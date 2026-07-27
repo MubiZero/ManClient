@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BusinessRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  displayName String
+  memberships Membership[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Business {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  branches    Branch[]
+  memberships Membership[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Branch {
+  id                      String                @id @default(cuid())
+  businessId              String
+  name                    String
+  slug                    String
+  timeZone                String                @default("Asia/Dushanbe")
+  recipientCardEncrypted  String?
+  business                Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  services                Service[]
+  resources               Resource[]
+  scheduleRules           BusinessScheduleRule[]
+  staffMembers            StaffMember[]
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  @@unique([businessId, slug])
+  @@index([businessId])
+}
+
+model Membership {
+  id         String       @id @default(cuid())
+  businessId String
+  userId     String
+  role       BusinessRole
+  business   Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staff      StaffMember?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([businessId, userId])
+  @@index([userId])
+}
+
+model StaffMember {
+  id           String     @id @default(cuid())
+  branchId     String
+  membershipId String     @unique
+  displayName  String
+  branch       Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  services     Service[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([branchId])
+}
+
+model Service {
+  id              String        @id @default(cuid())
+  branchId        String
+  name            String
+  durationMinutes Int
+  amountDiram     Int
+  branch          Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staffMembers    StaffMember[]
+  resources       ServiceResource[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([branchId])
+}
+
+model Resource {
+  id        String            @id @default(cuid())
+  branchId  String
+  name      String
+  branch    Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  services  ServiceResource[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([branchId])
+}
+
+model ServiceResource {
+  serviceId  String
+  resourceId String
+  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, resourceId])
+  @@index([resourceId])
+}
+
+model BusinessScheduleRule {
+  id        String   @id @default(cuid())
+  branchId  String
+  dayOfWeek Int
+  startsAt  String
+  endsAt    String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, dayOfWeek])
+}

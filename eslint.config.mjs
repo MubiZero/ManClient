@@ -3,5 +3,11 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 
 export default defineConfig([
   ...nextVitals,
-  globalIgnores([".next/**", "node_modules/**", "coverage/**", "playwright-report/**"]),
+  globalIgnores([
+    ".next/**",
+    "node_modules/**",
+    "coverage/**",
+    "playwright-report/**",
+    "src/generated/prisma/**",
+  ]),
 ]);
