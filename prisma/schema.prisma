@@ -13,6 +13,13 @@ enum BusinessRole {
   STAFF
 }
 
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
 model User {
   id          String       @id @default(cuid())
   email       String       @unique
@@ -28,6 +35,7 @@ model Business {
   slug        String       @unique
   branches    Branch[]
   memberships Membership[]
+  bookings    Booking[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -44,6 +52,7 @@ model Branch {
   resources               Resource[]
   scheduleRules           BusinessScheduleRule[]
   staffMembers            StaffMember[]
+  bookings                Booking[]
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
 
@@ -74,6 +83,7 @@ model StaffMember {
   branch       Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
   membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   services     Service[]
+  bookings     Booking[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -101,10 +111,40 @@ model Resource {
   name      String
   branch    Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
   services  ServiceResource[]
+  bookings  BookingResource[]
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
   @@index([branchId])
+}
+
+model Booking {
+  id        String          @id @default(cuid())
+  businessId String
+  branchId  String
+  staffId   String
+  startsAt  DateTime
+  endsAt    DateTime
+  status    BookingStatus   @default(PENDING_PAYMENT)
+  business  Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch    Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staff     StaffMember     @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  resources BookingResource[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([businessId, branchId, startsAt, endsAt])
+  @@index([staffId, startsAt, endsAt])
+}
+
+model BookingResource {
+  bookingId  String
+  resourceId String
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+
+  @@id([bookingId, resourceId])
+  @@index([resourceId])
 }
 
 model ServiceResource {
