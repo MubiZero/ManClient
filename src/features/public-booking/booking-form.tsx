@@ -23,6 +23,7 @@ export function BookingForm({ businessSlug, branches }: { businessSlug: string; 
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [paymentStep, setPaymentStep] = useState<{ paymentUrl: string; telegramUrl: string | null } | null>(null);
 
   const branch = branches.find(({ id }) => id === branchId) ?? branches[0];
   const service = branch?.services.find(({ id }) => id === serviceId);
@@ -84,8 +85,12 @@ export function BookingForm({ businessSlug, branches }: { businessSlug: string; 
         return;
       }
       if (!response.ok) throw new Error("booking");
-      const data = (await response.json()) as { paymentUrl: string };
-      window.location.assign(data.paymentUrl);
+      const data = (await response.json()) as { paymentUrl: string; telegramUrl: string | null };
+      if (!data.telegramUrl) {
+        window.location.assign(data.paymentUrl);
+        return;
+      }
+      setPaymentStep(data);
     } catch {
       setError("Запись не создана. Проверьте имя и номер +992, затем попробуйте ещё раз.");
     } finally {
@@ -95,6 +100,19 @@ export function BookingForm({ businessSlug, branches }: { businessSlug: string; 
 
   return (
     <form className="booking-form" onSubmit={submit} noValidate>
+      {paymentStep ? <div className="form-section payment-step" role="status">
+        <p className="context-label">Слот закреплён на 15 минут</p>
+        <h2>Оплатите и отправьте чек</h2>
+        <ol>
+          <li>Откройте DushanbeCity и завершите оплату.</li>
+          <li>Откройте Telegram-бота по персональной ссылке.</li>
+          <li>Отправьте боту изображение чека.</li>
+        </ol>
+        <div className="payment-actions">
+          <a className="primary-link" href={paymentStep.paymentUrl}>Оплатить в DushanbeCity</a>
+          {paymentStep.telegramUrl && <a className="secondary-link" href={paymentStep.telegramUrl}>Открыть Telegram-бота</a>}
+        </div>
+      </div> : <>
       {branches.length > 1 && (
         <div className="form-section">
           <h2><span>1</span> Выберите филиал</h2>
@@ -161,6 +179,7 @@ export function BookingForm({ businessSlug, branches }: { businessSlug: string; 
         </div>
       )}
       {error && <p className="form-error" role="alert">{error}</p>}
+      </>}
     </form>
   );
 }

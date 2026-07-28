@@ -99,6 +99,9 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .page-heading h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -.035em; }
 .page-heading p:not(.context-label) { max-width: 60ch; color: var(--muted); }
 .primary-link { min-height: 44px; display: inline-flex; align-items: center; padding: 0 18px; border-radius: 10px; background: var(--brand); color: white; text-decoration: none; font-weight: 700; }
+.secondary-link { min-height: 44px; display: inline-flex; align-items: center; padding: 0 18px; border: 1px solid var(--brand); border-radius: 10px; color: var(--brand); text-decoration: none; font-weight: 700; }
+.payment-step ol { margin: 0 0 24px; padding-left: 24px; color: var(--muted); line-height: 1.8; }
+.payment-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .metric-row article { min-height: 168px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; border-top: 3px solid var(--brand); background: white; border-radius: var(--radius-md); }
 .metric-row span { color: var(--muted); }

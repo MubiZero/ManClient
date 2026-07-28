@@ -110,6 +110,20 @@ describe("confirmFromReceipt", () => {
     await confirmFromReceipt(receipt);
     await expect(confirmFromReceipt(receipt)).resolves.toMatchObject({ status: "RECEIPT_ACCEPTED" });
   });
+
+  it("does not confirm a new booking with a receipt from before the reservation", async () => {
+    const booking = await createPaymentReadyBooking();
+
+    await expect(confirmFromReceipt({
+      paymentId: booking.paymentId,
+      receiptStorageKey: "receipts/old.png",
+      operationNumber: "1895624294",
+      amountDiram: 5_000,
+      recipientCardSuffix: "4444",
+      operationAt: new Date("2020-01-01T00:00:00.000Z"),
+      isSuccessful: true,
+    })).resolves.toMatchObject({ status: "NEEDS_ATTENTION" });
+  });
 });
 
 async function createPaymentReadyBooking() {

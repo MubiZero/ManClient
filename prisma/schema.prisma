@@ -130,25 +130,27 @@ model Resource {
 }
 
 model Booking {
-  id         String            @id @default(cuid())
-  businessId String
-  branchId   String
-  serviceId  String
-  staffId    String
-  customerId String
-  startsAt   DateTime
-  endsAt     DateTime
-  expiresAt  DateTime
-  status     BookingStatus     @default(PENDING_PAYMENT)
-  business   Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branch     Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  service    Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  staff      StaffMember       @relation(fields: [staffId], references: [id], onDelete: Restrict)
-  customer   Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  resources  BookingResource[]
-  payment    Payment?
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
+  id          String            @id @default(cuid())
+  businessId  String
+  branchId    String
+  serviceId   String
+  staffId     String
+  customerId  String
+  startsAt    DateTime
+  endsAt      DateTime
+  expiresAt   DateTime
+  status      BookingStatus     @default(PENDING_PAYMENT)
+  cancelledAt DateTime?
+  cancelledBy String?
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch      Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  service     Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  staff       StaffMember       @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  customer    Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  resources   BookingResource[]
+  payment     Payment?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([businessId, branchId, startsAt, endsAt])
   @@index([staffId, startsAt, endsAt])
@@ -156,16 +158,18 @@ model Booking {
 }
 
 model Customer {
-  id         String    @id @default(cuid())
-  businessId String
-  name       String
-  phone      String
-  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  bookings   Booking[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  businessId     String
+  name           String
+  phone          String
+  telegramChatId String?
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bookings       Booking[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([businessId, phone])
+  @@unique([businessId, telegramChatId])
   @@index([businessId])
 }
 

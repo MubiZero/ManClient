@@ -10,6 +10,7 @@ type AvailabilityQuery = {
   rangeEndsAt: Date;
   durationMinutes: number;
   intervalMinutes: number;
+  excludeBookingId?: string;
 };
 
 const ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED];
@@ -58,6 +59,7 @@ export async function getAvailableStarts(query: AvailabilityQuery): Promise<Date
 
     const hasConflict = await prisma.booking.findFirst({
       where: {
+        id: query.excludeBookingId ? { not: query.excludeBookingId } : undefined,
         branchId: query.branchId,
         status: { in: ACTIVE_BOOKING_STATUSES },
         startsAt: { lt: endsAt },

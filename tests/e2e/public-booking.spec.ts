@@ -9,6 +9,7 @@ test("visitor selects a service, specialist and receives a payment link", async 
   await page.getByLabel("Имя").fill("Мухаммад");
   await page.getByLabel("Телефон").fill("+992900001122");
   await page.getByRole("button", { name: "Перейти к оплате" }).click();
+  await page.getByRole("link", { name: "Оплатить в DushanbeCity" }).click();
 
   await expect(page).toHaveURL(/pay\.dc\.tj/);
   expect(new URL(page.url()).searchParams.get("A")).toBe("1111222233334444");

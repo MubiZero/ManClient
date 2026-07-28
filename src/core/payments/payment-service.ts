@@ -77,7 +77,9 @@ export async function confirmFromReceipt(input: ReceiptInput) {
       const isMatching =
         receipt.isSuccessful &&
         receipt.amountDiram === payment.amountDiram &&
-        receipt.recipientCardSuffix === payment.booking.branch.recipientCardLast4;
+        receipt.recipientCardSuffix === payment.booking.branch.recipientCardLast4 &&
+        receipt.operationAt >= payment.booking.createdAt &&
+        receipt.operationAt <= payment.booking.expiresAt;
       if (!isMatching || payment.booking.status !== "PENDING_PAYMENT") {
         return transaction.payment.update({
           where: { id: payment.id },
