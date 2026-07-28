@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/core/database/prisma";
+import { encryptCardNumber } from "@/core/payments/card-encryption";
+
+const fixtureEncryptionKey = Buffer.alloc(32, 7).toString("base64");
 
 export async function createBookingFixture() {
+  process.env.CARD_ENCRYPTION_KEY ??= fixtureEncryptionKey;
   const suffix = randomUUID();
   const business = await prisma.business.create({
     data: { name: "Pilot Barber", slug: `pilot-barber-${suffix}` },
@@ -12,6 +16,8 @@ export async function createBookingFixture() {
       businessId: business.id,
       name: "Dushanbe",
       slug: "dushanbe",
+      recipientCardEncrypted: encryptCardNumber("1111222233334444", process.env.CARD_ENCRYPTION_KEY),
+      recipientCardLast4: "4444",
       scheduleRules: { create: { dayOfWeek: 0, startsAt: "09:00", endsAt: "18:00" } },
     },
   });

@@ -1,0 +1,4 @@
+import { requireBusinessAdmin } from "@/core/auth/business-session";
+import { prisma } from "@/core/database/prisma";
+import { SettingsList } from "@/features/dashboard/settings-list";
+export default async function ResourcesPage() { const member = await requireBusinessAdmin(); const items = await prisma.resource.findMany({ where: { branch: { businessId: member.businessId } }, include: { branch: true }, orderBy: { name: "asc" } }); return <SettingsList title="Ресурсы" description="Боксы, подъёмники и другие объекты, которые нельзя занять дважды.">{items.length ? items.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.branch.name}</span></div></article>) : <div className="dashboard-empty"><h2>Добавьте первый ресурс</h2><p>Для барбершопа ресурсы необязательны. Автосервис может добавить бокс или подъёмник.</p></div>}</SettingsList>; }

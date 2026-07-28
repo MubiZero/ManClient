@@ -10,7 +10,7 @@ import {
 } from "@/core/payments/payment-service";
 import { createBookingFixture } from "@/../tests/helpers/booking-fixture";
 
-const cardNumber = "9762000128351953";
+const cardNumber = "1111222233334444";
 const encryptionKey = Buffer.alloc(32, 7).toString("base64");
 
 describe("confirmFromReceipt", () => {
@@ -28,7 +28,7 @@ describe("confirmFromReceipt", () => {
         receiptStorageKey: "receipts/receipt-1.png",
         operationNumber: "1895624290",
         amountDiram: 5_000,
-        recipientCardSuffix: "1953",
+        recipientCardSuffix: "4444",
         operationAt: new Date("2026-08-01T04:05:00.000Z"),
         isSuccessful: true,
       }),
@@ -43,7 +43,7 @@ describe("confirmFromReceipt", () => {
 
     await expect(getPaymentUrl(booking.paymentId)).resolves.toMatchObject({
       hostname: "pay.dc.tj",
-      search: expect.stringContaining("A=9762000128351953"),
+      search: expect.stringContaining("A=1111222233334444"),
     });
   });
 
@@ -65,7 +65,7 @@ describe("confirmFromReceipt", () => {
       receiptStorageKey: "receipts/receipt-duplicate.png",
       operationNumber: "1895624291",
       amountDiram: 5_000,
-      recipientCardSuffix: "1953",
+      recipientCardSuffix: "4444",
       operationAt: new Date("2026-08-01T04:05:00.000Z"),
       isSuccessful: true,
     };
@@ -85,7 +85,7 @@ describe("confirmFromReceipt", () => {
         receiptStorageKey: "receipts/wrong-amount.png",
         operationNumber: "1895624292",
         amountDiram: 4_000,
-        recipientCardSuffix: "1953",
+        recipientCardSuffix: "4444",
         operationAt: new Date("2026-08-01T04:05:00.000Z"),
         isSuccessful: true,
       }),
@@ -102,7 +102,7 @@ describe("confirmFromReceipt", () => {
       receiptStorageKey: "receipts/retry.png",
       operationNumber: "1895624293",
       amountDiram: 5_000,
-      recipientCardSuffix: "1953",
+      recipientCardSuffix: "4444",
       operationAt: new Date("2026-08-01T04:05:00.000Z"),
       isSuccessful: true,
     };

@@ -14,6 +14,28 @@ export class DuplicateOperationError extends Error {
   }
 }
 
+export class PaymentConfigurationError extends Error {
+  readonly code = "PAYMENT_NOT_CONFIGURED";
+
+  constructor() {
+    super("PAYMENT_NOT_CONFIGURED");
+    this.name = "PaymentConfigurationError";
+  }
+}
+
+export async function assertPaymentCardConfigured(branchId: string): Promise<void> {
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { recipientCardEncrypted: true, recipientCardLast4: true },
+  });
+  const encryptionKey = process.env.CARD_ENCRYPTION_KEY;
+  if (!branch?.recipientCardEncrypted || !branch.recipientCardLast4 || !encryptionKey) {
+    throw new PaymentConfigurationError();
+  }
+
+  decryptCardNumber(branch.recipientCardEncrypted, encryptionKey);
+}
+
 export async function getPaymentUrl(paymentId: string): Promise<URL> {
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId },
@@ -22,7 +44,7 @@ export async function getPaymentUrl(paymentId: string): Promise<URL> {
   const encryptedCardNumber = payment?.booking.branch.recipientCardEncrypted;
   const encryptionKey = process.env.CARD_ENCRYPTION_KEY;
   if (!payment || !encryptedCardNumber || !encryptionKey) {
-    throw new Error("Business payment card is not configured");
+    throw new PaymentConfigurationError();
   }
 
   return createPaymentUrl({

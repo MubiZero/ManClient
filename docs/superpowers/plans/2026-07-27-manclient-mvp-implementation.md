@@ -278,7 +278,7 @@ git commit -m "feat: add pending booking lifecycle"
 
 ```ts
 it("encodes the DushanbeCity amount in TJS", () => {
-  expect(createPaymentUrl({ cardNumber: "9762000128351953", amountDiram: 1750, bookingReference: "MC-1" }).toString())
+  expect(createPaymentUrl({ cardNumber: "1111222233334444", amountDiram: 1750, bookingReference: "MC-1" }).toString())
     .toContain("s=17.50");
 });
 

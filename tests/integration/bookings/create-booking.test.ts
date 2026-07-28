@@ -83,4 +83,32 @@ describe("POST /api/bookings", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("does not reserve a slot when the branch payment card is not configured", async () => {
+    const fixture = await createBookingFixture();
+    await prisma.branch.update({
+      where: { id: fixture.branch.id },
+      data: { recipientCardEncrypted: null, recipientCardLast4: null },
+    });
+    const bookingsBefore = await prisma.booking.count({ where: { businessId: fixture.business.id } });
+
+    const response = await POST(
+      new Request("http://localhost/api/bookings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          businessSlug: fixture.business.slug,
+          branchId: fixture.branch.id,
+          serviceId: fixture.service.id,
+          staffId: fixture.staff.id,
+          resourceIds: [],
+          startsAt: "2026-08-02T05:00:00.000Z",
+          customer: { name: "Мухаммад", phone: "+992900001122" },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    await expect(prisma.booking.count({ where: { businessId: fixture.business.id } })).resolves.toBe(bookingsBefore);
+  });
 });
