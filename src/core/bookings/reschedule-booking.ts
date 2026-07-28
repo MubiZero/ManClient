@@ -1,5 +1,8 @@
+import { Prisma } from "@/generated/prisma/client";
+
 import { BookingConflictError } from "@/core/bookings/booking-allocation";
 import { getAvailableStarts } from "@/core/availability/availability-service";
+import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 
 type RescheduleBookingInput = { bookingId: string; customerId: string; startsAt: Date };
@@ -53,7 +56,16 @@ export async function rescheduleBooking(input: RescheduleBookingInput) {
           throw new BookingConflictError(resourceConflict ? "RESOURCE_UNAVAILABLE" : "STAFF_UNAVAILABLE");
         }
 
-        return transaction.booking.update({ where: { id: current.id }, data: { startsAt: input.startsAt, endsAt } });
+        const updated = await transaction.booking.update({ where: { id: current.id }, data: { startsAt: input.startsAt, endsAt } });
+        await writeAuditEvent({
+          businessId: current.businessId,
+          bookingId: current.id,
+          type: "booking.rescheduled",
+          actorType: "customer",
+          actorId: input.customerId,
+          metadata: { previousStartsAt: current.startsAt.toISOString(), startsAt: input.startsAt.toISOString() },
+        }, transaction);
+        return updated;
       }, { isolationLevel: "Serializable" });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034" && attempt < 2) continue;
@@ -63,4 +75,3 @@ export async function rescheduleBooking(input: RescheduleBookingInput) {
 
   throw new BookingConflictError("STAFF_UNAVAILABLE");
 }
-import { Prisma } from "@/generated/prisma/client";

@@ -1,6 +1,7 @@
 import { BookingStatus, Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
+import { writeAuditEvent } from "@/core/audit/audit-service";
 
 import type { ReserveAllocationInput } from "./booking-types";
 
@@ -58,7 +59,7 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
       throw new BookingConflictError(hasConflictingResource ? "RESOURCE_UNAVAILABLE" : "STAFF_UNAVAILABLE");
     }
 
-    return transaction.booking.create({
+    const booking = await transaction.booking.create({
       data: {
         businessId: branch.businessId,
         branchId: input.branchId,
@@ -80,6 +81,15 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
       },
       include: { payment: true, resources: true },
     });
+    await writeAuditEvent({
+      businessId: branch.businessId,
+      bookingId: booking.id,
+      type: "booking.created",
+      actorType: "customer",
+      actorId: input.customerId,
+      metadata: { startsAt: input.startsAt.toISOString(), staffId: input.staffId },
+    }, transaction);
+    return booking;
   });
 }
 

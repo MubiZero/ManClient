@@ -1,6 +1,8 @@
 import { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
+import { writeAuditEvent } from "@/core/audit/audit-service";
+import { scheduleBookingReminders, scheduleWhatsAppConfirmation } from "@/core/notifications/notification-service";
 import { decryptCardNumber } from "@/core/payments/card-encryption";
 import { receiptInputSchema, type ReceiptInput } from "@/core/payments/receipt-recognizer";
 import { createPaymentUrl } from "@/integrations/dushanbe-city/payment-link";
@@ -111,6 +113,20 @@ export async function confirmFromReceipt(input: ReceiptInput) {
         where: { id: payment.bookingId },
         data: { status: "CONFIRMED" },
       });
+      await writeAuditEvent({
+        businessId: payment.businessId,
+        bookingId: payment.bookingId,
+        type: "booking.confirmed",
+        actorType: "receipt",
+        metadata: {
+          operationNumber: receipt.operationNumber,
+          recipientCardSuffix: receipt.recipientCardSuffix,
+          amountDiram: receipt.amountDiram,
+          isBankVerified: false,
+        },
+      }, transaction);
+      await scheduleBookingReminders(payment.bookingId, transaction);
+      await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
 
       return confirmedPayment;
     }, { isolationLevel: "Serializable" });

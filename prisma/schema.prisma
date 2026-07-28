@@ -26,6 +26,19 @@ enum PaymentStatus {
   NEEDS_ATTENTION
 }
 
+enum MessageChannel {
+  TELEGRAM
+  WHATSAPP
+}
+
+enum MessageStatus {
+  SCHEDULED
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 model User {
   id           String       @id @default(cuid())
   email        String       @unique
@@ -37,16 +50,22 @@ model User {
 }
 
 model Business {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  branches    Branch[]
-  memberships Membership[]
-  bookings    Booking[]
-  customers   Customer[]
-  payments    Payment[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                               String       @id @default(cuid())
+  name                             String
+  slug                             String       @unique
+  branches                         Branch[]
+  memberships                      Membership[]
+  bookings                         Booking[]
+  customers                        Customer[]
+  payments                         Payment[]
+  messages                         Message[]
+  auditEvents                      AuditEvent[]
+  whatsappPhoneNumberId            String?
+  whatsappTemplateName             String?
+  whatsappConfirmationTemplateName String?
+  whatsappLanguageCode             String       @default("ru")
+  createdAt                        DateTime     @default(now())
+  updatedAt                        DateTime     @updatedAt
 }
 
 model Branch {
@@ -149,12 +168,52 @@ model Booking {
   customer    Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
   resources   BookingResource[]
   payment     Payment?
+  messages    Message[]
+  auditEvents AuditEvent[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
   @@index([businessId, branchId, startsAt, endsAt])
   @@index([staffId, startsAt, endsAt])
   @@index([status, expiresAt])
+}
+
+model Message {
+  id          String         @id @default(cuid())
+  businessId  String
+  bookingId   String
+  channel     MessageChannel
+  kind        String
+  status      MessageStatus  @default(SCHEDULED)
+  scheduledAt DateTime
+  attempts    Int            @default(0)
+  maxAttempts Int            @default(3)
+  externalId  String?
+  lastError   String?
+  business    Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking     Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([bookingId, channel, kind])
+  @@index([status, scheduledAt])
+  @@index([externalId])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  businessId String
+  bookingId  String?
+  type       String
+  actorType  String
+  actorId    String?
+  metadata   Json
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking    Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([bookingId, createdAt])
 }
 
 model Customer {

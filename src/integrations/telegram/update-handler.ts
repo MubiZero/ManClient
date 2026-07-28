@@ -6,6 +6,7 @@ import {
   verifyCustomerBookingToken,
 } from "@/core/bookings/booking-action-token";
 import { cancelBooking } from "@/core/bookings/cancel-booking";
+import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 import { recognizeDushanbeCityReceipt } from "@/core/payments/dushanbe-city-receipt-recognizer";
 import { confirmFromReceipt } from "@/core/payments/payment-service";
@@ -94,18 +95,55 @@ export async function handleTelegramUpdate(update: TelegramUpdate, dependencies:
   const image = await dependencies.downloadPhoto(photo.file_id);
   const storageKey = `receipts/${payment.businessId}/${randomUUID()}.jpg`;
   await dependencies.storeReceipt({ storageKey, contentType: "image/jpeg", body: image });
+  await writeAuditEvent({
+    businessId: payment.businessId,
+    bookingId: payment.bookingId,
+    type: "receipt.received",
+    actorType: "customer",
+    actorId: payment.booking.customerId,
+    metadata: { storageKey, channel: "telegram" },
+  });
 
+  let confirmationStatus: "RECEIPT_ACCEPTED" | "NEEDS_ATTENTION";
   try {
     const receipt = await dependencies.recognizeReceipt(image);
     const confirmed = await confirmFromReceipt({ ...receipt, paymentId: payment.id, receiptStorageKey: storageKey });
-    if (confirmed.status === "RECEIPT_ACCEPTED") {
-      await dependencies.sendMessage(chatId, "Запись подтверждена. Мы напомним вам перед визитом.", bookingActions(payment.booking.id, dependencies.now()));
-    } else {
-      await dependencies.sendMessage(chatId, "Чек получен и передан администратору на проверку. Запись пока ожидает подтверждения.");
-    }
+    confirmationStatus = confirmed.status === "RECEIPT_ACCEPTED" ? "RECEIPT_ACCEPTED" : "NEEDS_ATTENTION";
   } catch {
     await prisma.payment.update({ where: { id: payment.id }, data: { status: "NEEDS_ATTENTION", receiptStorageKey: storageKey } });
-    await dependencies.sendMessage(chatId, "Не удалось надёжно прочитать чек. Он передан администратору на проверку.");
+    try {
+      await dependencies.sendMessage(chatId, "Не удалось надёжно прочитать чек. Он передан администратору на проверку.");
+    } catch {
+      // Payment review remains durable and must not be rolled back by notification failure.
+    }
+    return;
+  }
+
+  if (confirmationStatus === "NEEDS_ATTENTION") {
+    try {
+      await dependencies.sendMessage(chatId, "Чек получен и передан администратору на проверку. Запись пока ожидает подтверждения.");
+    } catch {
+      // The receipt remains available to the administrator even if delivery fails.
+    }
+    return;
+  }
+
+  await deliverTelegramConfirmation(payment.booking.id, payment.businessId, chatId, dependencies);
+}
+
+async function deliverTelegramConfirmation(bookingId: string, businessId: string, chatId: string, dependencies: HandlerDependencies) {
+  const message = await prisma.message.upsert({
+    where: { bookingId_channel_kind: { bookingId, channel: "TELEGRAM", kind: "BOOKING_CONFIRMATION" } },
+    create: { businessId, bookingId, channel: "TELEGRAM", kind: "BOOKING_CONFIRMATION", status: "PROCESSING", scheduledAt: dependencies.now() },
+    update: {},
+  });
+  if (message.status === "SENT") return;
+
+  try {
+    await dependencies.sendMessage(chatId, "Запись подтверждена. Мы напомним вам перед визитом.", bookingActions(bookingId, dependencies.now()));
+    await prisma.message.update({ where: { id: message.id }, data: { status: "SENT", attempts: { increment: 1 }, lastError: null } });
+  } catch {
+    await prisma.message.update({ where: { id: message.id }, data: { status: "FAILED", attempts: { increment: 1 }, lastError: "TELEGRAM delivery failed" } });
   }
 }
 
