@@ -1,0 +1,56 @@
+name: verify
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: manclient
+          POSTGRES_USER: manclient
+          POSTGRES_PASSWORD: manclient
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U manclient -d manclient"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://manclient:manclient@127.0.0.1:5432/manclient
+      DATABASE_DIRECT_URL: postgresql://manclient:manclient@127.0.0.1:5432/manclient
+      AUTH_SECRET: ci-auth-secret-at-least-32-characters
+      AUTH_URL: http://127.0.0.1:3000
+      APP_URL: http://127.0.0.1:3000
+      CARD_ENCRYPTION_KEY: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+      INTERNAL_API_SECRET: ci-internal-secret-at-least-32-characters
+      BOOKING_ACTION_SECRET: ci-booking-secret-at-least-32-characters
+      TELEGRAM_BOT_USERNAME: manclient_ci_bot
+      DEMO_OWNER_PASSWORD: ci-demo-owner-password
+      DEMO_STAFF_PASSWORD: ci-demo-staff-password
+      DEMO_AUTO_OWNER_PASSWORD: ci-demo-auto-owner-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.30.2 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma migrate deploy
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm prisma validate
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm playwright test

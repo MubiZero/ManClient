@@ -121,6 +121,82 @@ async function main() {
       },
     });
   }
+
+  await seedAutoService(paymentCardEncrypted);
+}
+
+async function seedAutoService(paymentCardEncrypted: string | undefined) {
+  const owner = await prisma.user.upsert({
+    where: { email: "owner@demo-auto.local" },
+    create: { email: "owner@demo-auto.local", displayName: "Рустам Каримов", passwordHash: await configuredPasswordHash("DEMO_AUTO_OWNER_PASSWORD") },
+    update: { displayName: "Рустам Каримов", passwordHash: await configuredPasswordHash("DEMO_AUTO_OWNER_PASSWORD") },
+  });
+  const business = await prisma.business.upsert({
+    where: { slug: "demo-auto" },
+    create: { name: "АвтоПрофи", slug: "demo-auto" },
+    update: { name: "АвтоПрофи" },
+  });
+  await prisma.membership.upsert({
+    where: { businessId_userId: { businessId: business.id, userId: owner.id } },
+    create: { businessId: business.id, userId: owner.id, role: "OWNER" },
+    update: { role: "OWNER" },
+  });
+  const branch = await prisma.branch.upsert({
+    where: { businessId_slug: { businessId: business.id, slug: "dushanbe-auto" } },
+    create: {
+      businessId: business.id,
+      name: "Душанбе, Сино",
+      slug: "dushanbe-auto",
+      ...(paymentCardEncrypted ? { recipientCardEncrypted: paymentCardEncrypted, recipientCardLast4: "4444" } : {}),
+    },
+    update: {
+      name: "Душанбе, Сино",
+      ...(paymentCardEncrypted ? { recipientCardEncrypted: paymentCardEncrypted, recipientCardLast4: "4444" } : {}),
+    },
+  });
+  await prisma.businessScheduleRule.deleteMany({ where: { branchId: branch.id } });
+  await prisma.businessScheduleRule.createMany({ data: Array.from({ length: 7 }, (_, dayOfWeek) => ({ branchId: branch.id, dayOfWeek, startsAt: "09:00", endsAt: "18:00" })) });
+
+  const staffUser = await prisma.user.upsert({
+    where: { email: "behruz@demo-auto.local" },
+    create: { email: "behruz@demo-auto.local", displayName: "Бехруз Ниёзов" },
+    update: { displayName: "Бехруз Ниёзов" },
+  });
+  const membership = await prisma.membership.upsert({
+    where: { businessId_userId: { businessId: business.id, userId: staffUser.id } },
+    create: { businessId: business.id, userId: staffUser.id, role: "STAFF" },
+    update: { role: "STAFF" },
+  });
+  const staff = await prisma.staffMember.upsert({
+    where: { membershipId: membership.id },
+    create: { branchId: branch.id, membershipId: membership.id, displayName: "Бехруз" },
+    update: { branchId: branch.id, displayName: "Бехруз" },
+  });
+  const resource = await prisma.resource.findFirst({ where: { branchId: branch.id, name: "Подъёмник 1" } })
+    ?? await prisma.resource.create({ data: { branchId: branch.id, name: "Подъёмник 1" } });
+  const service = await prisma.service.findFirst({ where: { branchId: branch.id, name: "Замена масла" } });
+  if (service) {
+    await prisma.service.update({
+      where: { id: service.id },
+      data: {
+        durationMinutes: 60,
+        amountDiram: 12_000,
+        staffMembers: { set: [{ id: staff.id }] },
+        resources: { deleteMany: {}, create: { resourceId: resource.id } },
+      },
+    });
+  } else {
+    await prisma.service.create({
+      data: {
+        branchId: branch.id,
+        name: "Замена масла",
+        durationMinutes: 60,
+        amountDiram: 12_000,
+        staffMembers: { connect: { id: staff.id } },
+        resources: { create: { resourceId: resource.id } },
+      },
+    });
+  }
 }
 
 function paymentCard(): string | undefined {
@@ -129,7 +205,7 @@ function paymentCard(): string | undefined {
     : undefined;
 }
 
-async function configuredPasswordHash(variableName: "DEMO_OWNER_PASSWORD" | "DEMO_STAFF_PASSWORD") {
+async function configuredPasswordHash(variableName: "DEMO_OWNER_PASSWORD" | "DEMO_STAFF_PASSWORD" | "DEMO_AUTO_OWNER_PASSWORD") {
   const password = process.env[variableName];
   return password ? hashPassword(password) : undefined;
 }
