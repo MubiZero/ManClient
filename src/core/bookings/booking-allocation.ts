@@ -62,14 +62,23 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
       data: {
         businessId: branch.businessId,
         branchId: input.branchId,
+        serviceId: input.serviceId,
         staffId: input.staffId,
+        customerId: input.customerId,
         startsAt: input.startsAt,
         endsAt,
+        expiresAt: input.expiresAt,
         resources: {
           create: input.resourceIds.map((resourceId) => ({ resourceId })),
         },
+        payment: {
+          create: {
+            businessId: branch.businessId,
+            amountDiram: input.amountDiram,
+          },
+        },
       },
-      include: { resources: true },
+      include: { payment: true, resources: true },
     });
   });
 }
@@ -86,13 +95,39 @@ async function assertAllocationBelongsToBranch(
   transaction: Prisma.TransactionClient,
   input: ReserveAllocationInput,
 ): Promise<void> {
-  const staff = await transaction.staffMember.findFirst({
-    where: { id: input.staffId, branchId: input.branchId },
-    select: { id: true },
+  const branch = await transaction.branch.findUnique({
+    where: { id: input.branchId },
+    select: { businessId: true },
   });
+  if (!branch) {
+    throw new Error("Branch does not exist");
+  }
+
+  const [staff, service, customer] = await Promise.all([
+    transaction.staffMember.findFirst({
+      where: { id: input.staffId, branchId: input.branchId },
+      select: { id: true },
+    }),
+    transaction.service.findFirst({
+      where: { id: input.serviceId, branchId: input.branchId },
+      select: { id: true },
+    }),
+    transaction.customer.findFirst({
+      where: { id: input.customerId, businessId: branch.businessId },
+      select: { id: true },
+    }),
+  ]);
 
   if (!staff) {
     throw new Error("Staff member does not belong to branch");
+  }
+
+  if (!service) {
+    throw new Error("Service does not belong to branch");
+  }
+
+  if (!customer) {
+    throw new Error("Customer does not belong to business");
   }
 
   if (input.resourceIds.length === 0) {
