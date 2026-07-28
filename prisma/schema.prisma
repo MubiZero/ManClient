@@ -49,20 +49,21 @@ model Business {
 }
 
 model Branch {
-  id                      String                @id @default(cuid())
-  businessId              String
-  name                    String
-  slug                    String
-  timeZone                String                @default("Asia/Dushanbe")
-  recipientCardEncrypted  String?
-  business                Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  services                Service[]
-  resources               Resource[]
-  scheduleRules           BusinessScheduleRule[]
-  staffMembers            StaffMember[]
-  bookings                Booking[]
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
+  id                     String                 @id @default(cuid())
+  businessId             String
+  name                   String
+  slug                   String
+  timeZone               String                 @default("Asia/Dushanbe")
+  recipientCardEncrypted String?
+  recipientCardLast4     String?
+  business               Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  services               Service[]
+  resources              Resource[]
+  scheduleRules          BusinessScheduleRule[]
+  staffMembers           StaffMember[]
+  bookings               Booking[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
 
   @@unique([businessId, slug])
   @@index([businessId])
@@ -99,17 +100,17 @@ model StaffMember {
 }
 
 model Service {
-  id              String        @id @default(cuid())
+  id              String            @id @default(cuid())
   branchId        String
   name            String
   durationMinutes Int
   amountDiram     Int
-  branch          Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch          Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
   staffMembers    StaffMember[]
   resources       ServiceResource[]
   bookings        Booking[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   @@index([branchId])
 }
@@ -128,7 +129,7 @@ model Resource {
 }
 
 model Booking {
-  id         String          @id @default(cuid())
+  id         String            @id @default(cuid())
   businessId String
   branchId   String
   serviceId  String
@@ -137,16 +138,16 @@ model Booking {
   startsAt   DateTime
   endsAt     DateTime
   expiresAt  DateTime
-  status     BookingStatus   @default(PENDING_PAYMENT)
-  business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branch     Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  service    Service         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  staff      StaffMember     @relation(fields: [staffId], references: [id], onDelete: Restrict)
-  customer   Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status     BookingStatus     @default(PENDING_PAYMENT)
+  business   Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch     Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  service    Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  staff      StaffMember       @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  customer   Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
   resources  BookingResource[]
   payment    Payment?
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
   @@index([businessId, branchId, startsAt, endsAt])
   @@index([staffId, startsAt, endsAt])
@@ -168,16 +169,24 @@ model Customer {
 }
 
 model Payment {
-  id          String        @id @default(cuid())
-  businessId  String
-  bookingId   String        @unique
-  amountDiram Int
-  status      PaymentStatus @default(PENDING)
-  business    Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                  String        @id @default(cuid())
+  businessId          String
+  bookingId           String        @unique
+  amountDiram         Int
+  status              PaymentStatus @default(PENDING)
+  operationNumber     String?
+  receiptAmountDiram  Int?
+  recipientCardSuffix String?
+  operationAt         DateTime?
+  receiptStorageKey   String?
+  receiptAcceptedAt   DateTime?
+  isBankVerified      Boolean       @default(false)
+  business            Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking             Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
+  @@unique([businessId, operationNumber])
   @@index([businessId, status])
 }
 
