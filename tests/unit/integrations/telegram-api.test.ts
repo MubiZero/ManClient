@@ -87,6 +87,24 @@ describe("Telegram API", () => {
     });
   });
 
+  it("edits reply markup by its Telegram reference without exposing the token", async () => {
+    const calls: RecordedCall[] = [];
+    const token = "123:secret";
+    const api = createTelegramApi(token, recordingFetcher(calls));
+    const keyboard = { inline_keyboard: [[{ text: "Назад", callback_data: "act_back_7Yp" }]] };
+
+    await expect(api.editMessageReplyMarkup({ chatId: "-10088", messageId: 17 }, keyboard)).resolves.toEqual({
+      chatId: "-10088",
+      messageId: 42,
+    });
+
+    expect(calls).toContainEqual({
+      method: "editMessageReplyMarkup",
+      body: { chat_id: "-10088", message_id: 17, reply_markup: keyboard },
+    });
+    expect(JSON.stringify(calls)).not.toContain(token);
+  });
+
   it("sends either a protected photo URL or stored bytes and returns a message reference", async () => {
     const calls: RecordedCall[] = [];
     const api = createTelegramApi("123:secret", recordingFetcher(calls));

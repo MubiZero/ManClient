@@ -105,6 +105,32 @@ describe("business bot renderer", () => {
     expectNoMoreThanTwoButtonsPerRow(view);
   });
 
+  it("keeps every booking card action in rows of at most two buttons", () => {
+    const view = bookingCardView({
+      customerName: "Мухаммад",
+      customerPhone: "+992900001122",
+      serviceName: "Стрижка",
+      staffName: "Алишер",
+      branchName: "Центр",
+      startsAt: new Date("2026-07-29T09:30:00.000Z"),
+      timeZone: "Asia/Dushanbe",
+      bookingStatus: "CONFIRMED",
+      paymentStatus: "RECEIPT_ACCEPTED",
+      amountDiram: 5000,
+      actions: [
+        { actionId: "act_first_7Yp", text: "Первое" },
+        { actionId: "act_second_7Yp", text: "Второе" },
+        { actionId: "act_third_7Yp", text: "Третье" },
+      ],
+    });
+
+    expect(buttons(view)).toEqual([
+      [{ text: "Первое", callback_data: "act_first_7Yp" }, { text: "Второе", callback_data: "act_second_7Yp" }],
+      [{ text: "Третье", callback_data: "act_third_7Yp" }],
+    ]);
+    expectNoMoreThanTwoButtonsPerRow(view);
+  });
+
   it("renders payment review with only a masked card tail and confirmation", () => {
     const view = paymentReviewView({
       customerName: "Мухаммад",

@@ -42,6 +42,7 @@ export type BookingCardViewModel = {
   bookingStatus: string;
   paymentStatus: string;
   amountDiram: number;
+  actions?: BusinessBotAction[];
   openPaymentAction?: BusinessBotAction;
   confirmation?: Confirmation;
 };
@@ -92,9 +93,10 @@ export function bookingCardView(input: BookingCardViewModel): BusinessBotView {
   if (input.confirmation) {
     return confirmationView(details, input.confirmation);
   }
+  const actions = input.actions ?? (input.openPaymentAction ? [input.openPaymentAction] : []);
   return {
     text: details.join("\n"),
-    ...(input.openPaymentAction ? { replyMarkup: inlineButtons([[input.openPaymentAction]]) } : {}),
+    ...(actions.length ? { replyMarkup: inlineButtons([actions]) } : {}),
   };
 }
 
@@ -131,7 +133,10 @@ function confirmationView(details: string[], confirmation: Confirmation): Busine
 
 function inlineButtons(rows: BusinessBotAction[][]): TelegramReplyMarkup {
   return {
-    inline_keyboard: rows.map((row) => row.slice(0, 2).map((action) => ({ text: action.text, callback_data: action.actionId }))),
+    inline_keyboard: rows.flatMap((row) => Array.from(
+      { length: Math.ceil(row.length / 2) },
+      (_, index) => row.slice(index * 2, index * 2 + 2).map((action) => ({ text: action.text, callback_data: action.actionId })),
+    )),
   };
 }
 
