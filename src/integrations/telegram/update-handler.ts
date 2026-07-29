@@ -38,7 +38,7 @@ const defaultDependencies: HandlerDependencies = {
   recognizeReceipt: recognizeDushanbeCityReceipt,
 };
 
-export async function handleTelegramUpdate(update: TelegramUpdate, dependencies: HandlerDependencies = defaultDependencies): Promise<void> {
+export async function handleTelegramUpdate(businessId: string, update: TelegramUpdate, dependencies: HandlerDependencies = defaultDependencies): Promise<void> {
   const message = update.message;
   if (update.callback_query?.data?.startsWith("c.") && update.callback_query.message) {
     const chatId = String(update.callback_query.message.chat.id);
@@ -46,7 +46,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate, dependencies:
       const token = update.callback_query.data;
       const action = verifyCustomerBookingToken(token, "cancel_booking", dependencies.now());
       const booking = await prisma.booking.findFirstOrThrow({
-        where: { id: action.bookingId, customer: { telegramChatId: chatId } },
+        where: { id: action.bookingId, businessId, customer: { telegramChatId: chatId } },
         select: { customerId: true },
       });
       await cancelBooking({ bookingId: action.bookingId, actor: { type: "customer", customerId: booking.customerId } }, dependencies.now());
@@ -63,7 +63,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate, dependencies:
     const token = message.text.slice(7).trim();
     try {
       const action = verifyBookingActionToken(token, dependencies.now());
-      const payment = await prisma.payment.findUnique({ where: { id: action.paymentId }, include: { booking: true } });
+      const payment = await prisma.payment.findFirst({ where: { id: action.paymentId, businessId }, include: { booking: true } });
       if (!payment || payment.booking.status !== "PENDING_PAYMENT") throw new Error("Payment is unavailable");
       await prisma.customer.update({ where: { id: payment.booking.customerId }, data: { telegramChatId: chatId } });
       await dependencies.sendMessage(chatId, "После оплаты отправьте чек DushanbeCity сюда одним изображением.");
@@ -80,6 +80,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate, dependencies:
 
   const payment = await prisma.payment.findFirst({
     where: {
+      businessId,
       status: { in: ["PENDING", "NEEDS_ATTENTION"] },
       booking: { status: "PENDING_PAYMENT", customer: { telegramChatId: chatId } },
     },

@@ -8,16 +8,10 @@ import { handleTelegramUpdate } from "@/integrations/telegram/update-handler";
 import { createBookingFixture } from "@/../tests/helpers/booking-fixture";
 
 describe("Telegram webhook", () => {
-  it("rejects a webhook without the configured secret", async () => {
-    process.env.TELEGRAM_WEBHOOK_SECRET = "telegram-test-secret";
+  it("retires the legacy global customer webhook", async () => {
+    const response = await POST();
 
-    const response = await POST(new Request("http://localhost/api/webhooks/telegram", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: "{}",
-    }));
-
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(410);
   });
 
   it("links a chat with a signed token and confirms its booking from a receipt photo", async () => {
@@ -53,14 +47,14 @@ describe("Telegram webhook", () => {
       }),
     };
 
-    await handleTelegramUpdate({ message: { chat: { id: 99201 }, text: `/start ${token}` } }, dependencies);
-    await handleTelegramUpdate({ message: { chat: { id: 99201 }, photo: [{ file_id: "small" }, { file_id: "large" }] } }, dependencies);
+    await handleTelegramUpdate(fixture.business.id, { message: { chat: { id: 99201 }, text: `/start ${token}` } }, dependencies);
+    await handleTelegramUpdate(fixture.business.id, { message: { chat: { id: 99201 }, photo: [{ file_id: "small" }, { file_id: "large" }] } }, dependencies);
 
     await expect(prisma.booking.findUnique({ where: { id: pending.bookingId } })).resolves.toMatchObject({ status: "CONFIRMED" });
     expect(messages.at(-1)).toContain("Запись подтверждена");
     expect(callbacks[0].length).toBeLessThanOrEqual(64);
 
-    await handleTelegramUpdate({ callback_query: { data: callbacks[0], message: { chat: { id: 99201 } } } }, dependencies);
+    await handleTelegramUpdate(fixture.business.id, { callback_query: { data: callbacks[0], message: { chat: { id: 99201 } } } }, dependencies);
     await expect(prisma.booking.findUnique({ where: { id: pending.bookingId } })).resolves.toMatchObject({ status: "CANCELLED" });
   });
 
@@ -71,7 +65,7 @@ describe("Telegram webhook", () => {
     const customer = await prisma.customer.findFirstOrThrow({ where: { businessId: fixture.business.id, phone: "+992900001122" } });
     await prisma.customer.update({ where: { id: customer.id }, data: { telegramChatId: "99202" } });
 
-    await handleTelegramUpdate({ message: { chat: { id: 99202 }, photo: [{ file_id: "receipt" }] } }, {
+    await handleTelegramUpdate(fixture.business.id, { message: { chat: { id: 99202 }, photo: [{ file_id: "receipt" }] } }, {
       now: () => new Date("2026-08-01T04:10:00.000Z"),
       sendMessage: async () => { throw new Error("Telegram unavailable"); },
       downloadPhoto: async () => new Uint8Array([1]),
