@@ -94,6 +94,27 @@ export async function handleConversationCommand(
   };
 }
 
+export async function getActiveConversationSession(businessId: string, conversationId: string) {
+  const session = await prisma.conversationSession.findFirst({
+    where: { conversationId, active: true, conversation: { businessId } },
+  });
+  if (!session || !isState(session.state)) throw new Error("Conversation session does not exist");
+  return { ...session, state: session.state, data: session.data as ConversationData };
+}
+
+export async function restartConversation(
+  businessId: string,
+  conversationId: string,
+  expiresAt: Date,
+) {
+  const session = await getActiveConversationSession(businessId, conversationId);
+  await prisma.conversationSession.update({
+    where: { id: session.id },
+    data: { state: "LANGUAGE", data: {}, expiresAt, version: { increment: 1 } },
+  });
+  return { state: "LANGUAGE" as const, data: {} as ConversationData };
+}
+
 export function conversationMessage(locale: ConversationLocale, state: ConversationStateName) {
   return (locale === "tg" ? messagesTg : messagesRu)[state];
 }

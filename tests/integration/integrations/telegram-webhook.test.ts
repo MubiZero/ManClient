@@ -5,6 +5,7 @@ import { createPendingBooking } from "@/core/bookings/booking-service";
 import { prisma } from "@/core/database/prisma";
 import { createBookingActionToken } from "@/core/bookings/booking-action-token";
 import { handleTelegramUpdate } from "@/integrations/telegram/update-handler";
+import type { TelegramReplyMarkup } from "@/integrations/telegram/telegram-client";
 import { createBookingFixture } from "@/../tests/helpers/booking-fixture";
 
 describe("Telegram webhook", () => {
@@ -31,9 +32,11 @@ describe("Telegram webhook", () => {
     const callbacks: string[] = [];
     const dependencies = {
       now: () => new Date("2026-08-01T04:10:00.000Z"),
-      sendMessage: async (_chatId: string, text: string, replyMarkup?: { inline_keyboard: Array<Array<{ callback_data?: string }>> }) => {
+      sendMessage: async (_chatId: string, text: string, replyMarkup?: TelegramReplyMarkup) => {
         messages.push(text);
-        const callback = replyMarkup?.inline_keyboard.flat().find(({ callback_data }) => callback_data)?.callback_data;
+        const callback = replyMarkup && "inline_keyboard" in replyMarkup
+          ? replyMarkup.inline_keyboard.flat().find(({ callback_data }) => callback_data)?.callback_data
+          : undefined;
         if (callback) callbacks.push(callback);
       },
       downloadPhoto: async () => new Uint8Array([1, 2, 3]),

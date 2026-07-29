@@ -26,6 +26,8 @@ export type ConversationData = {
   startsAt?: string;
   name?: string;
   phone?: string;
+  bookingId?: string;
+  paymentId?: string;
 };
 export type ConversationState = { state: ConversationStateName; data: ConversationData };
 export type ConversationCommand = { kind: string; payload: unknown };
@@ -44,7 +46,7 @@ const transitions: Record<ConversationStateName, {
   SLOT: { kind: "SELECT_SLOT", next: "CUSTOMER_NAME", schema: z.object({ startsAt: z.string().datetime({ offset: true }) }) },
   CUSTOMER_NAME: { kind: "ENTER_NAME", next: "CUSTOMER_PHONE", schema: z.object({ name: z.string().trim().min(1).max(120) }) },
   CUSTOMER_PHONE: { kind: "ENTER_PHONE", next: "CONFIRM", schema: z.object({ phone: z.string().regex(/^\+992\d{9}$/) }) },
-  CONFIRM: { kind: "CONFIRM_BOOKING", next: "AWAITING_PAYMENT", schema: z.object({}) },
+  CONFIRM: { kind: "CONFIRM_BOOKING", next: "AWAITING_PAYMENT", schema: z.object({ bookingId: z.string().min(1).optional(), paymentId: z.string().min(1).optional() }) },
   AWAITING_PAYMENT: { kind: "PAYMENT_SUBMITTED", next: "AWAITING_RECEIPT", schema: z.object({}) },
   AWAITING_RECEIPT: { kind: "RECEIPT_ACCEPTED", next: "COMPLETE", schema: z.object({}) },
   COMPLETE: { kind: "RESTART", next: "LANGUAGE", schema: z.object({}) },

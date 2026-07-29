@@ -1,14 +1,15 @@
 import { prisma } from "@/core/database/prisma";
-import { sendTelegramMessage } from "@/integrations/telegram/telegram-client";
+import { decryptSecret } from "@/core/security/secret-encryption";
+import { createTelegramApi } from "@/integrations/telegram/telegram-api";
 import { sendTemplateMessage, type WhatsAppTemplateMessage } from "@/integrations/whatsapp/whatsapp-client";
 
 type DeliveryDependencies = {
-  sendTelegram: (chatId: string, text: string) => Promise<void>;
+  sendTelegram: (token: string, chatId: string, text: string) => Promise<void>;
   sendWhatsApp: (input: WhatsAppTemplateMessage) => Promise<{ externalId: string }>;
 };
 
 const defaultDependencies: DeliveryDependencies = {
-  sendTelegram: sendTelegramMessage,
+  sendTelegram: (token, chatId, text) => createTelegramApi(token).sendMessage(chatId, text),
   sendWhatsApp: sendTemplateMessage,
 };
 
@@ -30,7 +31,15 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
 
     const message = await prisma.message.findUniqueOrThrow({
       where: { id: candidate.id },
-      include: { booking: { include: { customer: true, business: true, service: true } } },
+      include: {
+        booking: {
+          include: {
+            customer: true,
+            business: { include: { telegramIntegrations: { where: { status: "ACTIVE" }, take: 1 } } },
+            service: true,
+          },
+        },
+      },
     });
     if (message.booking.startsAt <= now || message.booking.status !== "CONFIRMED") {
       await prisma.message.update({ where: { id: message.id }, data: { status: "SKIPPED" } });
@@ -43,7 +52,10 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
       if (message.channel === "TELEGRAM") {
         const chatId = message.booking.customer.telegramChatId;
         if (!chatId) throw new Error("Telegram chat is unavailable");
-        await dependencies.sendTelegram(chatId, reminderText(message.booking));
+        const encryptedToken = message.booking.business.telegramIntegrations[0]?.botTokenEncrypted;
+        const encryptionKey = process.env.INTEGRATION_ENCRYPTION_KEY;
+        if (!encryptedToken || !encryptionKey) throw new Error("Business Telegram bot is unavailable");
+        await dependencies.sendTelegram(decryptSecret(encryptedToken, encryptionKey), chatId, reminderText(message.booking));
       } else {
         const business = message.booking.business;
         if (!business.whatsappPhoneNumberId) throw new Error("WhatsApp business settings are unavailable");

@@ -3,7 +3,7 @@ import { recognizeDushanbeCityReceipt } from "@/core/payments/dushanbe-city-rece
 import { storeReceipt } from "@/core/payments/receipt-storage";
 import { decryptSecret } from "@/core/security/secret-encryption";
 import { createTelegramApi } from "@/integrations/telegram/telegram-api";
-import { handleTelegramUpdate } from "@/integrations/telegram/update-handler";
+import { handleBusinessTelegramUpdate } from "@/integrations/telegram/business-update-handler";
 
 export type BusinessTelegramUpdate = {
   update_id: number;
@@ -11,8 +11,9 @@ export type BusinessTelegramUpdate = {
     chat: { id: number };
     text?: string;
     photo?: Array<{ file_id: string }>;
+    contact?: { phone_number: string; user_id?: number };
   };
-  callback_query?: { data?: string; message?: { chat: { id: number } } };
+  callback_query?: { id?: string; data?: string; message?: { chat: { id: number } } };
   [key: string]: unknown;
 };
 
@@ -69,7 +70,7 @@ async function defaultBusinessUpdateHandler(
   update: BusinessTelegramUpdate,
 ) {
   const telegram = createTelegramApi(context.token);
-  await handleTelegramUpdate(context.businessId, update, {
+  await handleBusinessTelegramUpdate(context, update, {
     now: () => new Date(),
     sendMessage: telegram.sendMessage,
     downloadPhoto: async (fileId) => {

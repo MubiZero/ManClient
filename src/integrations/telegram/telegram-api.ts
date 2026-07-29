@@ -8,6 +8,14 @@ export type TelegramInlineKeyboard = {
   inline_keyboard: Array<Array<{ text: string; url?: string; callback_data?: string }>>;
 };
 
+export type TelegramReplyKeyboard = {
+  keyboard: Array<Array<{ text: string; request_contact?: boolean }>>;
+  resize_keyboard?: boolean;
+  one_time_keyboard?: boolean;
+};
+
+export type TelegramReplyMarkup = TelegramInlineKeyboard | TelegramReplyKeyboard;
+
 export class TelegramApiError extends Error {
   constructor(
     public readonly method: string,
@@ -60,7 +68,7 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
       await call<boolean>("deleteWebhook", {});
     },
 
-    async sendMessage(chatId: string, text: string, replyMarkup?: TelegramInlineKeyboard): Promise<void> {
+    async sendMessage(chatId: string, text: string, replyMarkup?: TelegramReplyMarkup): Promise<void> {
       await call("sendMessage", { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
     },
 

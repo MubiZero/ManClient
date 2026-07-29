@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { BookingConflictError } from "@/core/bookings/booking-allocation";
 import { createBookingActionToken } from "@/core/bookings/booking-action-token";
 import { BookingValidationError, createPendingBooking } from "@/core/bookings/booking-service";
+import { prisma } from "@/core/database/prisma";
 import {
   assertPaymentCardConfigured,
   getPaymentUrl,
@@ -20,7 +21,7 @@ export async function POST(request: Request): Promise<Response> {
       startsAt: new Date(String(payload.startsAt)),
     } as Parameters<typeof createPendingBooking>[0]);
     const paymentUrl = await getPaymentUrl(booking.paymentId);
-    const telegramUrl = createTelegramStartUrl(booking.paymentId, booking.expiresAt);
+    const telegramUrl = await createTelegramStartUrl(booking.paymentId, booking.expiresAt);
 
     return Response.json(
       { ...booking, expiresAt: booking.expiresAt.toISOString(), paymentUrl: paymentUrl.toString(), telegramUrl },
@@ -43,11 +44,15 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-function createTelegramStartUrl(paymentId: string, expiresAt: Date): string | null {
-  const botUsername = process.env.TELEGRAM_BOT_USERNAME;
-  if (!botUsername || !process.env.BOOKING_ACTION_SECRET) return null;
+async function createTelegramStartUrl(paymentId: string, expiresAt: Date): Promise<string | null> {
+  if (!process.env.BOOKING_ACTION_SECRET) return null;
+  const integration = await prisma.businessTelegramIntegration.findFirst({
+    where: { business: { payments: { some: { id: paymentId } } }, status: "ACTIVE" },
+    select: { botUsername: true },
+  });
+  if (!integration) return null;
   const token = createBookingActionToken({ paymentId, action: "link_payment", expiresAt });
-  const url = new URL(`https://t.me/${botUsername.replace(/^@/, "")}`);
+  const url = new URL(`https://t.me/${integration.botUsername.replace(/^@/, "")}`);
   url.searchParams.set("start", token);
   return url.toString();
 }

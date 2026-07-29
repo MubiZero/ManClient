@@ -33,13 +33,52 @@ describe("POST /api/bookings", () => {
       bookingId: string;
       paymentId: string;
       expiresAt: string;
+      telegramUrl: string | null;
     };
 
     expect(response.status).toBe(201);
     expect(body.expiresAt).toBe("2026-08-01T04:15:00.000Z");
+    expect(body.telegramUrl).toBeNull();
     await expect(prisma.booking.findUnique({ where: { id: body.bookingId } })).resolves.toMatchObject({
       status: "PENDING_PAYMENT",
     });
+  });
+
+  it("creates the deep link from the business bot instead of the platform bot", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-01T04:00:00.000Z"));
+    process.env.TELEGRAM_BOT_USERNAME = "manclient_platform_bot";
+    const fixture = await createBookingFixture();
+    await prisma.businessTelegramIntegration.create({
+      data: {
+        businessId: fixture.business.id,
+        publicId: `booking-${fixture.business.id}`,
+        botId: `booking-bot-${fixture.business.id}`,
+        botUsername: "tenant_booking_bot",
+        botTokenEncrypted: "encrypted",
+        webhookSecretEncrypted: "encrypted",
+        status: "ACTIVE",
+      },
+    });
+
+    const response = await POST(new Request("http://localhost/api/bookings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        businessSlug: fixture.business.slug,
+        branchId: fixture.branch.id,
+        serviceId: fixture.service.id,
+        staffId: fixture.staff.id,
+        resourceIds: [],
+        startsAt: "2026-08-02T05:00:00.000Z",
+        customer: { name: "Мухаммад", phone: "+992900001123" },
+      }),
+    }));
+    const body = await response.json() as { telegramUrl: string | null };
+
+    expect(response.status).toBe(201);
+    expect(body.telegramUrl).toMatch(/^https:\/\/t\.me\/tenant_booking_bot\?start=/);
+    expect(body.telegramUrl).not.toContain("manclient_platform_bot");
   });
 
   it("rejects a phone outside the +992 format", async () => {

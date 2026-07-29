@@ -1,6 +1,6 @@
-import { createTelegramApi, type TelegramInlineKeyboard } from "@/integrations/telegram/telegram-api";
+import { createTelegramApi, type TelegramReplyMarkup as ApiTelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 
-export type TelegramReplyMarkup = TelegramInlineKeyboard;
+export type TelegramReplyMarkup = ApiTelegramReplyMarkup;
 
 export async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: TelegramReplyMarkup): Promise<void> {
   await platformApi().sendMessage(chatId, text, replyMarkup);

@@ -3,10 +3,39 @@ import { describe, expect, it } from "vitest";
 import { createPendingBooking } from "@/core/bookings/booking-service";
 import { prisma } from "@/core/database/prisma";
 import { scheduleBookingReminders } from "@/core/notifications/notification-service";
+import { encryptSecret } from "@/core/security/secret-encryption";
 import { sendDueBookingReminders } from "@/jobs/send-booking-reminder";
 import { createBookingFixture } from "@/../tests/helpers/booking-fixture";
 
 describe("sendDueBookingReminders", () => {
+  it("sends Telegram reminders with the business bot token", async () => {
+    const encryptionKey = Buffer.alloc(32, 14).toString("base64");
+    process.env.INTEGRATION_ENCRYPTION_KEY = encryptionKey;
+    const { bookingId } = await confirmedTelegramBooking();
+    const booking = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
+    await prisma.businessTelegramIntegration.create({
+      data: {
+        businessId: booking.businessId,
+        publicId: `reminder-${bookingId}`,
+        botId: `reminder-bot-${bookingId}`,
+        botUsername: "reminder_bot",
+        botTokenEncrypted: encryptSecret("10013:tenant-reminder-token", encryptionKey),
+        webhookSecretEncrypted: encryptSecret("reminder-secret", encryptionKey),
+        status: "ACTIVE",
+      },
+    });
+    await scheduleBookingReminders(bookingId);
+    await prisma.message.updateMany({ where: { bookingId }, data: { scheduledAt: new Date("2026-08-01T04:00:00.000Z") } });
+    const tokens: string[] = [];
+
+    await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
+      sendTelegram: async (token) => { tokens.push(token); },
+      sendWhatsApp: async () => ({ externalId: "unused" }),
+    });
+
+    expect(tokens).toEqual(["10013:tenant-reminder-token"]);
+  });
+
   it("skips an expired reminder instead of messaging after the visit time", async () => {
     const { bookingId } = await confirmedTelegramBooking();
     await scheduleBookingReminders(bookingId);
