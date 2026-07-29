@@ -34,6 +34,7 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
       setIntegration(payload);
       setToken("");
       setRotating(false);
+      setShowExistingBot(false);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {

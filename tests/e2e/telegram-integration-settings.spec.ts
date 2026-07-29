@@ -26,7 +26,7 @@ test("owner can choose the secondary existing-bot path without retaining its tok
   await expect(page.getByText("@salon_customer_bot")).toBeVisible();
   await expect(token).toHaveCount(0);
   await page.reload();
-  await expect(page.getByLabel("Токен клиентского бота")).toHaveValue("");
+  await expect(page.getByLabel("Токен клиентского бота")).toHaveCount(0);
 });
 
 test("settings remain usable on a narrow screen", async ({ page }) => {
