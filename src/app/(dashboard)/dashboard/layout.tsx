@@ -20,6 +20,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <Link href="/dashboard/settings/services">Услуги</Link>
             <Link href="/dashboard/settings/staff">Сотрудники</Link>
             <Link href="/dashboard/settings/resources">Ресурсы</Link>
+            <Link href="/dashboard/settings/integrations">Интеграции</Link>
           </>}
         </nav>
         <form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}>
