@@ -51,7 +51,7 @@ describe("business booking queries", () => {
 
     const secondList = await listBusinessBookings({ businessId: second.business.id, actorUserId: secondMembership.userId, filters: parseBookingFilters({ view: "list", staffId: first.staff.id }, second.branch.timeZone) });
     expect(secondList.items).toEqual([]);
-    await expect(getBusinessBooking({ businessId: first.business.id, actorUserId: secondMembership.userId, bookingId: created.bookingId })).rejects.toMatchObject<Partial<BookingOperationError>>({ code: "FORBIDDEN" });
-    await expect(getBusinessBooking({ businessId: second.business.id, actorUserId: secondMembership.userId, bookingId: created.bookingId })).rejects.toMatchObject<Partial<BookingOperationError>>({ code: "NOT_FOUND" });
+    await expect(getBusinessBooking({ businessId: first.business.id, actorUserId: secondMembership.userId, bookingId: created.bookingId })).rejects.toMatchObject({ code: "FORBIDDEN" } satisfies Partial<BookingOperationError>);
+    await expect(getBusinessBooking({ businessId: second.business.id, actorUserId: secondMembership.userId, bookingId: created.bookingId })).rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<BookingOperationError>);
   });
 });

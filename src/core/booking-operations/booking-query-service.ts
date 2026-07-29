@@ -1,5 +1,6 @@
 import type { BookingStatus, Prisma } from "@/generated/prisma/client";
 
+import { bookingScopeWhere, requireBookingAccess } from "@/core/booking-operations/booking-access";
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import type { BookingFilters } from "@/core/booking-operations/booking-operation-schemas";
 import { prisma } from "@/core/database/prisma";
@@ -8,9 +9,9 @@ import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 type ActorInput = { businessId: string; actorUserId: string };
 
 export async function listBusinessBookings(input: ActorInput & { filters: BookingFilters }) {
-  const actor = await bookingActor(input);
+  const actor = await requireBookingAccess(input);
   const timeZone = await resolveTimeZone(input.businessId, input.filters.branchId);
-  const where = bookingWhere(input, actor.staffId, timeZone);
+  const where = bookingWhere(input, actor.role === "STAFF" ? actor.staffId : undefined, timeZone);
   const rows = await prisma.booking.findMany({
     where,
     include: {
@@ -37,9 +38,9 @@ export async function listBusinessBookings(input: ActorInput & { filters: Bookin
 }
 
 export async function getBusinessBooking(input: ActorInput & { bookingId: string }) {
-  const actor = await bookingActor(input);
+  const actor = await requireBookingAccess(input);
   const booking = await prisma.booking.findFirst({
-    where: { id: input.bookingId, businessId: input.businessId, ...(actor.staffId !== undefined ? { staffId: actor.staffId ?? "__none__" } : {}) },
+    where: { id: input.bookingId, ...bookingScopeWhere(actor) },
     include: {
       branch: true,
       customer: true,
@@ -52,15 +53,6 @@ export async function getBusinessBooking(input: ActorInput & { bookingId: string
   });
   if (!booking) throw new BookingOperationError("NOT_FOUND");
   return booking;
-}
-
-async function bookingActor(input: ActorInput) {
-  const membership = await prisma.membership.findUnique({
-    where: { businessId_userId: { businessId: input.businessId, userId: input.actorUserId } },
-    select: { id: true, role: true, staff: { select: { id: true } } },
-  });
-  if (!membership) throw new BookingOperationError("FORBIDDEN");
-  return { membershipId: membership.id, role: membership.role, staffId: membership.role === "STAFF" ? membership.staff?.id ?? null : undefined };
 }
 
 async function resolveTimeZone(businessId: string, branchId?: string) {
