@@ -10,7 +10,7 @@ describe("createPaymentUrl", () => {
       bookingReference: "MC-1",
     });
 
-    expect(url.origin + url.pathname).toBe("http://pay.dc.tj/");
+    expect(url.origin + url.pathname).toBe("http://pay.expresspay.tj/");
     expect(url.searchParams.get("A")).toBe("1111222233334444");
     expect(url.searchParams.get("s")).toBe("17.50");
     expect(url.searchParams.get("c")).toBe("MC-1");

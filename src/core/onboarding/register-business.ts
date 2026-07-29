@@ -9,7 +9,7 @@ import { prisma } from "@/core/database/prisma";
 const registrationSchema = z.object({
   ownerName: z.string().trim().min(2).max(80),
   phone: z.string().regex(/^\+992\d{9}$/),
-  password: z.string().min(12).max(128),
+  password: z.string().min(8).max(128),
   businessName: z.string().trim().min(2).max(120),
 }).strict();
 

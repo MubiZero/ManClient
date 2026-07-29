@@ -72,7 +72,7 @@ describe("tenant Telegram booking journey", () => {
     await callback(context, dependencies, sent, "Подтвердить запись", 10);
 
     expect(sent.at(-1)?.text).toContain("DushanbeCity");
-    expect(findUrl(sent.at(-1), "Оплатить")).toMatch(/^http:\/\/pay\.dc\.tj\//);
+    expect(findUrl(sent.at(-1), "Оплатить")).toMatch(/^http:\/\/pay\.expresspay\.tj\//);
 
     await callback(context, dependencies, sent, "Я оплатил", 11);
     await send(context, dependencies, { update_id: 12, message: { chat: { id: 701 }, photo: [{ file_id: "receipt" }] } });

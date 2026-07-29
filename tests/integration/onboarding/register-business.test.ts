@@ -23,7 +23,7 @@ describe("business registration", () => {
     const result = await registerBusiness({
       ownerName: "  Мухаммад  ",
       phone,
-      password: "safe-password-123",
+      password: "12345678",
       businessName: "  Салон Сино  ",
     });
     businessIds.push(result.businessId);
@@ -40,7 +40,7 @@ describe("business registration", () => {
     const branch = membership.business.branches[0];
 
     expect(user).toMatchObject({ email: null, phone, displayName: "Мухаммад" });
-    expect(await verifyPassword("safe-password-123", user.passwordHash!)).toBe(true);
+    expect(await verifyPassword("12345678", user.passwordHash!)).toBe(true);
     expect(membership.role).toBe("OWNER");
     expect(membership.business.name).toBe("Салон Сино");
     expect(branch.name).toBe("Основной филиал");

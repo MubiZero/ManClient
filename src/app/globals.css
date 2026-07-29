@@ -126,16 +126,37 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .dashboard-empty { padding: 40px; background: white; border-radius: var(--radius-md); }
 .dashboard-empty h2 { margin-top: 0; }
 .dashboard-empty p { color: var(--muted); }
-.onboarding-page .page-heading { max-width: 760px; }
-.onboarding-checklist { max-width: 860px; display: grid; background: white; border-radius: var(--radius-md); overflow: hidden; }
-.onboarding-checklist article { display: grid; grid-template-columns: 48px 1fr; gap: 20px; padding: 28px; border-bottom: 1px solid var(--border); }
-.onboarding-checklist article:last-child { border-bottom: 0; }
-.onboarding-checklist article > span { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 700; }
-.onboarding-checklist h2 { margin: 4px 0 8px; font-size: 1.25rem; }
-.onboarding-checklist p { max-width: 62ch; margin: 0 0 18px; color: var(--muted); line-height: 1.5; }
-.onboarding-setup-form { max-width: 760px; display: grid; gap: 20px; padding: 28px; border-radius: var(--radius-md); background: white; }
-.setup-form-heading h2 { margin: 0 0 8px; }
-.setup-form-heading p { max-width: 60ch; margin: 0; color: var(--muted); line-height: 1.5; }
+.onboarding-page .page-heading { max-width: 760px; margin-bottom: 28px; }
+.onboarding-wizard { width: min(100%, 680px); display: grid; gap: 16px; }
+.onboarding-progress { min-height: 76px; display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 0 20px; border-radius: var(--radius-md); background: #eaf0ec; list-style: none; }
+.onboarding-progress li { position: relative; display: flex; align-items: center; gap: 10px; color: #718078; font-size: .875rem; }
+.onboarding-progress li:not(:last-child)::after { content: ""; position: absolute; z-index: 0; top: 50%; right: 12px; width: calc(100% - 58px); height: 1px; background: #c8d4cd; }
+.onboarding-progress li > span { position: relative; z-index: 1; width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #aebdb5; border-radius: 50%; background: #f7faf8; font-variant-numeric: tabular-nums; }
+.onboarding-progress .is-current { color: var(--text); }
+.onboarding-progress .is-current > span { border-color: var(--brand); background: var(--brand); color: white; font-weight: 700; box-shadow: 0 0 0 4px rgba(23, 107, 69, .1); }
+.onboarding-progress .is-complete { color: var(--brand-strong); }
+.onboarding-progress .is-complete > span { border-color: #8db7a0; background: var(--brand-soft); color: var(--brand-strong); font-weight: 700; }
+.onboarding-step-form, .onboarding-checklist { display: grid; gap: 24px; padding: 32px; border-radius: var(--radius-md); background: white; box-shadow: 0 1px 2px rgba(22, 33, 27, .05), 0 8px 24px rgba(22, 33, 27, .06); }
+.setup-form-heading { display: grid; gap: 8px; }
+.setup-form-heading h2, .onboarding-checklist h2 { margin: 0; font-size: clamp(1.5rem, 4vw, 2rem); line-height: 1.15; letter-spacing: -.025em; text-wrap: balance; }
+.setup-form-heading p, .onboarding-checklist > p { max-width: 58ch; margin: 0; color: var(--muted); line-height: 1.55; text-wrap: pretty; }
+.step-kicker { color: var(--brand) !important; font-size: .82rem; font-weight: 700; }
+.onboarding-fields { display: grid; gap: 20px; }
+.onboarding-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.onboarding-primary-action { width: 100%; min-height: 52px; }
+.payment-security-note { display: grid; gap: 4px; padding: 16px; border-radius: var(--radius-sm); background: var(--brand-soft); color: var(--brand-strong); line-height: 1.45; }
+.payment-security-note span { color: #456253; font-size: .9rem; }
+.payment-card-input { font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.onboarding-form-actions { display: grid; grid-template-columns: auto minmax(220px, 1fr); align-items: center; gap: 12px; }
+.onboarding-back-link { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); text-decoration: none; }
+.onboarding-success-mark { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; background: var(--brand); color: white; font-size: 1.5rem; font-weight: 700; }
+.booking-link-preview { display: grid; gap: 5px; padding: 16px 18px; border-radius: var(--radius-sm); background: #f3f7f4; color: var(--text); text-decoration: none; transition: background-color var(--dur-short) var(--ease), transform var(--dur-short) var(--ease); }
+.booking-link-preview:hover { background: var(--brand-soft); }
+.booking-link-preview:active { transform: scale(.99); }
+.booking-link-preview span { color: var(--muted); font-size: .82rem; }
+.booking-link-preview strong { overflow-wrap: anywhere; color: var(--brand-strong); }
+.onboarding-ready-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.onboarding-ready-actions .primary-link, .onboarding-ready-actions .secondary-link { justify-content: center; }
 
 .integration-settings-page .page-heading { max-width: 760px; }
 .telegram-settings-grid { max-width: 820px; display: grid; gap: 20px; }
@@ -189,7 +210,14 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   .branch-profile-row form { align-items: stretch; flex-direction: column; }
   .registration-fields { grid-template-columns: 1fr; }
   .registration-wide-field { grid-column: auto; }
-  .onboarding-checklist article { grid-template-columns: 40px 1fr; padding: 20px; gap: 12px; }
+  .onboarding-progress { min-height: 84px; padding: 10px 12px; }
+  .onboarding-progress li { justify-content: center; flex-direction: column; gap: 5px; font-size: .75rem; }
+  .onboarding-progress li:not(:last-child)::after { top: 26px; right: -10px; width: calc(100% - 38px); }
+  .onboarding-step-form, .onboarding-checklist { padding: 24px 20px; }
+  .onboarding-field-row { grid-template-columns: 1fr; }
+  .onboarding-form-actions { grid-template-columns: 1fr; }
+  .onboarding-form-actions .onboarding-back-link { order: 2; }
+  .onboarding-ready-actions { display: grid; }
 }
 
 /* Marketing homepage */

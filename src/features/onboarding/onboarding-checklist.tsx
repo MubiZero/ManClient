@@ -1,19 +1,18 @@
 import Link from "next/link";
 
-const steps = [
-  { number: "1", title: "Бизнес готов к первым записям", description: "Основной филиал, расписание, первая услуга, специалист и карта оплаты настроены.", href: "/dashboard", action: "Открыть кабинет" },
-  { number: "2", title: "Подключите клиентского бота", description: "Это дополнительный канал. Создайте отдельного бота бизнеса в @BotFather и подключите token здесь.", href: "/dashboard/settings/integrations", action: "Настроить Telegram" },
-] as const;
-
-export function OnboardingChecklist() {
+export function OnboardingChecklist({ businessSlug }: { businessSlug: string }) {
+  const bookingPath = `/b/${businessSlug}`;
   return (
     <div className="onboarding-checklist">
-      {steps.map(step => (
-        <article key={step.number}>
-          <span aria-hidden>{step.number}</span>
-          <div><h2>{step.title}</h2><p>{step.description}</p><Link className="secondary-link" href={step.href}>{step.action}</Link></div>
-        </article>
-      ))}
+      <div className="onboarding-success-mark" aria-hidden>✓</div>
+      <p className="step-kicker">Настройка завершена</p>
+      <h2>Бизнес готов к первым записям</h2>
+      <p>Услуга, расписание и получение оплаты настроены. Проверьте страницу, которую увидят ваши клиенты.</p>
+      <Link className="booking-link-preview" href={bookingPath}><span>Ваша ссылка для записи</span><strong>{bookingPath}</strong></Link>
+      <div className="onboarding-ready-actions">
+        <Link className="primary-link" href="/dashboard">Открыть кабинет</Link>
+        <Link className="secondary-link" href="/dashboard/settings/integrations">Подключить Telegram</Link>
+      </div>
     </div>
   );
 }

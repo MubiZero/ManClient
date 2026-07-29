@@ -42,7 +42,7 @@ describe("confirmFromReceipt", () => {
     const booking = await createPaymentReadyBooking();
 
     await expect(getPaymentUrl(booking.paymentId)).resolves.toMatchObject({
-      hostname: "pay.dc.tj",
+      hostname: "pay.expresspay.tj",
       search: expect.stringContaining("A=1111222233334444"),
     });
   });

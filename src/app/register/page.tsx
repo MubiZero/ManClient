@@ -34,7 +34,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   const message = error === "phone"
     ? "Этот номер уже используется. Войдите в существующий кабинет или укажите другой."
     : error === "input"
-      ? "Проверьте заполненные поля. Пароль должен содержать минимум 12 символов."
+      ? "Проверьте заполненные поля. Пароль должен содержать минимум 8 символов."
       : undefined;
 
   return (
