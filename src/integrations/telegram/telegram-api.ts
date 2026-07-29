@@ -16,6 +16,16 @@ export type TelegramReplyKeyboard = {
 
 export type TelegramReplyMarkup = TelegramInlineKeyboard | TelegramReplyKeyboard;
 
+export type TelegramMessageRef = {
+  chatId: string;
+  messageId: number;
+};
+
+export type TelegramBotCommand = {
+  command: string;
+  description: string;
+};
+
 export class TelegramApiError extends Error {
   constructor(
     public readonly method: string,
@@ -30,11 +40,11 @@ export class TelegramApiError extends Error {
 export type TelegramApi = ReturnType<typeof createTelegramApi>;
 
 export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) {
-  async function call<T>(method: string, body: Record<string, unknown>): Promise<T> {
+  async function request<T>(method: string, body: BodyInit, headers?: HeadersInit): Promise<T> {
     const response = await fetcher(`https://api.telegram.org/bot${token}/${method}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+      ...(headers ? { headers } : {}),
+      body,
     });
     const payload = (await response.json()) as {
       ok: boolean;
@@ -45,6 +55,26 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
       throw new TelegramApiError(method, response.status, payload.description ?? "Unknown error");
     }
     return payload.result;
+  }
+
+  async function call<T>(method: string, body: Record<string, unknown>): Promise<T> {
+    return request<T>(method, JSON.stringify(body), { "content-type": "application/json" });
+  }
+
+  async function messageRef(chatId: string, method: string, body: Record<string, unknown>): Promise<TelegramMessageRef> {
+    const message = await call<{ message_id?: number }>(method, body);
+    if (typeof message.message_id !== "number") {
+      throw new Error(`Telegram ${method} did not return a message id`);
+    }
+    return { chatId, messageId: message.message_id };
+  }
+
+  async function multipartMessageRef(chatId: string, method: string, form: FormData): Promise<TelegramMessageRef> {
+    const message = await request<{ message_id?: number }>(method, form);
+    if (typeof message.message_id !== "number") {
+      throw new Error(`Telegram ${method} did not return a message id`);
+    }
+    return { chatId, messageId: message.message_id };
   }
 
   return {
@@ -74,6 +104,51 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
 
     async deleteMessage(chatId: string, messageId: number): Promise<void> {
       await call("deleteMessage", { chat_id: chatId, message_id: messageId });
+    },
+
+    async answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
+      await call("answerCallbackQuery", { callback_query_id: callbackQueryId, ...(text ? { text } : {}) });
+    },
+
+    async editMessageText(message: TelegramMessageRef, text: string, replyMarkup?: TelegramReplyMarkup): Promise<TelegramMessageRef> {
+      return messageRef(message.chatId, "editMessageText", {
+        chat_id: message.chatId,
+        message_id: message.messageId,
+        text,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      });
+    },
+
+    async editMessageReplyMarkup(message: TelegramMessageRef, replyMarkup?: TelegramReplyMarkup): Promise<TelegramMessageRef> {
+      return messageRef(message.chatId, "editMessageReplyMarkup", {
+        chat_id: message.chatId,
+        message_id: message.messageId,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      });
+    },
+
+    async sendPhoto(chatId: string, photo: Uint8Array | string, caption?: string, replyMarkup?: TelegramReplyMarkup): Promise<TelegramMessageRef> {
+      if (typeof photo === "string") {
+        return messageRef(chatId, "sendPhoto", {
+          chat_id: chatId,
+          photo,
+          ...(caption ? { caption } : {}),
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        });
+      }
+
+      const form = new FormData();
+      form.append("chat_id", chatId);
+      const photoBytes = new Uint8Array(photo.byteLength);
+      photoBytes.set(photo);
+      form.append("photo", new Blob([photoBytes.buffer]), "photo.jpg");
+      if (caption) form.append("caption", caption);
+      if (replyMarkup) form.append("reply_markup", JSON.stringify(replyMarkup));
+      return multipartMessageRef(chatId, "sendPhoto", form);
+    },
+
+    async setMyCommands(commands: TelegramBotCommand[]): Promise<void> {
+      await call("setMyCommands", { commands });
     },
 
     async getFile(fileId: string): Promise<{ filePath: string }> {

@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import { createTelegramApi } from "@/integrations/telegram/telegram-api";
 
+type RecordedCall = { method: string; body: unknown };
+
+function recordingFetcher(calls: RecordedCall[]): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = new URL(String(input)).pathname.split("/").at(-1)!;
+    const body = typeof init?.body === "string"
+      ? JSON.parse(init.body)
+      : init?.body;
+    calls.push({ method, body });
+    return new Response(JSON.stringify({ ok: true, result: { message_id: 42 } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+}
+
 describe("Telegram API", () => {
   it("validates bot identity without exposing the token", async () => {
     const token = "123456:top-secret-token";
@@ -40,5 +56,67 @@ describe("Telegram API", () => {
     }), { status: 200, headers: { "content-type": "application/json" } }));
 
     await expect(api.getMe()).rejects.toThrow("Telegram bot must have a username");
+  });
+
+  it("answers callbacks without leaking tokens", async () => {
+    const calls: RecordedCall[] = [];
+    const api = createTelegramApi("123:secret", recordingFetcher(calls));
+
+    await api.answerCallbackQuery("callback-1", "Готово");
+
+    expect(calls).toContainEqual({
+      method: "answerCallbackQuery",
+      body: { callback_query_id: "callback-1", text: "Готово" },
+    });
+    expect(JSON.stringify(calls)).not.toContain("123:secret");
+  });
+
+  it("edits a message by its Telegram reference and preserves its keyboard", async () => {
+    const calls: RecordedCall[] = [];
+    const api = createTelegramApi("123:secret", recordingFetcher(calls));
+    const keyboard = { inline_keyboard: [[{ text: "Открыть", callback_data: "act_7Yp" }]] };
+
+    await expect(api.editMessageText({ chatId: "-10088", messageId: 17 }, "Обновлено", keyboard)).resolves.toEqual({
+      chatId: "-10088",
+      messageId: 42,
+    });
+
+    expect(calls).toContainEqual({
+      method: "editMessageText",
+      body: { chat_id: "-10088", message_id: 17, text: "Обновлено", reply_markup: keyboard },
+    });
+  });
+
+  it("sends either a protected photo URL or stored bytes and returns a message reference", async () => {
+    const calls: RecordedCall[] = [];
+    const api = createTelegramApi("123:secret", recordingFetcher(calls));
+
+    await expect(api.sendPhoto("-10088", "https://storage.example/receipt?signature=protected", "Чек")).resolves.toEqual({
+      chatId: "-10088",
+      messageId: 42,
+    });
+    await api.sendPhoto("-10088", new Uint8Array([1, 2, 3]), "Чек");
+
+    expect(calls[0]).toEqual({
+      method: "sendPhoto",
+      body: { chat_id: "-10088", photo: "https://storage.example/receipt?signature=protected", caption: "Чек" },
+    });
+    expect(calls[1]?.method).toBe("sendPhoto");
+    expect(calls[1]?.body).toBeInstanceOf(FormData);
+    expect((calls[1]?.body as FormData).get("chat_id")).toBe("-10088");
+    expect((calls[1]?.body as FormData).get("caption")).toBe("Чек");
+    expect((calls[1]?.body as FormData).get("photo")).toBeInstanceOf(Blob);
+  });
+
+  it("registers the native command list", async () => {
+    const calls: RecordedCall[] = [];
+    const api = createTelegramApi("123:secret", recordingFetcher(calls));
+
+    await api.setMyCommands([{ command: "menu", description: "Главное меню" }]);
+
+    expect(calls).toContainEqual({
+      method: "setMyCommands",
+      body: { commands: [{ command: "menu", description: "Главное меню" }] },
+    });
   });
 });
