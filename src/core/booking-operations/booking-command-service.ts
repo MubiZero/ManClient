@@ -8,6 +8,7 @@ import { reserveAllocation } from "@/core/bookings/booking-allocation";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
+import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 import { scheduleBookingReminders } from "@/core/notifications/notification-service";
 
 type ActorInput = { businessId: string; actorUserId: string };
@@ -96,7 +97,89 @@ export async function cancelBusinessBooking(input: ActorInput & { bookingId: str
   });
 }
 
+export async function remindBusinessBookingPayment(input: ActorInput & { bookingId: string }, now = new Date()) {
+  return prisma.$transaction(async (transaction) => {
+    const scope = await requireBookingAccess(input, transaction);
+    const booking = await transaction.booking.findFirst({
+      where: { id: input.bookingId, ...bookingScopeWhere(scope) },
+      include: { customer: true, payment: true },
+    });
+    if (!booking) throw new BookingOperationError("NOT_FOUND");
+    if (
+      booking.status !== "PENDING_PAYMENT"
+      || booking.payment?.status !== "PENDING"
+      || !booking.customer.telegramChatId
+    ) {
+      throw new BookingOperationError("INVALID_STATUS");
+    }
+    const created = await transaction.message.createMany({
+      data: [{
+        businessId: input.businessId,
+        bookingId: booking.id,
+        channel: "TELEGRAM",
+        kind: "PAYMENT_REMINDER",
+        scheduledAt: now,
+      }],
+      skipDuplicates: true,
+    });
+    if (created.count === 1) {
+      await writeAuditEvent({
+        businessId: input.businessId,
+        bookingId: booking.id,
+        type: "booking.payment_reminder_scheduled",
+        actorType: "membership",
+        actorId: scope.id,
+        metadata: { channel: "TELEGRAM" },
+      }, transaction);
+    }
+    return { bookingId: booking.id, scheduled: created.count === 1 };
+  });
+}
+
+export async function getBusinessBookingAvailableStarts(
+  input: ActorInput & { bookingId: string; date: string },
+) {
+  const scope = await requireBookingAccess(input);
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: input.bookingId,
+      ...bookingScopeWhere(scope),
+      status: { in: ["PENDING_PAYMENT", "CONFIRMED"] },
+    },
+    include: { branch: true, service: true, resources: true },
+  });
+  if (!booking) throw new BookingOperationError("NOT_FOUND");
+  let rangeStartsAt: Date;
+  let rangeEndsAt: Date;
+  try {
+    rangeStartsAt = localDateTimeToUtc(input.date, "00:00", booking.branch.timeZone);
+    rangeEndsAt = localDateTimeToUtc(nextDate(input.date), "00:00", booking.branch.timeZone);
+  } catch {
+    throw new BookingOperationError("INVALID_INPUT");
+  }
+  const starts = await getAvailableStarts({
+    branchId: booking.branchId,
+    serviceId: booking.serviceId,
+    staffId: booking.staffId,
+    resourceIds: booking.resources.map(item => item.resourceId),
+    rangeStartsAt,
+    rangeEndsAt,
+    durationMinutes: booking.service.durationMinutes,
+    intervalMinutes: 30,
+    excludeBookingId: booking.id,
+  });
+  return { starts, timeZone: booking.branch.timeZone };
+}
+
 async function assertAvailable(input: { branchId: string; serviceId: string; staffId: string; resourceIds: string[]; startsAt: Date; durationMinutes: number; excludeBookingId?: string }) {
   const starts = await getAvailableStarts({ ...input, rangeStartsAt: input.startsAt, rangeEndsAt: new Date(input.startsAt.getTime() + input.durationMinutes * 60_000), intervalMinutes: input.durationMinutes });
   if (starts.length !== 1) throw new BookingOperationError("SLOT_UNAVAILABLE");
+}
+
+function nextDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("INVALID_DATE");
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) throw new Error("INVALID_DATE");
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }

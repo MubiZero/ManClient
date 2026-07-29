@@ -16,6 +16,18 @@ type CreateBusinessBotActionInput = {
   mode?: "NAVIGATION" | "MUTATION";
 };
 
+export type BusinessBotActionKind =
+  | "menu.open"
+  | "bookings.list"
+  | "booking.open"
+  | "BOOKING_CONFIRM"
+  | "BOOKING_REMIND_PAYMENT"
+  | "BOOKING_RESCHEDULE_DATE"
+  | "BOOKING_RESCHEDULE_SLOT"
+  | "BOOKING_CANCEL_BEGIN"
+  | "BOOKING_CANCEL_REASON"
+  | "BOOKING_REFRESH";
+
 type StoredActionPayload = {
   actorUserId: string;
   telegramUserId: string;

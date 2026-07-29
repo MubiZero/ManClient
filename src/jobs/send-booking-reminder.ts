@@ -35,13 +35,17 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
         booking: {
           include: {
             customer: true,
+            payment: true,
             business: { include: { telegramIntegrations: { where: { status: "ACTIVE" }, take: 1 } } },
             service: true,
           },
         },
       },
     });
-    if (message.booking.startsAt <= now || message.booking.status !== "CONFIRMED") {
+    const eligible = message.kind === "PAYMENT_REMINDER"
+      ? message.booking.status === "PENDING_PAYMENT" && message.booking.payment?.status === "PENDING"
+      : message.booking.status === "CONFIRMED";
+    if (message.booking.startsAt <= now || !eligible) {
       await prisma.message.update({ where: { id: message.id }, data: { status: "SKIPPED" } });
       processed += 1;
       continue;
@@ -55,7 +59,7 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
         const encryptedToken = message.booking.business.telegramIntegrations[0]?.botTokenEncrypted;
         const encryptionKey = process.env.INTEGRATION_ENCRYPTION_KEY;
         if (!encryptedToken || !encryptionKey) throw new Error("Business Telegram bot is unavailable");
-        await dependencies.sendTelegram(decryptSecret(encryptedToken, encryptionKey), chatId, reminderText(message.booking));
+        await dependencies.sendTelegram(decryptSecret(encryptedToken, encryptionKey), chatId, reminderText(message.kind, message.booking));
       } else {
         const business = message.booking.business;
         if (!business.whatsappPhoneNumberId) throw new Error("WhatsApp business settings are unavailable");
@@ -90,7 +94,10 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
   return processed;
 }
 
-function reminderText(booking: { customer: { name: string }; service: { name: string }; startsAt: Date }) {
+function reminderText(kind: string, booking: { customer: { name: string }; service: { name: string }; startsAt: Date }) {
+  if (kind === "PAYMENT_REMINDER") {
+    return `${booking.customer.name}, напоминаем об оплате записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt)}.`;
+  }
   return `${booking.customer.name}, напоминаем о записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt)}.`;
 }
 

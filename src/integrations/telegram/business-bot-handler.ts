@@ -4,7 +4,16 @@ import {
   consumeBusinessBotAction,
   createBusinessBotAction,
   type BusinessBotActionActor,
+  type BusinessBotActionKind,
 } from "@/core/integrations/business-bot-actions";
+import {
+  cancelBusinessBooking,
+  confirmBusinessBooking,
+  getBusinessBookingAvailableStarts,
+  remindBusinessBookingPayment,
+  rescheduleBusinessBooking,
+} from "@/core/booking-operations/booking-command-service";
+import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import {
   getBusinessBotBooking,
   getBusinessBotSummary,
@@ -12,6 +21,7 @@ import {
   type BusinessBotBookingFilter,
 } from "@/core/integrations/business-bot-query-service";
 import { formatTajikPhoneInput } from "@/core/formatting/tajik-phone";
+import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
 import {
   bookingCardView,
   bookingListView,
@@ -130,6 +140,83 @@ async function handleCallback(
       await showBookingCard(actor, bookingId, dependencies, callback.message);
       return;
     }
+    case "BOOKING_REFRESH": {
+      const bookingId = stringValue(action.payload.bookingId);
+      if (!bookingId) return showStaleAction(actor, callback.message, dependencies);
+      await showBookingCard(actor, bookingId, dependencies, callback.message);
+      return;
+    }
+    case "BOOKING_CONFIRM": {
+      const bookingId = stringValue(action.payload.bookingId);
+      if (!bookingId) return showStaleAction(actor, callback.message, dependencies);
+      try {
+        await confirmBusinessBooking({ businessId: actor.businessId, actorUserId: actor.userId, bookingId }, dependencies.now());
+        await showBookingCard(actor, bookingId, dependencies, callback.message, "Запись подтверждена вручную. Банковская проверка оплаты не выполнялась.");
+      } catch (error) {
+        await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
+      }
+      return;
+    }
+    case "BOOKING_REMIND_PAYMENT": {
+      const bookingId = stringValue(action.payload.bookingId);
+      if (!bookingId) return showStaleAction(actor, callback.message, dependencies);
+      try {
+        const result = await remindBusinessBookingPayment({ businessId: actor.businessId, actorUserId: actor.userId, bookingId }, dependencies.now());
+        await showBookingCard(
+          actor,
+          bookingId,
+          dependencies,
+          callback.message,
+          result.scheduled ? "Напоминание об оплате запланировано." : "Напоминание об оплате уже запланировано.",
+        );
+      } catch (error) {
+        await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
+      }
+      return;
+    }
+    case "BOOKING_RESCHEDULE_DATE": {
+      const bookingId = stringValue(action.payload.bookingId);
+      if (!bookingId) return showStaleAction(actor, callback.message, dependencies);
+      await showRescheduleDates(actor, bookingId, callback.message, dependencies);
+      return;
+    }
+    case "BOOKING_RESCHEDULE_SLOT": {
+      const bookingId = stringValue(action.payload.bookingId);
+      const startsAt = stringValue(action.payload.startsAt);
+      const date = stringValue(action.payload.date);
+      if (!bookingId || (!startsAt && !date)) return showStaleAction(actor, callback.message, dependencies);
+      if (startsAt) {
+        const value = new Date(startsAt);
+        if (Number.isNaN(value.getTime())) return showStaleAction(actor, callback.message, dependencies);
+        try {
+          await rescheduleBusinessBooking({ businessId: actor.businessId, actorUserId: actor.userId, bookingId, startsAt: value });
+          await showBookingCard(actor, bookingId, dependencies, callback.message, "Запись перенесена.");
+        } catch (error) {
+          await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
+        }
+        return;
+      }
+      await showRescheduleSlots(actor, bookingId, date!, callback.message, dependencies);
+      return;
+    }
+    case "BOOKING_CANCEL_BEGIN": {
+      const bookingId = stringValue(action.payload.bookingId);
+      if (!bookingId) return showStaleAction(actor, callback.message, dependencies);
+      await showCancellationConfirmation(actor, bookingId, callback.message, dependencies);
+      return;
+    }
+    case "BOOKING_CANCEL_REASON": {
+      const bookingId = stringValue(action.payload.bookingId);
+      const reason = stringValue(action.payload.reason);
+      if (!bookingId || !reason) return showStaleAction(actor, callback.message, dependencies);
+      try {
+        await cancelBusinessBooking({ businessId: actor.businessId, actorUserId: actor.userId, bookingId, reason }, dependencies.now());
+        await showBookingCard(actor, bookingId, dependencies, callback.message, "Запись отменена. Причина сохранена.");
+      } catch (error) {
+        await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
+      }
+      return;
+    }
     default:
       await showStaleAction(actor, callback.message, dependencies);
   }
@@ -217,14 +304,23 @@ async function showBookingCard(
   bookingId: string,
   dependencies: BusinessBotHandlerDependencies,
   message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+  notice?: string,
 ) {
   try {
     const booking = await getBusinessBotBooking(actor, bookingId);
-    const [refresh, menu] = await Promise.all([
-      navigationAction(actor, "booking.open", { bookingId }, "Обновить", dependencies.now()),
+    const actions = await Promise.all([
+      ...(booking.status === "PENDING_PAYMENT" ? [
+        mutationAction(actor, "BOOKING_CONFIRM", { bookingId }, "Подтвердить запись", dependencies.now()),
+        mutationAction(actor, "BOOKING_REMIND_PAYMENT", { bookingId }, "Напомнить об оплате", dependencies.now()),
+      ] : []),
+      ...(["PENDING_PAYMENT", "CONFIRMED"].includes(booking.status) ? [
+        navigationAction(actor, "BOOKING_RESCHEDULE_DATE", { bookingId }, "Перенести", dependencies.now()),
+        navigationAction(actor, "BOOKING_CANCEL_BEGIN", { bookingId }, "Отменить запись", dependencies.now()),
+      ] : []),
+      navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Обновить", dependencies.now()),
       navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
     ]);
-    await deliver(bookingCardView({
+    const view = bookingCardView({
       customerName: booking.customer.name,
       customerPhone: formatTajikPhoneInput(booking.customer.phone),
       serviceName: booking.service.name,
@@ -235,11 +331,132 @@ async function showBookingCard(
       bookingStatus: booking.status,
       paymentStatus: booking.payment?.status ?? "PENDING",
       amountDiram: booking.payment?.amountDiram ?? booking.service.amountDiram,
-      actions: [refresh, menu],
-    }), actor, dependencies, message);
+      actions,
+    });
+    await deliver(notice ? { ...view, text: `${notice}\n\n${view.text}` } : view, actor, dependencies, message);
   } catch {
     await showStaleAction(actor, message, dependencies);
   }
+}
+
+async function showRescheduleDates(
+  actor: BusinessBotPlatformActor,
+  bookingId: string,
+  message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+  dependencies: BusinessBotHandlerDependencies,
+) {
+  try {
+    const booking = await getBusinessBotBooking(actor, bookingId);
+    const firstDate = todayInTimeZone(booking.branch.timeZone, dependencies.now());
+    const candidates = Array.from({ length: 7 }, (_, index) => addDays(firstDate, index));
+    const available = (await Promise.all(candidates.map(async date => ({
+      date,
+      options: await getBusinessBookingAvailableStarts({
+        businessId: actor.businessId,
+        actorUserId: actor.userId,
+        bookingId,
+        date,
+      }),
+    })))).filter(item => item.options.starts.length > 0);
+    const actions = await Promise.all(available.map(item => navigationAction(
+      actor,
+      "BOOKING_RESCHEDULE_SLOT",
+      { bookingId, date: item.date },
+      formatDate(item.date, booking.branch.timeZone),
+      dependencies.now(),
+    )));
+    const back = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Назад", dependencies.now());
+    await deliver({
+      text: actions.length
+        ? "Выберите новую дату. Старое время сохранится до успешного переноса."
+        : "На ближайшие 7 дней свободных дат нет. Старое время записи сохранено.",
+      replyMarkup: inlineView(actions.length ? [...pairRows(actions), [back]] : [[back]]),
+    }, actor, dependencies, message);
+  } catch (error) {
+    await showBookingOperationError(actor, bookingId, error, message, dependencies);
+  }
+}
+
+async function showRescheduleSlots(
+  actor: BusinessBotPlatformActor,
+  bookingId: string,
+  date: string,
+  message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+  dependencies: BusinessBotHandlerDependencies,
+) {
+  try {
+    const options = await getBusinessBookingAvailableStarts({
+      businessId: actor.businessId,
+      actorUserId: actor.userId,
+      bookingId,
+      date,
+    });
+    const actions = await Promise.all(options.starts.map(startsAt => mutationAction(
+      actor,
+      "BOOKING_RESCHEDULE_SLOT",
+      { bookingId, startsAt: startsAt.toISOString() },
+      formatTime(startsAt, options.timeZone),
+      dependencies.now(),
+    )));
+    const back = await navigationAction(actor, "BOOKING_RESCHEDULE_DATE", { bookingId }, "К датам", dependencies.now());
+    await deliver({
+      text: actions.length
+        ? "Выберите новое время. Доступность будет проверена ещё раз перед переносом."
+        : "На эту дату свободного времени уже нет. Выберите другую дату.",
+      replyMarkup: inlineView(actions.length ? [...pairRows(actions), [back]] : [[back]]),
+    }, actor, dependencies, message);
+  } catch (error) {
+    await showBookingOperationError(actor, bookingId, error, message, dependencies);
+  }
+}
+
+async function showCancellationConfirmation(
+  actor: BusinessBotPlatformActor,
+  bookingId: string,
+  message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+  dependencies: BusinessBotHandlerDependencies,
+) {
+  try {
+    await getBusinessBotBooking(actor, bookingId);
+    const reasons = ["Клиент попросил отменить", "Не удалось связаться с клиентом"];
+    const actions = await Promise.all(reasons.map(reason => mutationAction(
+      actor,
+      "BOOKING_CANCEL_REASON",
+      { bookingId, reason },
+      reason,
+      dependencies.now(),
+    )));
+    const back = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Назад", dependencies.now());
+    await deliver({
+      text: "Отменить запись? Клиент получит уведомление. Выберите причину для подтверждения отмены.",
+      replyMarkup: inlineView(actions.map(action => [action]).concat([[back]])),
+    }, actor, dependencies, message);
+  } catch (error) {
+    await showBookingOperationError(actor, bookingId, error, message, dependencies);
+  }
+}
+
+async function showBookingOperationError(
+  actor: BusinessBotPlatformActor,
+  bookingId: string,
+  error: unknown,
+  message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+  dependencies: BusinessBotHandlerDependencies,
+) {
+  if (!(error instanceof BookingOperationError)) {
+    await showStaleAction(actor, message, dependencies);
+    return;
+  }
+  const refresh = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Обновить", dependencies.now());
+  const menu = await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now());
+  const text = {
+    FORBIDDEN: "У вас нет доступа к этой записи.",
+    NOT_FOUND: "Запись не найдена или у вас нет доступа к ней.",
+    INVALID_STATUS: "Действие недоступно в текущем состоянии записи. Обновите карточку.",
+    SLOT_UNAVAILABLE: "Это время уже занято. Старое время записи сохранено. Выберите другой слот.",
+    INVALID_INPUT: "Данные действия устарели или заполнены неверно. Обновите карточку.",
+  }[error.code];
+  await deliver({ text, replyMarkup: inlineView([[refresh, menu]]) }, actor, dependencies, message);
 }
 
 async function showStaleAction(
@@ -283,7 +500,7 @@ async function showHelp(actor: BusinessBotPlatformActor, dependencies: BusinessB
 
 async function navigationAction(
   actor: BusinessBotPlatformActor,
-  kind: string,
+  kind: BusinessBotActionKind,
   payload: Prisma.InputJsonObject,
   text: string,
   now: Date,
@@ -293,6 +510,22 @@ async function navigationAction(
     payload,
     expiresAt: new Date(now.getTime() + actionLifetimeMs),
     mode: "NAVIGATION",
+  });
+  return { actionId: action.actionId, text };
+}
+
+async function mutationAction(
+  actor: BusinessBotPlatformActor,
+  kind: BusinessBotActionKind,
+  payload: Prisma.InputJsonObject,
+  text: string,
+  now: Date,
+): Promise<BusinessBotAction> {
+  const action = await createBusinessBotAction(actor, {
+    kind,
+    payload,
+    expiresAt: new Date(now.getTime() + actionLifetimeMs),
+    mode: "MUTATION",
   });
   return { actionId: action.actionId, text };
 }
@@ -353,6 +586,25 @@ function titleForFilter(filter: BusinessBotBookingFilter["kind"]) {
     case "pending": return "Ожидают оплату";
     case "upcoming": return "Ближайшие записи";
   }
+}
+
+function addDays(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDate(value: string, timeZone: string) {
+  return new Intl.DateTimeFormat("ru-RU", { timeZone, day: "numeric", month: "short", weekday: "short" })
+    .format(new Date(`${value}T12:00:00.000Z`));
+}
+
+function formatTime(value: Date, timeZone: string) {
+  return new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" }).format(value);
+}
+
+function pairRows(actions: BusinessBotAction[]) {
+  return Array.from({ length: Math.ceil(actions.length / 2) }, (_, index) => actions.slice(index * 2, index * 2 + 2));
 }
 
 function requiredAppUrl() {
