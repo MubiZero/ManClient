@@ -24,10 +24,9 @@ describe("first business setup", () => {
     const suffix = randomUUID();
     const registered = await registerBusiness({
       ownerName: "Мухаммад",
-      email: `setup-${suffix}@example.test`,
+      phone: `+9929${suffix.replace(/-/g, "").replace(/\D/g, "").padEnd(8, "3").slice(0, 8)}`,
       password: "safe-password-123",
       businessName: "Салон",
-      branchName: "Центр",
     });
     businessIds.push(registered.businessId);
     userIds.push(registered.userId);

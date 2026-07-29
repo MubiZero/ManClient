@@ -60,7 +60,8 @@ enum ConversationChannel {
 
 model User {
   id                            String                        @id @default(cuid())
-  email                         String                        @unique
+  email                         String?                       @unique
+  phone                         String?                       @unique
   displayName                   String
   passwordHash                  String?
   memberships                   Membership[]

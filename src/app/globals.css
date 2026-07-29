@@ -79,6 +79,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .login-form { display: grid; gap: 18px; }
 .registration-panel { width: min(100%, 760px); }
 .registration-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.registration-fields .field-label { align-self: start; grid-auto-rows: max-content; }
 .registration-wide-field { grid-column: 1 / -1; }
 .field-label small { color: var(--muted); font-weight: 400; }
 .auth-switch { margin: 0; color: var(--muted); text-align: center; }
@@ -167,6 +168,10 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .secondary-action:disabled, .danger-action:disabled, .quiet-action:disabled, .danger-button:disabled { cursor: wait; opacity: .6; }
 .integration-confirm { border: 1px solid #dfb0b0; }
 .integration-error { max-width: 66ch; margin: 8px 0 0; padding: 12px 14px; border-radius: var(--radius-sm); background: #fae8e8; color: var(--error); line-height: 1.45; }
+.settings-list > .branch-profile-row { grid-template-columns: minmax(280px, 1.4fr) minmax(180px, .6fr); }
+.branch-profile-row form { display: flex; align-items: end; gap: 12px; }
+.branch-profile-row form .field-label { flex: 1; }
+.branch-profile-row .secondary-action { white-space: nowrap; }
 
 @media (max-width: 760px) {
   .dashboard-shell { grid-template-columns: 1fr; }
@@ -180,6 +185,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   .booking-list article, .settings-list > article { grid-template-columns: 1fr; gap: 8px; }
   .integration-status-panel, .integration-token-form, .integration-confirm { padding: 20px; }
   .integration-actions > button { width: 100%; justify-content: center; }
+  .settings-list > .branch-profile-row { grid-template-columns: 1fr; }
+  .branch-profile-row form { align-items: stretch; flex-direction: column; }
   .registration-fields { grid-template-columns: 1fr; }
   .registration-wide-field { grid-column: auto; }
   .onboarding-checklist article { grid-template-columns: 40px 1fr; padding: 20px; gap: 12px; }

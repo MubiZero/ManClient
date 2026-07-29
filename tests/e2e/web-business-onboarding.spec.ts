@@ -7,12 +7,16 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await expect(connect).toHaveAttribute("href", "/register");
   await connect.click();
   await expect(page).toHaveURL(/\/register$/);
+  const passwordBox = await page.getByLabel("Пароль").boundingBox();
+  const businessBox = await page.getByLabel("Название бизнеса").boundingBox();
+  expect(passwordBox).not.toBeNull();
+  expect(businessBox).not.toBeNull();
+  expect(Math.abs(passwordBox!.y - businessBox!.y)).toBeLessThanOrEqual(1);
 
-  await page.getByLabel("Имя владельца").fill("Мухаммад Саидов");
-  await page.getByLabel("Электронная почта").fill(`owner-${suffix}@example.test`);
+  await page.getByLabel("Ваше имя").fill("Мухаммад Саидов");
+  await page.getByLabel("Номер телефона").fill(`90${suffix.replace(/\D/g, "").padEnd(7, "1").slice(0, 7)}`);
   await page.getByLabel("Пароль").fill("safe-password-123");
   await page.getByLabel("Название бизнеса").fill(`Салон ${suffix}`);
-  await page.getByLabel("Основной филиал").fill("Душанбе, центр");
   await page.getByRole("button", { name: "Создать бизнес" }).click();
 
   await expect(page).toHaveURL(/\/dashboard\/onboarding$/);

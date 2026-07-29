@@ -8,16 +8,15 @@ import { prisma } from "@/core/database/prisma";
 
 const registrationSchema = z.object({
   ownerName: z.string().trim().min(2).max(80),
-  email: z.string().trim().toLowerCase().email().max(160),
+  phone: z.string().regex(/^\+992\d{9}$/),
   password: z.string().min(12).max(128),
   businessName: z.string().trim().min(2).max(120),
-  branchName: z.string().trim().min(2).max(120),
 }).strict();
 
 export type RegisterBusinessInput = z.input<typeof registrationSchema>;
 
 export class RegistrationError extends Error {
-  constructor(public readonly code: "INVALID_INPUT" | "EMAIL_ALREADY_USED") {
+  constructor(public readonly code: "INVALID_INPUT" | "PHONE_ALREADY_USED") {
     super(code);
     this.name = "RegistrationError";
   }
@@ -33,7 +32,7 @@ export async function registerBusiness(input: RegisterBusinessInput) {
     return await prisma.$transaction(async transaction => {
       const user = await transaction.user.create({
         data: {
-          email: parsed.data.email,
+          phone: parsed.data.phone,
           displayName: parsed.data.ownerName,
           passwordHash,
         },
@@ -45,7 +44,7 @@ export async function registerBusiness(input: RegisterBusinessInput) {
         data: { userId: user.id, businessId: business.id, role: "OWNER" },
       });
       const branch = await transaction.branch.create({
-        data: { businessId: business.id, name: parsed.data.branchName, slug: "main" },
+        data: { businessId: business.id, name: "Основной филиал", slug: "main" },
       });
       await Promise.all([
         transaction.staffMember.create({
@@ -64,7 +63,7 @@ export async function registerBusiness(input: RegisterBusinessInput) {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new RegistrationError("EMAIL_ALREADY_USED");
+      throw new RegistrationError("PHONE_ALREADY_USED");
     }
     throw error;
   }

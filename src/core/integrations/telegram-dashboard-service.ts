@@ -30,18 +30,18 @@ export class TelegramDashboardError extends Error {
 
 const tokenInput = z.object({ token: z.string().trim().min(1) }).strict();
 
-export async function getTelegramDashboardStatus(userEmail: string): Promise<TelegramDashboardStatus> {
-  const membership = await managerMembership(userEmail);
+export async function getTelegramDashboardStatus(userId: string): Promise<TelegramDashboardStatus> {
+  const membership = await managerMembership(userId);
   const integration = await getBusinessTelegramStatus(membership.businessId);
   return safeStatus(integration);
 }
 
 export async function connectTelegramForDashboard(
-  userEmail: string,
+  userId: string,
   input: unknown,
   telegramFactory: TelegramApiFactory = createTelegramApi,
 ): Promise<TelegramDashboardStatus> {
-  const membership = await managerMembership(userEmail);
+  const membership = await managerMembership(userId);
   const token = parseToken(input);
   try {
     return safeStatus(await connectBusinessTelegramBot(
@@ -54,11 +54,11 @@ export async function connectTelegramForDashboard(
 }
 
 export async function rotateTelegramForDashboard(
-  userEmail: string,
+  userId: string,
   input: unknown,
   telegramFactory: TelegramApiFactory = createTelegramApi,
 ): Promise<TelegramDashboardStatus> {
-  const membership = await managerMembership(userEmail);
+  const membership = await managerMembership(userId);
   const token = parseToken(input);
   try {
     return safeStatus(await rotateBusinessTelegramBot(
@@ -71,10 +71,10 @@ export async function rotateTelegramForDashboard(
 }
 
 export async function disconnectTelegramForDashboard(
-  userEmail: string,
+  userId: string,
   telegramFactory?: TelegramApiFactory,
 ): Promise<TelegramDashboardStatus> {
-  const membership = await managerMembership(userEmail);
+  const membership = await managerMembership(userId);
   try {
     await disconnectBusinessTelegramBot(
       { businessId: membership.businessId, actorUserId: membership.userId },
@@ -86,9 +86,9 @@ export async function disconnectTelegramForDashboard(
   }
 }
 
-async function managerMembership(userEmail: string) {
+async function managerMembership(userId: string) {
   const membership = await prisma.membership.findFirst({
-    where: { user: { email: userEmail } },
+    where: { userId },
     select: { businessId: true, userId: true, role: true },
     orderBy: { createdAt: "asc" },
   });

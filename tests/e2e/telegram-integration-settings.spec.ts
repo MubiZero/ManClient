@@ -37,7 +37,7 @@ test("settings remain usable on a narrow screen", async ({ page }) => {
 
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto("/login");
-  await page.getByLabel("Электронная почта").fill("owner@demo-barber.local");
+  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");
   await page.getByLabel("Пароль").fill(ownerPassword);
   await page.getByRole("button", { name: "Войти в кабинет" }).click();
   await expect(page).toHaveURL(/\/dashboard/);

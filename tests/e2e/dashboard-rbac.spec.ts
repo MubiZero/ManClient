@@ -21,7 +21,7 @@ test("staff cannot open business settings", async ({ page }) => {
 
 async function signIn(page: import("@playwright/test").Page, email: string, password: string) {
   await page.goto("/login");
-  await page.getByLabel("Электронная почта").fill(email);
+  await page.getByLabel("Телефон или электронная почта").fill(email);
   await page.getByLabel("Пароль").fill(password);
   await page.getByRole("button", { name: "Войти в кабинет" }).click();
   await expect(page).toHaveURL(/\/dashboard/);

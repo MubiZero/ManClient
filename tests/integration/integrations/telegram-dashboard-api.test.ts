@@ -29,7 +29,7 @@ describe("Telegram dashboard API service", () => {
   it("derives the business from the signed-in user and never returns credentials", async () => {
     const fixture = await createBusiness("OWNER");
     const result = await connectTelegramForDashboard(
-      fixture.user.email,
+      fixture.user.id,
       { token: "20001:dashboard-secret" },
       fakeFactory({ id: 20001, username: "salon_customer_bot" }),
     );
@@ -41,29 +41,29 @@ describe("Telegram dashboard API service", () => {
       lastWebhookError: null,
     });
     expect(JSON.stringify(result)).not.toContain("dashboard-secret");
-    expect(await getTelegramDashboardStatus(fixture.user.email)).toEqual(result);
+    expect(await getTelegramDashboardStatus(fixture.user.id)).toEqual(result);
   });
 
   it("rejects staff and unknown users without revealing tenant state", async () => {
     const staff = await createBusiness("STAFF");
 
     await expect(connectTelegramForDashboard(
-      staff.user.email,
+      staff.user.id,
       { token: "20002:dashboard-secret" },
       fakeFactory({ id: 20002, username: "staff_bot" }),
     )).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(getTelegramDashboardStatus("missing@example.test"))
+    await expect(getTelegramDashboardStatus("missing-user-id"))
       .rejects.toBeInstanceOf(TelegramDashboardError);
   });
 
   it("validates token input and disconnects without returning stored secrets", async () => {
     const fixture = await createBusiness("ADMIN");
-    await expect(connectTelegramForDashboard(fixture.user.email, { token: " " }, fakeFactory({ id: 1, username: "x_bot" })))
+    await expect(connectTelegramForDashboard(fixture.user.id, { token: " " }, fakeFactory({ id: 1, username: "x_bot" })))
       .rejects.toMatchObject({ code: "INVALID_BOT_TOKEN" });
 
     const factory = fakeFactory({ id: 20003, username: "service_bot" });
-    await connectTelegramForDashboard(fixture.user.email, { token: "20003:dashboard-secret" }, factory);
-    const result = await disconnectTelegramForDashboard(fixture.user.email, factory);
+    await connectTelegramForDashboard(fixture.user.id, { token: "20003:dashboard-secret" }, factory);
+    const result = await disconnectTelegramForDashboard(fixture.user.id, factory);
 
     expect(result).toEqual({ status: "DISCONNECTED", botUsername: null, connectedAt: null, lastWebhookError: null });
     expect(JSON.stringify(result)).not.toContain("dashboard-secret");

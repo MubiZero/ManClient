@@ -5,10 +5,10 @@ import { prisma } from "@/core/database/prisma";
 
 export async function requireBusinessSession() {
   const session = await auth();
-  if (!session?.user?.email) redirect("/login");
+  if (!session?.user?.id) redirect("/login");
 
   const membership = await prisma.membership.findFirst({
-    where: { user: { email: session.user.email } },
+    where: { userId: session.user.id },
     include: { business: true, staff: true, user: true },
     orderBy: { createdAt: "asc" },
   });

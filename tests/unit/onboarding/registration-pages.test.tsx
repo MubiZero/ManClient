@@ -9,9 +9,12 @@ describe("web business onboarding", () => {
   it("collects the tenant owner and business data with persistent labels", () => {
     const html = renderToStaticMarkup(<RegistrationForm action={async () => undefined} />);
 
-    expect(html).toContain("Имя владельца");
+    expect(html).toContain("Ваше имя");
+    expect(html).toContain("+992");
+    expect(html).toContain("__ ___ __ __");
+    expect(html).not.toContain("Электронная почта");
     expect(html).toContain("Название бизнеса");
-    expect(html).toContain("Основной филиал");
+    expect(html).not.toContain("Основной филиал");
     expect(html).toContain('autoComplete="new-password"');
     expect(html).toContain("Минимум 12 символов");
     expect(html).toContain('href="/login"');

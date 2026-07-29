@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth, signIn } from "@/auth";
 import { registerBusiness, RegistrationError } from "@/core/onboarding/register-business";
 import { RegistrationForm } from "@/features/onboarding/registration-form";
+import { normalizeTajikPhone } from "@/features/onboarding/tajik-phone";
 
 type RegisterPageProps = { searchParams: Promise<{ error?: string }> };
 
@@ -12,27 +13,26 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
 
   async function register(formData: FormData) {
     "use server";
-    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const phone = normalizeTajikPhone(String(formData.get("phone") ?? "")) ?? "";
     const password = String(formData.get("password") ?? "");
     try {
       await registerBusiness({
         ownerName: String(formData.get("ownerName") ?? ""),
-        email,
+        phone,
         password,
         businessName: String(formData.get("businessName") ?? ""),
-        branchName: String(formData.get("branchName") ?? ""),
       });
     } catch (caught) {
       if (caught instanceof RegistrationError) {
-        redirect(`/register?error=${caught.code === "EMAIL_ALREADY_USED" ? "email" : "input"}`);
+        redirect(`/register?error=${caught.code === "PHONE_ALREADY_USED" ? "phone" : "input"}`);
       }
       throw caught;
     }
-    await signIn("credentials", { email, password, redirectTo: "/dashboard/onboarding" });
+    await signIn("credentials", { identifier: phone, password, redirectTo: "/dashboard/onboarding" });
   }
 
-  const message = error === "email"
-    ? "Эта почта уже используется. Войдите в существующий кабинет или укажите другую."
+  const message = error === "phone"
+    ? "Этот номер уже используется. Войдите в существующий кабинет или укажите другой."
     : error === "input"
       ? "Проверьте заполненные поля. Пароль должен содержать минимум 12 символов."
       : undefined;

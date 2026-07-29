@@ -31,7 +31,7 @@ test("pilot auto service confirms a resource booking after receipt", async ({ pa
   expect(receipt.status()).toBe(200);
 
   await page.goto("/login");
-  await page.getByLabel("Электронная почта").fill("owner@demo-auto.local");
+  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-auto.local");
   await page.getByLabel("Пароль").fill(autoOwnerPassword);
   await page.getByRole("button", { name: "Войти в кабинет" }).click();
   await expect(page).toHaveURL(/\/dashboard/);

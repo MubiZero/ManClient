@@ -6,27 +6,27 @@ import {
 } from "@/core/integrations/telegram-dashboard-service";
 
 export async function GET() {
-  const email = await sessionEmail();
-  if (!email) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const userId = await sessionUserId();
+  if (!userId) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   try {
-    return Response.json(await getTelegramDashboardStatus(email));
+    return Response.json(await getTelegramDashboardStatus(userId));
   } catch (error) {
     return errorResponse(error);
   }
 }
 
 export async function POST(request: Request) {
-  const email = await sessionEmail();
-  if (!email) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const userId = await sessionUserId();
+  if (!userId) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   try {
-    return Response.json(await connectTelegramForDashboard(email, await request.json()));
+    return Response.json(await connectTelegramForDashboard(userId, await request.json()));
   } catch (error) {
     return errorResponse(error);
   }
 }
 
-async function sessionEmail() {
-  return (await auth())?.user?.email ?? null;
+async function sessionUserId() {
+  return (await auth())?.user?.id ?? null;
 }
 
 export function errorResponse(error: unknown) {

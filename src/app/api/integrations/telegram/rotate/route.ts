@@ -3,10 +3,10 @@ import { rotateTelegramForDashboard } from "@/core/integrations/telegram-dashboa
 import { errorResponse } from "@/app/api/integrations/telegram/route";
 
 export async function POST(request: Request) {
-  const email = (await auth())?.user?.email;
-  if (!email) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const userId = (await auth())?.user?.id;
+  if (!userId) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   try {
-    return Response.json(await rotateTelegramForDashboard(email, await request.json()));
+    return Response.json(await rotateTelegramForDashboard(userId, await request.json()));
   } catch (error) {
     return errorResponse(error);
   }

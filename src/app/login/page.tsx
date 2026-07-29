@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     "use server";
     try {
       await signIn("credentials", {
-        email: formData.get("email"),
+        identifier: formData.get("identifier"),
         password: formData.get("password"),
         redirectTo: "/dashboard",
       });
@@ -32,7 +32,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <h1>Войдите в кабинет</h1>
         <p className="login-intro">Управляйте записями, услугами и расписанием своего бизнеса.</p>
         <form action={login} className="login-form">
-          <label className="field-label">Электронная почта<input className="text-input" name="email" type="email" autoComplete="email" required /></label>
+          <label className="field-label">Телефон или электронная почта<input className="text-input" name="identifier" autoComplete="username" required /></label>
           <label className="field-label">Пароль<input className="text-input" name="password" type="password" autoComplete="current-password" required /></label>
           {error && <p className="form-error" role="alert">Почта или пароль не подошли. Проверьте данные и попробуйте ещё раз.</p>}
           <button className="primary-button" type="submit">Войти в кабинет</button>
