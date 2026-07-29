@@ -5,6 +5,7 @@ import {
   MarketingHomePage,
   normalizeTelegramOnboardingUrl,
 } from "@/features/marketing/homepage";
+import { metadata } from "@/app/layout";
 
 describe("ManClient homepage", () => {
   test("explains the B2B product and links owners to login", () => {
@@ -31,5 +32,16 @@ describe("ManClient homepage", () => {
     const fallback = renderToStaticMarkup(<MarketingHomePage onboardingUrl={null} />);
     expect(fallback).toContain("Подключаем первые бизнесы вручную");
     expect(fallback).not.toContain("javascript:");
+  });
+
+  test("provides semantic navigation and product metadata", () => {
+    const html = renderToStaticMarkup(<MarketingHomePage onboardingUrl={null} />);
+
+    expect(html).toContain('aria-label="Основная навигация"');
+    expect(html).toContain('id="how-it-works"');
+    expect(html).toContain("Освободите переписку от ручной записи");
+    expect(html).not.toContain("<button");
+    expect(metadata.title).toBe("ManClient - онлайн-запись для сервисного бизнеса");
+    expect(metadata.description).toContain("Таджикистане");
   });
 });

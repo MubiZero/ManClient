@@ -4,8 +4,19 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ManClient",
-  description: "Онлайн-запись для сервисных бизнесов",
+  title: "ManClient - онлайн-запись для сервисного бизнеса",
+  description: "Онлайн-запись, подтверждение оплаты и напоминания для сервисного бизнеса в Таджикистане.",
+  openGraph: {
+    title: "ManClient - онлайн-запись для сервисного бизнеса",
+    description: "Принимайте записи, подтверждайте оплату и напоминайте клиентам о визите.",
+    locale: "ru_TJ",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "ManClient - онлайн-запись для сервисного бизнеса",
+    description: "Принимайте записи, подтверждайте оплату и напоминайте клиентам о визите.",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
