@@ -1,5 +1,6 @@
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { auth, signIn } from "@/auth";
 
@@ -35,6 +36,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <label className="field-label">Пароль<input className="text-input" name="password" type="password" autoComplete="current-password" required /></label>
           {error && <p className="form-error" role="alert">Почта или пароль не подошли. Проверьте данные и попробуйте ещё раз.</p>}
           <button className="primary-button" type="submit">Войти в кабинет</button>
+          <p className="auth-switch">Ещё нет кабинета? <Link href="/register">Создать бизнес</Link></p>
         </form>
       </section>
     </main>

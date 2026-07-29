@@ -1,10 +1,6 @@
 import Link from "next/link";
 import type { ReactElement, ReactNode } from "react";
 
-type MarketingHomePageProps = {
-  onboardingUrl: string | null;
-};
-
 const bookingJourney = [
   ["01", "Клиент выбирает услугу", "Открывает ссылку бизнеса, выбирает мастера или бокс и удобное время."],
   ["02", "Подтверждает запись оплатой", "Получает ссылку DushanbeCity и отправляет чек в Telegram."],
@@ -18,25 +14,10 @@ const operatingSteps = [
   ["3", "Получайте подтверждённые записи", "Клиент выбирает время и оплачивает напрямую на карту бизнеса."],
 ] as const;
 
-export function normalizeTelegramOnboardingUrl(value: string | undefined): string | null {
-  if (!value) return null;
-
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:") return null;
-    if (url.hostname !== "t.me" && url.hostname !== "telegram.me") return null;
-    if (url.pathname === "/") return null;
-
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return null;
-  }
-}
-
-export function MarketingHomePage({ onboardingUrl }: MarketingHomePageProps): ReactElement {
+export function MarketingHomePage(): ReactElement {
   return (
     <div className="marketing-page">
-      <MarketingHeader onboardingUrl={onboardingUrl} />
+      <MarketingHeader />
       <main>
         <section className="marketing-hero" aria-labelledby="hero-title">
           <div className="marketing-container hero-layout">
@@ -47,7 +28,7 @@ export function MarketingHomePage({ onboardingUrl }: MarketingHomePageProps): Re
                 подтверждать оплату и напоминать клиентам о визите.
               </p>
               <div className="hero-actions">
-                <OnboardingAction onboardingUrl={onboardingUrl} />
+                <OnboardingAction />
                 <Link className="marketing-button marketing-button-secondary" href="/login">
                   Войти
                 </Link>
@@ -139,9 +120,9 @@ export function MarketingHomePage({ onboardingUrl }: MarketingHomePageProps): Re
           <div className="marketing-container final-cta-layout">
             <div>
               <h2 id="final-cta-title">Освободите переписку от ручной записи</h2>
-              <p>Подключаем первые бизнесы вручную и помогаем настроить услуги, расписание и оплату.</p>
+              <p>Создайте кабинет на сайте и настройте услуги, расписание и оплату в удобном порядке.</p>
             </div>
-            <OnboardingAction onboardingUrl={onboardingUrl} inverted />
+            <OnboardingAction inverted />
           </div>
         </section>
       </main>
@@ -159,7 +140,7 @@ export function MarketingHomePage({ onboardingUrl }: MarketingHomePageProps): Re
   );
 }
 
-function MarketingHeader({ onboardingUrl }: MarketingHomePageProps): ReactElement {
+function MarketingHeader(): ReactElement {
   return (
     <header className="marketing-header">
       <div className="marketing-container header-layout">
@@ -173,31 +154,21 @@ function MarketingHeader({ onboardingUrl }: MarketingHomePageProps): ReactElemen
         </nav>
         <div className="header-actions">
           <Link className="header-login" href="/login">Войти</Link>
-          {onboardingUrl ? (
-            <a className="marketing-button marketing-button-primary header-cta" href={onboardingUrl} rel="noreferrer" target="_blank">
-              Подключить бизнес
-            </a>
-          ) : null}
+          <Link className="marketing-button marketing-button-primary header-cta" href="/register">Подключить бизнес</Link>
         </div>
       </div>
     </header>
   );
 }
 
-function OnboardingAction({ onboardingUrl, inverted = false }: MarketingHomePageProps & { inverted?: boolean }): ReactElement {
-  if (!onboardingUrl) {
-    return <p className={inverted ? "onboarding-fallback onboarding-fallback-inverted" : "onboarding-fallback"}>Подключаем первые бизнесы вручную</p>;
-  }
-
+function OnboardingAction({ inverted = false }: { inverted?: boolean }): ReactElement {
   return (
-    <a
+    <Link
       className={`marketing-button ${inverted ? "marketing-button-light" : "marketing-button-primary"}`}
-      href={onboardingUrl}
-      rel="noreferrer"
-      target="_blank"
+      href="/register"
     >
       Подключить бизнес
-    </a>
+    </Link>
   );
 }
 
