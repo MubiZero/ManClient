@@ -113,19 +113,32 @@ model Branch {
 }
 
 model Membership {
-  id            String                 @id @default(cuid())
-  businessId    String
-  userId        String
-  role          BusinessRole
-  business      Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  staff         StaffMember?
-  telegramChats BusinessTelegramChat[]
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
+  id                String                 @id @default(cuid())
+  businessId        String
+  userId            String
+  role              BusinessRole
+  business          Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staff             StaffMember?
+  telegramChats     BusinessTelegramChat[]
+  platformChatLinks PlatformChatLink[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   @@unique([businessId, userId])
   @@index([userId])
+}
+
+model PlatformChatLink {
+  id           String     @id @default(cuid())
+  membershipId String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@index([membershipId, expiresAt])
+  @@index([expiresAt, consumedAt])
 }
 
 model BusinessTelegramIntegration {
