@@ -1,15 +1,12 @@
-import { randomUUID } from "node:crypto";
-
 import {
   createCustomerBookingToken,
   verifyBookingActionToken,
   verifyCustomerBookingToken,
 } from "@/core/bookings/booking-action-token";
 import { cancelBooking } from "@/core/bookings/cancel-booking";
-import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 import { recognizeDushanbeCityReceipt } from "@/core/payments/dushanbe-city-receipt-recognizer";
-import { confirmFromReceipt } from "@/core/payments/payment-service";
+import { submitReceiptImage } from "@/core/payments/receipt-submission-service";
 import { storeReceipt } from "@/core/payments/receipt-storage";
 import { downloadTelegramPhoto, sendTelegramMessage, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-client";
 
@@ -38,7 +35,7 @@ const defaultDependencies: HandlerDependencies = {
   recognizeReceipt: recognizeDushanbeCityReceipt,
 };
 
-export async function handleTelegramUpdate(businessId: string, update: TelegramUpdate, dependencies: HandlerDependencies = defaultDependencies): Promise<void> {
+export async function handleTelegramUpdate(businessId: string, update: TelegramUpdate, dependencies: HandlerDependencies = defaultDependencies, expectedPaymentId?: string): Promise<void> {
   const message = update.message;
   if (update.callback_query?.data?.startsWith("c.") && update.callback_query.message) {
     const chatId = String(update.callback_query.message.chat.id);
@@ -78,9 +75,15 @@ export async function handleTelegramUpdate(businessId: string, update: TelegramU
     return;
   }
 
+  if (!expectedPaymentId) {
+    await dependencies.sendMessage(chatId, "Не выбрана запись для этого чека. Откройте нужную запись, нажмите «Я оплатил» и отправьте изображение снова.");
+    return;
+  }
+
   const payment = await prisma.payment.findFirst({
     where: {
       businessId,
+      id: expectedPaymentId,
       status: { in: ["PENDING", "NEEDS_ATTENTION"] },
       booking: { status: "PENDING_PAYMENT", customer: { telegramChatId: chatId } },
     },
@@ -93,64 +96,25 @@ export async function handleTelegramUpdate(businessId: string, update: TelegramU
   }
 
   const photo = message.photo.at(-1)!;
-  const storageKey = `receipts/${payment.businessId}/${randomUUID()}.jpg`;
-  let image: Uint8Array;
   try {
-    image = await dependencies.downloadPhoto(photo.file_id);
-    await dependencies.storeReceipt({ storageKey, contentType: "image/jpeg", body: image });
-  } catch (error) {
-    console.error("Receipt storage failed", {
-      paymentId: payment.id,
-      error: error instanceof Error ? error.message : "Unknown receipt storage error",
+    const image = await dependencies.downloadPhoto(photo.file_id);
+    try {
+      await dependencies.sendMessage(chatId, "Чек получен. Проверяем изображение и реквизиты оплаты.");
+    } catch {
+      // Receipt processing must not depend on delivery of immediate feedback.
+    }
+    await submitReceiptImage({ paymentId: payment.id, bytes: image, contentType: "image/jpeg", channel: "telegram" }, dependencies.now(), {
+      store: dependencies.storeReceipt,
+      recognize: dependencies.recognizeReceipt,
     });
-    try {
-      await dependencies.sendMessage(chatId, "Не удалось сохранить чек из-за временной ошибки. Отправьте изображение ещё раз через минуту.");
-    } catch {
-      // The payment stays pending, so a later receipt image can still be processed.
-    }
-    return;
-  }
-  await writeAuditEvent({
-    businessId: payment.businessId,
-    bookingId: payment.bookingId,
-    type: "receipt.received",
-    actorType: "customer",
-    actorId: payment.booking.customerId,
-    metadata: { storageKey, channel: "telegram" },
-  });
-
-  const reviewDeadline = new Date(Math.min(payment.booking.startsAt.getTime(), dependencies.now().getTime() + 24 * 60 * 60_000));
-  const submission = await prisma.$transaction(async (transaction) => {
-    const created = await transaction.receiptSubmission.create({ data: { businessId: payment.businessId, paymentId: payment.id, storageKey, contentType: "image/jpeg", sizeBytes: image.byteLength, status: "PROCESSING", attempts: 1 } });
-    await transaction.payment.update({ where: { id: payment.id }, data: { status: "RECEIPT_PROCESSING", reviewDeadline } });
-    return created;
-  });
-
-  let confirmationStatus: "RECEIPT_ACCEPTED" | "NEEDS_ATTENTION";
-  try {
-    const receipt = await dependencies.recognizeReceipt(image);
-    const confirmed = await confirmFromReceipt({ ...receipt, paymentId: payment.id, receiptStorageKey: storageKey });
-    confirmationStatus = confirmed.status === "RECEIPT_ACCEPTED" ? "RECEIPT_ACCEPTED" : "NEEDS_ATTENTION";
-    await prisma.receiptSubmission.update({ where: { id: submission.id }, data: { status: confirmationStatus === "RECEIPT_ACCEPTED" ? "ACCEPTED" : "NEEDS_REVIEW", parsedOperationNumber: receipt.operationNumber, parsedAmountDiram: receipt.amountDiram, parsedCardSuffix: receipt.recipientCardSuffix, parsedOperationAt: receipt.operationAt, processedAt: dependencies.now() } });
   } catch {
-    await prisma.$transaction([
-      prisma.payment.update({ where: { id: payment.id }, data: { status: "NEEDS_ATTENTION", receiptStorageKey: storageKey, attentionReason: "OCR_UNRELIABLE" } }),
-      prisma.receiptSubmission.update({ where: { id: submission.id }, data: { status: "NEEDS_REVIEW", failureCode: "OCR_UNRELIABLE", processedAt: dependencies.now() } }),
-    ]);
-    try {
-      await dependencies.sendMessage(chatId, "Не удалось надёжно прочитать чек. Он передан администратору на проверку.");
-    } catch {
-      // Payment review remains durable and must not be rolled back by notification failure.
-    }
+    await dependencies.sendMessage(chatId, "Не удалось сохранить или прочитать изображение. Проверьте, что это чек JPG, PNG или WEBP, и отправьте его ещё раз.");
     return;
   }
 
-  if (confirmationStatus === "NEEDS_ATTENTION") {
-    try {
-      await dependencies.sendMessage(chatId, "Чек получен и передан администратору на проверку. Запись пока ожидает подтверждения.");
-    } catch {
-      // The receipt remains available to the administrator even if delivery fails.
-    }
+  const current = await prisma.payment.findUniqueOrThrow({ where: { id: payment.id }, select: { status: true } });
+  if (current.status !== "RECEIPT_ACCEPTED") {
+    await dependencies.sendMessage(chatId, "Чек получен и передан администратору на проверку. Запись пока ожидает подтверждения.");
     return;
   }
 

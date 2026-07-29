@@ -44,8 +44,13 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
     });
     const eligible = message.kind === "PAYMENT_REMINDER"
       ? message.booking.status === "PENDING_PAYMENT" && message.booking.payment?.status === "PENDING"
-      : message.booking.status === "CONFIRMED";
-    if (message.booking.startsAt <= now || !eligible) {
+      : message.kind === "BOOKING_CANCELLED"
+        ? message.booking.status === "CANCELLED"
+        : message.kind === "PAYMENT_REJECTED" || message.kind === "RECEIPT_NEEDS_REVIEW"
+          ? message.booking.status === "PENDING_PAYMENT"
+          : message.booking.status === "CONFIRMED";
+    const visitMustBeFuture = ["BOOKING_REMINDER", "PAYMENT_REMINDER"].includes(message.kind);
+    if ((visitMustBeFuture && message.booking.startsAt <= now) || !eligible) {
       await prisma.message.update({ where: { id: message.id }, data: { status: "SKIPPED" } });
       processed += 1;
       continue;
@@ -94,13 +99,19 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
   return processed;
 }
 
-function reminderText(kind: string, booking: { customer: { name: string }; service: { name: string }; startsAt: Date }) {
+function reminderText(kind: string, booking: { customer: { name: string; telegramLocale: string }; service: { name: string }; startsAt: Date }) {
+  const tg = booking.customer.telegramLocale === "tg";
+  if (kind === "PAYMENT_APPROVED") return tg ? "Пардохт тасдиқ шуд. Сабти шумо тасдиқ шудааст." : "Оплата подтверждена. Запись сохранена.";
+  if (kind === "PAYMENT_REJECTED") return tg ? "Расид тасдиқ нашуд. Лутфан расиди дурустро аз нав фиристед." : "Чек не подтверждён. Откройте запись и отправьте корректный чек ещё раз.";
+  if (kind === "RECEIPT_NEEDS_REVIEW") return tg ? "Расид қабул шуд ва ба маъмур барои санҷиш фиристода шуд." : "Чек получен и передан администратору на проверку.";
+  if (kind === "BOOKING_CANCELLED") return tg ? "Сабт бекор шуд." : "Запись отменена.";
+  if (kind === "BOOKING_RESCHEDULED") return tg ? `Вақти нави сабт: ${formatVisitTime(booking.startsAt, "tg-TJ")}.` : `Запись перенесена: ${formatVisitTime(booking.startsAt, "ru-RU")}.`;
   if (kind === "PAYMENT_REMINDER") {
-    return `${booking.customer.name}, напоминаем об оплате записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt)}.`;
+    return tg ? `${booking.customer.name}, пардохти сабтро барои ${booking.service.name} ёдрас мекунем: ${formatVisitTime(booking.startsAt, "tg-TJ")}.` : `${booking.customer.name}, напоминаем об оплате записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt)}.`;
   }
-  return `${booking.customer.name}, напоминаем о записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt)}.`;
+  return tg ? `${booking.customer.name}, сабти шуморо барои ${booking.service.name} ёдрас мекунем: ${formatVisitTime(booking.startsAt, "tg-TJ")}.` : `${booking.customer.name}, напоминаем о записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt)}.`;
 }
 
-function formatVisitTime(value: Date) {
-  return new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Dushanbe", dateStyle: "medium", timeStyle: "short" }).format(value);
+function formatVisitTime(value: Date, locale = "ru-RU") {
+  return new Intl.DateTimeFormat(locale, { timeZone: "Asia/Dushanbe", dateStyle: "medium", timeStyle: "short" }).format(value);
 }

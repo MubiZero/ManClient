@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const conversationStates = [
   "LANGUAGE",
+  "HOME",
   "BRANCH",
   "SERVICE",
   "STAFF",
@@ -38,7 +39,8 @@ const transitions: Record<ConversationStateName, {
   next: ConversationStateName;
   schema: z.ZodType<Record<string, string>>;
 }> = {
-  LANGUAGE: { kind: "SELECT_LANGUAGE", next: "BRANCH", schema: z.object({ locale: z.enum(["ru", "tg"]) }) },
+  LANGUAGE: { kind: "SELECT_LANGUAGE", next: "HOME", schema: z.object({ locale: z.enum(["ru", "tg"]) }) },
+  HOME: { kind: "START_BOOKING", next: "BRANCH", schema: z.object({}) },
   BRANCH: { kind: "SELECT_BRANCH", next: "SERVICE", schema: idPayload("branchId") },
   SERVICE: { kind: "SELECT_SERVICE", next: "STAFF", schema: idPayload("serviceId") },
   STAFF: { kind: "SELECT_STAFF", next: "DATE", schema: idPayload("staffId") },

@@ -8,12 +8,13 @@ import { handleBusinessTelegramUpdate } from "@/integrations/telegram/business-u
 export type BusinessTelegramUpdate = {
   update_id: number;
   message?: {
-    chat: { id: number };
+    chat: { id: number; type?: string };
+    from?: { id: number };
     text?: string;
     photo?: Array<{ file_id: string }>;
     contact?: { phone_number: string; user_id?: number };
   };
-  callback_query?: { id?: string; data?: string; message?: { chat: { id: number } } };
+  callback_query?: { id?: string; from?: { id: number }; data?: string; message?: { message_id?: number; chat: { id: number; type?: string } } };
   [key: string]: unknown;
 };
 
@@ -73,6 +74,7 @@ async function defaultBusinessUpdateHandler(
   await handleBusinessTelegramUpdate(context, update, {
     now: () => new Date(),
     sendMessage: telegram.sendMessage,
+    answerCallbackQuery: telegram.answerCallbackQuery,
     downloadPhoto: async (fileId) => {
       const file = await telegram.getFile(fileId);
       return telegram.downloadFile(file.filePath);

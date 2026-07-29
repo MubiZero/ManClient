@@ -8,6 +8,7 @@ import { recognizeDushanbeCityReceipt } from "@/core/payments/dushanbe-city-rece
 import { confirmFromReceipt, DuplicateOperationError } from "@/core/payments/payment-service";
 import { getReceipt, storeReceipt } from "@/core/payments/receipt-storage";
 import { scheduleBusinessNotification } from "@/core/notifications/business-notification-service";
+import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
 
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 const MAX_RECEIPT_PIXELS = 24_000_000;
@@ -37,6 +38,21 @@ export async function normalizeReceiptImage(file: File): Promise<{ body: Uint8Ar
 }
 
 export async function submitReceipt(input: { paymentId: string; file: File; channel: "web" | "telegram" }, now = new Date()) {
+  return submitReceiptImage({ paymentId: input.paymentId, bytes: new Uint8Array(await input.file.arrayBuffer()), contentType: input.file.type, channel: input.channel }, now);
+}
+
+type ReceiptSubmissionDependencies = {
+  store: typeof storeReceipt;
+  recognize: typeof recognizeDushanbeCityReceipt;
+};
+
+const defaultDependencies: ReceiptSubmissionDependencies = { store: storeReceipt, recognize: recognizeDushanbeCityReceipt };
+
+export async function submitReceiptImage(
+  input: { paymentId: string; bytes: Uint8Array; contentType: string; channel: "web" | "telegram" },
+  now = new Date(),
+  dependencies: ReceiptSubmissionDependencies = defaultDependencies,
+) {
   const payment = await prisma.payment.findUnique({
     where: { id: input.paymentId },
     include: { booking: true },
@@ -44,9 +60,9 @@ export async function submitReceipt(input: { paymentId: string; file: File; chan
   if (!payment || payment.booking.status !== "PENDING_PAYMENT") throw new ReceiptSubmissionError("PAYMENT_UNAVAILABLE");
   if (payment.status === "RECEIPT_ACCEPTED") throw new ReceiptSubmissionError("ALREADY_PAID");
 
-  const normalized = await normalizeReceiptImage(input.file);
+  const normalized = await normalizeReceiptImage(new File([new Uint8Array(input.bytes)], "receipt", { type: input.contentType }));
   const storageKey = `receipts/${payment.businessId}/${payment.id}/${randomUUID()}.jpg`;
-  await storeReceipt({ storageKey, contentType: normalized.contentType, body: normalized.body });
+  await dependencies.store({ storageKey, contentType: normalized.contentType, body: normalized.body });
   const reviewDeadline = new Date(Math.min(payment.booking.startsAt.getTime(), now.getTime() + REVIEW_WINDOW_MS));
   const submission = await prisma.$transaction(async (transaction) => {
     const created = await transaction.receiptSubmission.create({
@@ -58,10 +74,10 @@ export async function submitReceipt(input: { paymentId: string; file: File; chan
     return created;
   });
 
-  return processReceiptSubmission(submission.id, normalized.body, now);
+  return processReceiptSubmission(submission.id, normalized.body, now, dependencies.recognize);
 }
 
-export async function processReceiptSubmission(submissionId: string, image: Uint8Array, now = new Date()) {
+export async function processReceiptSubmission(submissionId: string, image: Uint8Array, now = new Date(), recognize = recognizeDushanbeCityReceipt) {
   const claimed = await prisma.receiptSubmission.updateMany({
     where: { id: submissionId, status: { in: ["UPLOADED", "FAILED"] } },
     data: { status: "PROCESSING", attempts: { increment: 1 }, failureCode: null },
@@ -71,7 +87,7 @@ export async function processReceiptSubmission(submissionId: string, image: Uint
 
   let receipt: Awaited<ReturnType<typeof recognizeDushanbeCityReceipt>>;
   try {
-    receipt = await recognizeDushanbeCityReceipt(image);
+    receipt = await recognize(image);
   } catch {
     return markNeedsReview(submission, "OCR_UNRELIABLE", now);
   }
@@ -115,6 +131,7 @@ async function markNeedsReview(
     await transaction.payment.update({ where: { id: submission.paymentId }, data: { status: "NEEDS_ATTENTION", attentionReason: reason, receiptStorageKey: submission.storageKey } });
     await writeAuditEvent({ businessId: submission.businessId, bookingId: submission.payment.bookingId, type: "receipt.needs_review", actorType: "system", metadata: { submissionId: submission.id, reason } }, transaction);
     await scheduleBusinessNotification({ businessId: submission.businessId, bookingId: submission.payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW", deduplicationKey: `receipt:${submission.id}:needs-review`, scheduledAt: now }, transaction);
+    await scheduleCustomerTelegramNotification({ bookingId: submission.payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW", scheduledAt: now }, transaction);
   });
   return prisma.receiptSubmission.findUniqueOrThrow({ where: { id: submission.id } });
 }

@@ -303,6 +303,7 @@ describe("business bot payment review", () => {
     await expect(prisma.auditEvent.count({ where: { bookingId: review.booking.id, type: "payment.review_approved" } })).resolves.toBe(1);
     await expect(prisma.message.findMany({ where: { bookingId: review.booking.id }, orderBy: [{ channel: "asc" }, { kind: "asc" }] })).resolves.toMatchObject([
       { channel: "TELEGRAM", kind: "BOOKING_REMINDER", status: "SCHEDULED" },
+      { channel: "TELEGRAM", kind: "PAYMENT_APPROVED", status: "SCHEDULED" },
       { channel: "WHATSAPP", kind: "BOOKING_CONFIRMATION", status: "SCHEDULED" },
       { channel: "WHATSAPP", kind: "BOOKING_REMINDER", status: "SCHEDULED" },
     ]);
@@ -386,7 +387,7 @@ describe("business bot payment review", () => {
     expect(["RECEIPT_ACCEPTED", "REJECTED"]).toContain(payment.status);
     expect(audit).toHaveLength(1);
     expect(audit[0]?.type).toBe(payment.status === "RECEIPT_ACCEPTED" ? "payment.review_approved" : "payment.review_rejected");
-    expect(schedules).toHaveLength(payment.status === "RECEIPT_ACCEPTED" ? 3 : 0);
+    expect(schedules).toHaveLength(payment.status === "RECEIPT_ACCEPTED" ? 4 : 1);
   });
 
   it("validates a custom rejection reason and accepts a valid opaque custom decision", async () => {

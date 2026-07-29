@@ -1,4 +1,4 @@
-import { claimInboundUpdate } from "@/core/integrations/inbound-update-service";
+import { claimInboundUpdate, completeInboundUpdate, failInboundUpdate } from "@/core/integrations/inbound-update-service";
 import {
   dispatchLoadedBusinessTelegramUpdate,
   loadBusinessTelegramContext,
@@ -23,16 +23,24 @@ export async function POST(request: Request, routeContext: RouteContext) {
   if (!Number.isSafeInteger(update.update_id)) {
     return Response.json({ error: "INVALID_UPDATE" }, { status: 400 });
   }
-  const claimed = await claimInboundUpdate({
+  const updateKey = {
     integrationId: integration.integrationId,
     externalUpdateId: String(update.update_id),
-  });
-  if (!claimed) return Response.json({ ok: true, duplicate: true });
+  };
+  const claim = await claimInboundUpdate(updateKey);
+  if (claim === "COMPLETED") return Response.json({ ok: true, duplicate: true });
+  if (claim === "BUSY") return Response.json({ ok: true, processing: true });
 
-  await dispatchLoadedBusinessTelegramUpdate({
-    businessId: integration.businessId,
-    integrationId: integration.integrationId,
-    token: integration.token,
-  }, update);
-  return Response.json({ ok: true });
+  try {
+    await dispatchLoadedBusinessTelegramUpdate({
+      businessId: integration.businessId,
+      integrationId: integration.integrationId,
+      token: integration.token,
+    }, update);
+    await completeInboundUpdate(updateKey);
+    return Response.json({ ok: true });
+  } catch {
+    await failInboundUpdate(updateKey);
+    return Response.json({ error: "TEMPORARY_FAILURE" }, { status: 500 });
+  }
 }

@@ -47,6 +47,7 @@ describe("business Telegram integration lifecycle", () => {
     expect(telegram.webhooks).toEqual([
       `https://manclient.example/api/webhooks/telegram/business/${result.publicId}`,
     ]);
+    expect(telegram.commands.map(command => command.command)).toEqual(["start", "book", "bookings", "language", "help"]);
     const audit = await prisma.auditEvent.findFirstOrThrow({
       where: { businessId: fixture.business.id, type: "telegram.integration.connected" },
     });
@@ -153,10 +154,12 @@ describe("business Telegram integration lifecycle", () => {
 
 function fakeTelegram(identity: { id: number; username: string }): BusinessTelegramApi & {
   webhooks: string[];
+  commands: Array<{ command: string; description: string }>;
   deleteWebhookCalls: number;
 } {
   const fake = {
     webhooks: [] as string[],
+    commands: [] as Array<{ command: string; description: string }>,
     deleteWebhookCalls: 0,
     async getMe() {
       return { id: identity.id, isBot: true as const, username: identity.username };
@@ -164,6 +167,7 @@ function fakeTelegram(identity: { id: number; username: string }): BusinessTeleg
     async setWebhook(url: string) {
       fake.webhooks.push(url);
     },
+    async setMyCommands(commands: Array<{ command: string; description: string }>) { fake.commands = commands; },
     async deleteWebhook() {
       fake.deleteWebhookCalls += 1;
     },

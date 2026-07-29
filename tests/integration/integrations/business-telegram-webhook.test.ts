@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import sharp from "sharp";
 
 import { POST } from "@/app/api/webhooks/telegram/business/[publicId]/route";
 import { createPendingBooking } from "@/core/bookings/booking-service";
@@ -47,7 +48,8 @@ describe("tenant Telegram webhook", () => {
       claimInboundUpdate({ integrationId: integration.id, externalUpdateId: "200" }),
     ));
 
-    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(results.filter(result => result === "CLAIMED")).toHaveLength(1);
+    expect(results.filter(result => result === "BUSY")).toHaveLength(3);
     await expect(prisma.inboundChannelUpdate.count({
       where: { integrationId: integration.id, externalUpdateId: "200" },
     })).resolves.toBe(1);
@@ -77,16 +79,17 @@ describe("tenant Telegram webhook", () => {
       where: { businessId: { in: [first.business.id, second.business.id] } },
       data: { telegramChatId: "99123" },
     });
+    const image = new Uint8Array(await sharp({ create: { width: 20, height: 20, channels: 3, background: "white" } }).jpeg().toBuffer());
 
     await handleTelegramUpdate(first.business.id, {
       message: { chat: { id: 99123 }, photo: [{ file_id: "receipt" }] },
     }, {
       now: () => new Date("2026-08-01T04:10:00.000Z"),
       sendMessage: async () => undefined,
-      downloadPhoto: async () => new Uint8Array([1]),
+      downloadPhoto: async () => image,
       storeReceipt: async () => "receipts/tenant-safe.jpg",
       recognizeReceipt: async () => ({ operationNumber: "99123001", amountDiram: 5_000, recipientCardSuffix: "4444", operationAt: new Date("2026-08-01T04:05:00.000Z"), isSuccessful: true }),
-    });
+    }, firstPending.paymentId);
 
     await expect(prisma.booking.findUnique({ where: { id: firstPending.bookingId } })).resolves.toMatchObject({ status: "CONFIRMED" });
     await expect(prisma.booking.findUnique({ where: { id: secondPending.bookingId } })).resolves.toMatchObject({ status: "PENDING_PAYMENT" });

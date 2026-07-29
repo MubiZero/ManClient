@@ -8,7 +8,8 @@ import { conversationMessage } from "@/core/conversations/conversation-engine";
 
 describe("booking conversation state machine", () => {
   it.each([
-    ["LANGUAGE", "SELECT_LANGUAGE", { locale: "ru" }, "BRANCH"],
+    ["LANGUAGE", "SELECT_LANGUAGE", { locale: "ru" }, "HOME"],
+    ["HOME", "START_BOOKING", {}, "BRANCH"],
     ["BRANCH", "SELECT_BRANCH", { branchId: "branch-1" }, "SERVICE"],
     ["SERVICE", "SELECT_SERVICE", { serviceId: "service-1" }, "STAFF"],
     ["STAFF", "SELECT_STAFF", { staffId: "staff-1" }, "DATE"],

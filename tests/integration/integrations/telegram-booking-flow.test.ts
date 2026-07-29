@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import sharp from "sharp";
 
 import { prisma } from "@/core/database/prisma";
 import { encryptSecret } from "@/core/security/secret-encryption";
@@ -46,10 +47,13 @@ describe("tenant Telegram booking journey", () => {
       token: "10012:tenant-token",
     };
     const sent: SentMessage[] = [];
+    const answered: string[] = [];
+    const image = new Uint8Array(await sharp({ create: { width: 20, height: 20, channels: 3, background: "white" } }).jpeg().toBuffer());
     const dependencies: BusinessTelegramHandlerDependencies = {
       now: () => new Date("2026-08-01T04:00:00.000Z"),
       sendMessage: async (_chatId, text, replyMarkup) => { sent.push({ text, replyMarkup }); },
-      downloadPhoto: async () => new Uint8Array([1, 2, 3]),
+      answerCallbackQuery: async id => { answered.push(id); },
+      downloadPhoto: async () => image,
       storeReceipt: async () => "receipts/tenant-flow.jpg",
       recognizeReceipt: async () => ({
         operationNumber: "88123001",
@@ -62,30 +66,31 @@ describe("tenant Telegram booking journey", () => {
 
     await send(context, dependencies, { update_id: 1, message: { chat: { id: 701 }, text: "/start" } });
     await callback(context, dependencies, sent, "Русский", 2);
-    await callback(context, dependencies, sent, fixture.branch.name, 3);
-    await callback(context, dependencies, sent, fixture.service.name, 4);
-    await callback(context, dependencies, sent, fixture.staff.displayName, 5);
-    await callback(context, dependencies, sent, "02.08", 6);
-    await callback(context, dependencies, sent, "09:00", 7);
-    await send(context, dependencies, { update_id: 8, message: { chat: { id: 701 }, text: "Мухаммад" } });
-    await send(context, dependencies, { update_id: 9, message: { chat: { id: 701 }, contact: { phone_number: "+992900001122", user_id: 701 } } });
-    await callback(context, dependencies, sent, "Подтвердить запись", 10);
+    await callback(context, dependencies, sent, "Новая запись", 3);
+    await callback(context, dependencies, sent, fixture.branch.name, 4);
+    await callback(context, dependencies, sent, fixture.service.name, 5);
+    await callback(context, dependencies, sent, fixture.staff.displayName, 6);
+    await callback(context, dependencies, sent, "02.08", 7);
+    await callback(context, dependencies, sent, "09:00", 8);
+    await send(context, dependencies, { update_id: 9, message: { chat: { id: 701 }, text: "Мухаммад" } });
+    await send(context, dependencies, { update_id: 10, message: { chat: { id: 701 }, contact: { phone_number: "+992900001122", user_id: 701 } } });
+    await callback(context, dependencies, sent, "Подтвердить запись", 11);
 
     expect(sent.at(-1)?.text).toContain("DushanbeCity");
     expect(findUrl(sent.at(-1), "Оплатить")).toMatch(/^http:\/\/pay\.expresspay\.tj\//);
 
-    await callback(context, dependencies, sent, "Я оплатил", 11);
+    await callback(context, dependencies, sent, "Я оплатил", 12);
     const workingStoreReceipt = dependencies.storeReceipt;
     dependencies.storeReceipt = async () => { throw new Error("storage unavailable"); };
-    await send(context, dependencies, { update_id: 12, message: { chat: { id: 701 }, photo: [{ file_id: "receipt" }] } });
+    await send(context, dependencies, { update_id: 13, message: { chat: { id: 701 }, photo: [{ file_id: "receipt" }] } });
 
-    expect(sent.at(-1)?.text).toContain("Отправьте изображение ещё раз");
+    expect(sent.at(-1)?.text).toContain("отправьте его ещё раз");
     await expect(prisma.booking.findFirst({
       where: { businessId: fixture.business.id, customer: { telegramChatId: "701" } },
     })).resolves.toMatchObject({ status: "PENDING_PAYMENT" });
 
     dependencies.storeReceipt = workingStoreReceipt;
-    await send(context, dependencies, { update_id: 13, message: { chat: { id: 701 }, photo: [{ file_id: "receipt" }] } });
+    await send(context, dependencies, { update_id: 14, message: { chat: { id: 701 }, photo: [{ file_id: "receipt" }] } });
 
     const booking = await prisma.booking.findFirstOrThrow({
       where: { businessId: fixture.business.id, customer: { telegramChatId: "701" } },
@@ -94,6 +99,7 @@ describe("tenant Telegram booking journey", () => {
     expect(booking.status).toBe("CONFIRMED");
     expect(booking.payment?.status).toBe("RECEIPT_ACCEPTED");
     expect(sent.at(-1)?.text).toContain("подтверждена");
+    expect(answered.length).toBeGreaterThan(0);
   });
 });
 

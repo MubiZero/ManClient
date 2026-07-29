@@ -87,6 +87,7 @@ function fakeFactory(identity: { id: number; username: string }): TelegramApiFac
   return () => ({
     async getMe() { return { ...identity, isBot: true as const }; },
     async setWebhook() {},
+    async setMyCommands() {},
     async deleteWebhook() {},
   });
 }

@@ -115,6 +115,20 @@ export async function restartConversation(
   return { state: "LANGUAGE" as const, data: {} as ConversationData };
 }
 
+export async function replaceConversationSession(
+  businessId: string,
+  conversationId: string,
+  state: ConversationStateName,
+  data: ConversationData,
+  expiresAt: Date,
+) {
+  const session = await getActiveConversationSession(businessId, conversationId);
+  await prisma.conversationSession.update({
+    where: { id: session.id },
+    data: { state, data: data as Prisma.InputJsonObject, expiresAt, version: { increment: 1 } },
+  });
+}
+
 export function conversationMessage(locale: ConversationLocale, state: ConversationStateName) {
   return (locale === "tg" ? messagesTg : messagesRu)[state];
 }

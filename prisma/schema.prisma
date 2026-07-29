@@ -82,6 +82,12 @@ enum ConversationChannel {
   WEB
 }
 
+enum InboundUpdateStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id                            String                        @id @default(cuid())
   email                         String?                       @unique
@@ -285,8 +291,14 @@ model InboundChannelUpdate {
   id               String                      @id @default(cuid())
   integrationId    String
   externalUpdateId String
+  status           InboundUpdateStatus         @default(PROCESSING)
+  attempts         Int                         @default(1)
+  claimedAt        DateTime                    @default(now())
+  completedAt      DateTime?
+  lastError        String?
   integration      BusinessTelegramIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   receivedAt       DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
 
   @@unique([integrationId, externalUpdateId])
   @@index([receivedAt])
@@ -476,6 +488,7 @@ model Customer {
   name           String
   phone          String
   telegramChatId String?
+  telegramLocale String     @default("ru")
   business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   bookings       Booking[]
   createdAt      DateTime  @default(now())

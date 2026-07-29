@@ -7,6 +7,7 @@ import { createTelegramApi, TelegramApiError, type TelegramIdentity } from "@/in
 export type BusinessTelegramApi = {
   getMe(): Promise<TelegramIdentity>;
   setWebhook(url: string, secretToken: string): Promise<void>;
+  setMyCommands(commands: Array<{ command: string; description: string }>): Promise<void>;
   deleteWebhook(): Promise<void>;
 };
 
@@ -48,6 +49,7 @@ export async function connectBusinessTelegramBot(
   });
 
   try {
+    await telegram.setMyCommands(clientCommands);
     await telegram.setWebhook(webhookUrl(publicId), webhookSecret);
   } catch {
     await prisma.businessTelegramIntegration.delete({ where: { id: pending.id } });
@@ -87,6 +89,7 @@ export async function rotateBusinessTelegramBot(
   const publicId = randomBytes(24).toString("base64url");
   const webhookSecret = randomBytes(32).toString("base64url");
   try {
+    await replacementTelegram.setMyCommands(clientCommands);
     await replacementTelegram.setWebhook(webhookUrl(publicId), webhookSecret);
   } catch {
     throw new BusinessTelegramIntegrationError("TELEGRAM_UNAVAILABLE");
@@ -258,3 +261,11 @@ function webhookUrl(publicId: string) {
   if (!appUrl) throw new BusinessTelegramIntegrationError("CONFIGURATION_ERROR");
   return `${appUrl.replace(/\/$/, "")}/api/webhooks/telegram/business/${publicId}`;
 }
+
+const clientCommands = [
+  { command: "start", description: "Главное меню" },
+  { command: "book", description: "Новая запись" },
+  { command: "bookings", description: "Мои записи" },
+  { command: "language", description: "Сменить язык" },
+  { command: "help", description: "Помощь" },
+];
