@@ -321,7 +321,13 @@ async function showMainMenu(actor: BusinessBotPlatformActor, dependencies: Busin
     `Клиентский бот: ${customerBot}`,
   ].join("\n");
   await dependencies.sendMessage(actor.destination.chatId, text, {
-    keyboard: [...keyboard, [{ text: "Ссылка для клиентов" }, { text: "Ещё" }]],
+    keyboard: [
+      ...keyboard,
+      ...(actor.role !== "STAFF" && actor.destination.chatType === "private" && summary.customerBotStatus !== "ACTIVE"
+        ? [[{ text: "Создать клиентского бота" }]]
+        : []),
+      [{ text: "Ссылка для клиентов" }, { text: "Ещё" }],
+    ],
     resize_keyboard: true,
   });
 }

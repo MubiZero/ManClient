@@ -64,6 +64,34 @@ describe("business Telegram integration lifecycle", () => {
     }, fakeTelegram({ id: 10002, username: "staff_bot" }))).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("binds a managed connection to the exact Telegram bot and owner", async () => {
+    const fixture = await createBusiness("OWNER");
+
+    await expect(connectBusinessTelegramBot({
+      businessId: fixture.business.id,
+      actorUserId: fixture.user.id,
+      token: "10020:managed-secret",
+      connectionMethod: "MANAGED",
+      managedOwnerTelegramUserId: "7007",
+      expectedBotId: "99999",
+    }, fakeTelegram({ id: 10020, username: "managed_customer_bot" }))).rejects.toMatchObject({ code: "INVALID_BOT_TOKEN" });
+
+    const connected = await connectBusinessTelegramBot({
+      businessId: fixture.business.id,
+      actorUserId: fixture.user.id,
+      token: "10020:managed-secret",
+      connectionMethod: "MANAGED",
+      managedOwnerTelegramUserId: "7007",
+      expectedBotId: "10020",
+    }, fakeTelegram({ id: 10020, username: "managed_customer_bot" }));
+    await expect(prisma.businessTelegramIntegration.findUniqueOrThrow({ where: { id: connected.id } }))
+      .resolves.toMatchObject({
+        connectionMethod: "MANAGED",
+        managedOwnerTelegramUserId: "7007",
+        managedAt: expect.any(Date),
+      });
+  });
+
   it("rejects a bot already connected to another business without identifying it", async () => {
     const first = await createBusiness("OWNER");
     const second = await createBusiness("OWNER");

@@ -1,4 +1,10 @@
 import { connectBusinessTelegramBot } from "@/core/integrations/business-telegram-service";
+import {
+  claimManagedBotIntent,
+  completeManagedBotIntent,
+  createManagedBotIntent,
+  failManagedBotIntent,
+} from "@/core/integrations/managed-bot-intent";
 import { consumePlatformChatLink, getPlatformTelegramActor } from "@/core/integrations/platform-chat-link";
 import { handleBusinessBotUpdate } from "@/integrations/telegram/business-bot-handler";
 import { createTelegramApi, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
@@ -20,13 +26,25 @@ export type PlatformTelegramUpdate = {
     message?: { message_id: number; chat: TelegramChat };
     data?: string;
   };
+  managed_bot?: {
+    user: { id: number };
+    bot: { id: number; is_bot: boolean; username?: string };
+  };
 };
 
 type PlatformHandlerDependencies = {
   now: () => Date;
   sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup) => Promise<void>;
   deleteMessage: (chatId: string, messageId: number) => Promise<void>;
-  connectBot: (input: { businessId: string; actorUserId: string; token: string }) => Promise<{ botUsername: string }>;
+  connectBot: (input: {
+    businessId: string;
+    actorUserId: string;
+    token: string;
+    connectionMethod?: "TOKEN" | "MANAGED";
+    managedOwnerTelegramUserId?: string;
+    expectedBotId?: string;
+  }) => Promise<{ botUsername: string }>;
+  getManagedBotToken: (botId: number) => Promise<string>;
   answerCallbackQuery?: (callbackQueryId: string, text?: string) => Promise<void>;
   editMessageText?: ReturnType<typeof createTelegramApi>["editMessageText"];
   sendPhoto?: ReturnType<typeof createTelegramApi>["sendPhoto"];
@@ -38,6 +56,10 @@ export async function handlePlatformTelegramUpdate(
   update: PlatformTelegramUpdate,
   dependencies: PlatformHandlerDependencies = defaultDependencies(),
 ) {
+  if (update.managed_bot) {
+    await handleManagedBotUpdate(update.managed_bot, dependencies);
+    return;
+  }
   const message = update.message;
   const actor = telegramActorFromUpdate(update);
   if (!actor) return;
@@ -104,6 +126,13 @@ export async function handlePlatformTelegramUpdate(
   const loginUrl = `${requiredAppUrl()}/login`;
   const platformActor = await getPlatformTelegramActor(actor);
   if (platformActor) {
+    if (text === "Создать клиентского бота") {
+      await startManagedBotCreation({
+        ...platformActor,
+        telegramUserId: actor.telegramUserId,
+      }, dependencies);
+      return;
+    }
     await handleBusinessBotUpdate({
       ...platformActor,
       telegramUserId: actor.telegramUserId,
@@ -149,10 +178,83 @@ function defaultDependencies(): PlatformHandlerDependencies {
     sendMessage: telegram.sendMessage,
     deleteMessage: telegram.deleteMessage,
     connectBot: input => connectBusinessTelegramBot(input),
+    getManagedBotToken: telegram.getManagedBotToken,
     answerCallbackQuery: telegram.answerCallbackQuery,
     editMessageText: telegram.editMessageText,
     sendPhoto: telegram.sendPhoto,
   };
+}
+
+async function startManagedBotCreation(
+  actor: Awaited<ReturnType<typeof getPlatformTelegramActor>> & { telegramUserId: string },
+  dependencies: PlatformHandlerDependencies,
+) {
+  if (!actor || actor.destination.chatType !== "private" || !["OWNER", "ADMIN"].includes(actor.role)) {
+    await dependencies.sendMessage(actor?.destination.chatId ?? actor?.telegramUserId ?? "", "Создание клиентского бота доступно владельцу или администратору в личном чате с @manclient_bot.");
+    return;
+  }
+  const platformUsername = requiredPlatformUsername();
+  const suggestedUsername = managedBotUsername(actor.business.name, actor.businessId);
+  const displayName = actor.business.name.slice(0, 64);
+  await createManagedBotIntent({
+    membershipId: actor.membershipId,
+    businessId: actor.businessId,
+    userId: actor.userId,
+    role: actor.role,
+    telegramUserId: actor.telegramUserId,
+  }, { displayName, suggestedUsername }, dependencies.now());
+  const url = new URL(`https://t.me/newbot/${platformUsername}/${suggestedUsername}`);
+  url.searchParams.set("name", displayName);
+  await dependencies.sendMessage(actor.destination.chatId, "Telegram покажет создание клиентского бота. Бот сразу будет принадлежать вам, а ManClient подключит его автоматически.", {
+    inline_keyboard: [[{ text: "Создать клиентского бота", url: url.toString() }]],
+  });
+}
+
+async function handleManagedBotUpdate(
+  update: NonNullable<PlatformTelegramUpdate["managed_bot"]>,
+  dependencies: PlatformHandlerDependencies,
+) {
+  const telegramUserId = String(update.user.id);
+  const botId = String(update.bot.id);
+  let intent: Awaited<ReturnType<typeof claimManagedBotIntent>>;
+  try {
+    intent = await claimManagedBotIntent({ telegramUserId, botId }, dependencies.now());
+  } catch {
+    await dependencies.sendMessage(telegramUserId, "Не удалось определить бизнес для этого бота. Откройте нужный бизнес в ManClient и запустите создание ещё раз.");
+    return;
+  }
+  if (intent.status === "COMPLETED") {
+    await dependencies.sendMessage(telegramUserId, `Клиентский бот${update.bot.username ? ` @${update.bot.username}` : ""} уже подключён.`);
+    return;
+  }
+  try {
+    const token = await dependencies.getManagedBotToken(update.bot.id);
+    const connected = await dependencies.connectBot({
+      businessId: intent.businessId,
+      actorUserId: intent.membership.userId,
+      token,
+      connectionMethod: "MANAGED",
+      managedOwnerTelegramUserId: telegramUserId,
+      expectedBotId: botId,
+    });
+    await completeManagedBotIntent(intent.id, botId, dependencies.now());
+    await dependencies.sendMessage(telegramUserId, `Клиентский бот @${connected.botUsername} подключён. Он принадлежит вам; ManClient управляет только интеграцией.`);
+  } catch {
+    await failManagedBotIntent(intent.id, "CONNECTION_FAILED");
+    await dependencies.sendMessage(telegramUserId, "Бот создан и принадлежит вам, но ManClient пока не смог подключить его. Повторите подключение позже — создавать нового бота не нужно.");
+  }
+}
+
+function managedBotUsername(businessName: string, businessId: string) {
+  const normalized = businessName.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const base = normalized || `client_${businessId.replace(/[^a-z0-9]/gi, "").slice(-8).toLowerCase()}`;
+  return `${base.slice(0, 28).replace(/_+$/g, "")}_bot`;
+}
+
+function requiredPlatformUsername() {
+  const username = process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/, "");
+  if (!username) throw new Error("TELEGRAM_BOT_USERNAME is required");
+  return username;
 }
 
 function requiredPlatformToken() {

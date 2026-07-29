@@ -12,7 +12,12 @@ export type BusinessTelegramApi = {
 };
 
 type MutationInput = { businessId: string; actorUserId: string };
-type ConnectInput = MutationInput & { token: string };
+type ConnectInput = MutationInput & {
+  token: string;
+  connectionMethod?: "TOKEN" | "MANAGED";
+  managedOwnerTelegramUserId?: string;
+  expectedBotId?: string;
+};
 
 export type BusinessTelegramErrorCode =
   | "INVALID_BOT_TOKEN"
@@ -35,6 +40,9 @@ export async function connectBusinessTelegramBot(
 ) {
   await requireManager(input);
   const identity = await validatedIdentity(telegram);
+  if (input.expectedBotId && String(identity.id) !== input.expectedBotId) {
+    throw new BusinessTelegramIntegrationError("INVALID_BOT_TOKEN");
+  }
   await rejectConnectedBot(String(identity.id));
 
   const encryptionKey = requiredEncryptionKey();
@@ -68,7 +76,11 @@ export async function connectBusinessTelegramBot(
         type: "telegram.integration.connected",
         actorType: "user",
         actorId: input.actorUserId,
-        metadata: { integrationId: connected.id, botUsername: connected.botUsername },
+        metadata: {
+          integrationId: connected.id,
+          botUsername: connected.botUsername,
+          connectionMethod: input.connectionMethod ?? "TOKEN",
+        },
       },
     });
     return connected;
@@ -243,6 +255,9 @@ async function createPendingIntegration(input: ConnectInput & {
         webhookSecretEncrypted: encryptSecret(input.webhookSecret, input.encryptionKey),
         status: "PENDING",
         connectedByUserId: input.actorUserId,
+        connectionMethod: input.connectionMethod ?? "TOKEN",
+        managedOwnerTelegramUserId: input.connectionMethod === "MANAGED" ? input.managedOwnerTelegramUserId : null,
+        managedAt: input.connectionMethod === "MANAGED" ? new Date() : null,
       },
     });
   } catch {

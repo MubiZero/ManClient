@@ -19,6 +19,7 @@ describe("ManClient business assistant", () => {
   beforeEach(() => {
     process.env.PLATFORM_LINK_SECRET = "platform-link-test-secret-at-least-32-bytes";
     process.env.TELEGRAM_WEBHOOK_SECRET = "platform-webhook-secret";
+    process.env.TELEGRAM_BOT_USERNAME = "manclient_bot";
     process.env.APP_URL = "https://manclient.example";
   });
 
@@ -242,6 +243,61 @@ describe("ManClient business assistant", () => {
     }]);
   });
 
+  it("creates and connects a customer-owned managed bot without asking for a token", async () => {
+    const fixture = await createMembership("OWNER");
+    const now = new Date("2026-07-30T08:00:00.000Z");
+    const link = await createPlatformChatLink({
+      membershipId: fixture.membership.id,
+      actorUserId: fixture.user.id,
+      expiresAt: new Date(now.getTime() + 15 * 60_000),
+    });
+    const messages: Array<{ text: string; url?: string }> = [];
+    const connections: Array<Record<string, unknown>> = [];
+    const deps = dependencies({
+      messages,
+      now: () => now,
+      getManagedBotToken: async (botId) => {
+        expect(botId).toBe(9001);
+        return "9001:managed-customer-secret";
+      },
+      connectBot: async (input) => {
+        connections.push(input);
+        return { botUsername: "platform_business_bot" };
+      },
+    });
+
+    await handlePlatformTelegramUpdate({
+      update_id: 70,
+      message: { message_id: 70, from: { id: 7007 }, chat: { id: 7007, type: "private" }, text: `/start b_${link}` },
+    }, deps);
+    await handlePlatformTelegramUpdate({
+      update_id: 71,
+      message: { message_id: 71, from: { id: 7007 }, chat: { id: 7007, type: "private" }, text: "Создать клиентского бота" },
+    }, deps);
+
+    expect(messages.at(-1)?.url).toMatch(/^https:\/\/t\.me\/newbot\/manclient_bot\/platform_business_bot\?name=/);
+    expect(messages.at(-1)?.text).toContain("принадлежать вам");
+
+    await handlePlatformTelegramUpdate({
+      update_id: 72,
+      managed_bot: {
+        user: { id: 7007 },
+        bot: { id: 9001, is_bot: true, username: "platform_business_bot" },
+      },
+    }, deps);
+
+    expect(connections).toEqual([{
+      businessId: fixture.business.id,
+      actorUserId: fixture.user.id,
+      token: "9001:managed-customer-secret",
+      connectionMethod: "MANAGED",
+      managedOwnerTelegramUserId: "7007",
+      expectedBotId: "9001",
+    }]);
+    expect(messages.at(-1)?.text).toContain("@platform_business_bot подключён");
+    expect(JSON.stringify(messages)).not.toContain("managed-customer-secret");
+  });
+
   async function createMembership(role: "OWNER" | "ADMIN") {
     const suffix = randomUUID();
     const business = await prisma.business.create({ data: { id: `platform-business-${suffix}`, name: "Platform Business", slug: `platform-${suffix}` } });
@@ -266,7 +322,15 @@ function dependencies(overrides: {
   deleted?: number[];
   answered?: string[];
   now?: () => Date;
-  connectBot?: (input: { businessId: string; actorUserId: string; token: string }) => Promise<{ botUsername: string }>;
+  connectBot?: (input: {
+    businessId: string;
+    actorUserId: string;
+    token: string;
+    connectionMethod?: "TOKEN" | "MANAGED";
+    managedOwnerTelegramUserId?: string;
+    expectedBotId?: string;
+  }) => Promise<{ botUsername: string }>;
+  getManagedBotToken?: (botId: number) => Promise<string>;
 } = {}) {
   return {
     now: overrides.now ?? (() => new Date("2026-07-29T06:00:00.000Z")),
@@ -279,5 +343,6 @@ function dependencies(overrides: {
     deleteMessage: async (_chatId: string, messageId: number) => { overrides.deleted?.push(messageId); },
     answerCallbackQuery: async (callbackId: string) => { overrides.answered?.push(callbackId); },
     connectBot: overrides.connectBot ?? (async () => ({ botUsername: "tenant_bot" })),
+    getManagedBotToken: overrides.getManagedBotToken ?? (async () => "9001:managed-token"),
   };
 }
