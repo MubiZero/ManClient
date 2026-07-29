@@ -49,8 +49,22 @@ describe("business bot booking queries", () => {
 
   it("uses every branch timezone when resolving today's dashboard", async () => {
     const fixture = await createWorkspace("America/New_York");
-    await createBooking(fixture, fixture.primaryStaffId, "Ещё сегодня", "2026-07-29T03:00:00.000Z", "PENDING_PAYMENT");
-    await createBooking(fixture, fixture.primaryStaffId, "Уже завтра", "2026-07-29T05:00:00.000Z", "PENDING_PAYMENT");
+    const tokyoBranch = await prisma.branch.create({
+      data: { businessId: fixture.businessId, name: "Tokyo", slug: `tokyo-${randomUUID()}`, timeZone: "Asia/Tokyo" },
+    });
+    const tokyoService = await prisma.service.create({
+      data: { branchId: tokyoBranch.id, name: "Tokyo service", durationMinutes: 45, amountDiram: 5_000 },
+    });
+    await createBooking(fixture, fixture.primaryStaffId, "Нью-Йорк сегодня", "2026-07-29T03:00:00.000Z", "PENDING_PAYMENT");
+    await createBooking(fixture, fixture.primaryStaffId, "Нью-Йорк завтра", "2026-07-29T05:00:00.000Z", "PENDING_PAYMENT");
+    await createBooking(fixture, fixture.primaryStaffId, "Токио сегодня", "2026-07-28T16:00:00.000Z", "PENDING_PAYMENT", {
+      branchId: tokyoBranch.id,
+      serviceId: tokyoService.id,
+    });
+    await createBooking(fixture, fixture.primaryStaffId, "Токио вчера", "2026-07-28T14:00:00.000Z", "PENDING_PAYMENT", {
+      branchId: tokyoBranch.id,
+      serviceId: tokyoService.id,
+    });
     const now = new Date("2026-07-29T02:00:00.000Z");
 
     const today = await listBusinessBotBookings(
@@ -64,33 +78,42 @@ describe("business bot booking queries", () => {
       now,
     );
 
-    expect(today.items.map(({ customer }) => customer.name)).toEqual(["Ещё сегодня"]);
-    expect(summary).toMatchObject({ todayCount: 1, pendingPaymentCount: 2, customerBotStatus: "DISCONNECTED" });
+    expect(today.items.map(({ customer }) => customer.name)).toEqual(["Токио сегодня", "Нью-Йорк сегодня"]);
+    expect(summary).toMatchObject({ todayCount: 2, pendingPaymentCount: 4, customerBotStatus: "DISCONNECTED" });
   });
 
-  it("paginates a stable booking order without duplicates", async () => {
+  it("paginates equal start times in deterministic startsAt and id order without gaps", async () => {
     const fixture = await createWorkspace();
-    for (const [index, hour] of ["08", "08", "09", "10"].entries()) {
-      await createBooking(
+    const created = [];
+    for (let index = 0; index < 5; index += 1) {
+      created.push(await createBooking(
         fixture,
         fixture.primaryStaffId,
         `Клиент ${index + 1}`,
-        `2026-07-29T${hour}:${index === 1 ? "00" : "30"}:00.000Z`,
+        "2026-07-29T08:00:00.000Z",
         "CONFIRMED",
-      );
+      ));
     }
+    created.push(await createBooking(fixture, fixture.primaryStaffId, "Клиент 6", "2026-07-29T09:00:00.000Z", "CONFIRMED"));
     const actor = { businessId: fixture.businessId, userId: fixture.ownerUserId };
     const now = new Date("2026-07-29T07:00:00.000Z");
 
-    const first = await listBusinessBotBookings(actor, { kind: "upcoming", limit: 2 }, null, now);
-    const second = await listBusinessBotBookings(actor, { kind: "upcoming", limit: 2 }, first.nextCursor, now);
+    const pages = [];
+    let cursor: string | null = null;
+    do {
+      const page = await listBusinessBotBookings(actor, { kind: "upcoming", limit: 2 }, cursor, now);
+      pages.push(page);
+      cursor = page.nextCursor;
+    } while (cursor);
+    const actualIds = pages.flatMap(page => page.items.map(({ id }) => id));
+    const expectedIds = [...created]
+      .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime() || left.id.localeCompare(right.id))
+      .map(({ id }) => id);
 
-    expect(first.nextCursor).toBeTruthy();
-    expect(second.nextCursor).toBeNull();
-    expect(new Set([...first.items, ...second.items].map(({ id }) => id)).size).toBe(4);
-    expect([...first.items, ...second.items].map(({ customer }) => customer.name).sort()).toEqual([
-      "Клиент 1", "Клиент 2", "Клиент 3", "Клиент 4",
-    ]);
+    expect(pages.map(page => page.items.length)).toEqual([2, 2, 2]);
+    expect(pages.at(-1)?.nextCursor).toBeNull();
+    expect(actualIds).toEqual(expectedIds);
+    expect(new Set(actualIds).size).toBe(created.length);
   });
 
   async function createWorkspace(timeZone = "Asia/Dushanbe") {
@@ -124,6 +147,10 @@ describe("business bot booking queries", () => {
     customerName: string,
     startsAt: string,
     status: "PENDING_PAYMENT" | "CONFIRMED",
+    location: { branchId: string; serviceId: string } = {
+      branchId: workspace.branchId,
+      serviceId: workspace.serviceId,
+    },
   ) {
     const start = new Date(startsAt);
     const suffix = randomUUID();
@@ -137,8 +164,8 @@ describe("business bot booking queries", () => {
     return prisma.booking.create({
       data: {
         businessId: workspace.businessId,
-        branchId: workspace.branchId,
-        serviceId: workspace.serviceId,
+        branchId: location.branchId,
+        serviceId: location.serviceId,
         staffId,
         customerId: customer.id,
         startsAt: start,

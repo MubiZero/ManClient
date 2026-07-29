@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/core/database/prisma";
 import {
@@ -14,14 +14,19 @@ describe("platform business bot handler", () => {
   const businessIds: string[] = [];
   const userIds: string[] = [];
 
+  beforeEach(() => {
+    process.env.APP_URL = "https://manclient.example";
+  });
+
   afterEach(async () => {
     await prisma.business.deleteMany({ where: { id: { in: businessIds.splice(0) } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds.splice(0) } } });
+    delete process.env.APP_URL;
   });
 
   it("renders a useful menu and opens a pending booking without a web redirect", async () => {
     const fixture = await createActor("OWNER");
-    await createPendingBooking(fixture, "Мухаммад");
+    await createPendingBooking(fixture, "Мухаммад", new Date("2026-07-29T08:00:00.000Z"), "+992900001177");
     const output: Output[] = [];
     const dependencies = fakeDependencies(output);
 
@@ -86,6 +91,62 @@ describe("platform business bot handler", () => {
     expect(labels).not.toContain("Проверить чеки");
   });
 
+  it("falls back to a fresh message when Telegram rejects a callback edit", async () => {
+    const owner = await createActor("OWNER");
+    const output: Output[] = [];
+    const dependencies = fakeDependencies(output, { editFails: true });
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("Записи"), dependencies);
+    const todayAction = findCallback(output.at(-1), "Сегодня")!;
+
+    output.length = 0;
+    await handleBusinessBotUpdate(owner.actor, callbackUpdate("edit-fallback", todayAction), dependencies);
+
+    expect(output).toMatchObject([
+      { kind: "answer", callbackId: "edit-fallback" },
+      { kind: "send", text: "Записи на сегодня\n\nЗаписей нет." },
+    ]);
+  });
+
+  it("serves help, the public client link and owner-only check counts", async () => {
+    const owner = await createActor("OWNER");
+    const booking = await createPendingBooking(owner, "Чек клиента");
+    await prisma.payment.update({ where: { bookingId: booking.id }, data: { status: "NEEDS_ATTENTION" } });
+    const output: Output[] = [];
+    const dependencies = fakeDependencies(output);
+
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("/help"), dependencies);
+    expect(output.at(-1)?.text).toContain("Используйте меню");
+
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("Ссылка для клиентов"), dependencies);
+    expect(findUrl(output.at(-1), "Открыть запись")).toBe(`https://manclient.example/b/${owner.business.slug}`);
+
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("Проверить чеки"), dependencies);
+    expect(output.at(-1)?.text).toBe("Чеков на проверке: 1.");
+  });
+
+  it("opens the next page through an opaque Show more action", async () => {
+    const owner = await createActor("OWNER");
+    for (let index = 0; index < 11; index += 1) {
+      await createPendingBooking(owner, `Клиент ${String(index + 1).padStart(2, "0")}`, new Date(`2026-07-29T${String(8 + Math.floor(index / 2)).padStart(2, "0")}:${index % 2 ? "30" : "00"}:00.000Z`));
+    }
+    const output: Output[] = [];
+    const dependencies = fakeDependencies(output);
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("Записи"), dependencies);
+    const pendingAction = findCallback(output.at(-1), "Ожидают оплату")!;
+
+    output.length = 0;
+    await handleBusinessBotUpdate(owner.actor, callbackUpdate("pending-page", pendingAction), dependencies);
+    const showMore = findCallback(output.at(-1), "Показать ещё");
+    expect(showMore).toBeTruthy();
+    expect(showMore).not.toContain("cursor");
+
+    output.length = 0;
+    await handleBusinessBotUpdate(owner.actor, callbackUpdate("next-page", showMore!), dependencies);
+    expect(output[0]).toMatchObject({ kind: "answer", callbackId: "next-page" });
+    expect(output.at(-1)?.text).toContain("Клиент 11");
+    expect(findCallback(output.at(-1), "Показать ещё")).toBeUndefined();
+  });
+
   async function createActor(role: "OWNER" | "STAFF", workspace?: ActorFixture): Promise<ActorFixture> {
     if (!workspace) {
       const fixture = await createBookingFixture();
@@ -111,7 +172,7 @@ describe("platform business bot handler", () => {
   }
 
   function actorResult(
-    business: { id: string; name: string },
+    business: { id: string; name: string; slug: string },
     branchId: string,
     serviceId: string,
     staffId: string,
@@ -123,16 +184,25 @@ describe("platform business bot handler", () => {
       businessId: business.id,
       userId,
       role,
-      business: { id: business.id, name: business.name },
+      business: { id: business.id, name: business.name, slug: business.slug },
       destination: { chatId: "-100900", chatType: "supergroup" },
       telegramUserId,
     };
     return { actor, business, branchId, serviceId, staffId };
   }
 
-  async function createPendingBooking(fixture: Awaited<ReturnType<typeof createActor>>, customerName: string) {
+  async function createPendingBooking(
+    fixture: Awaited<ReturnType<typeof createActor>>,
+    customerName: string,
+    startsAt = new Date("2026-07-29T08:00:00.000Z"),
+    phone = `+992${randomUUID().replace(/\D/g, "").padEnd(9, "0").slice(0, 9)}`,
+  ) {
     const customer = await prisma.customer.create({
-      data: { businessId: fixture.actor.businessId, name: customerName, phone: "+992900001177" },
+      data: {
+        businessId: fixture.actor.businessId,
+        name: customerName,
+        phone,
+      },
     });
     return prisma.booking.create({
       data: {
@@ -141,8 +211,8 @@ describe("platform business bot handler", () => {
         serviceId: fixture.serviceId,
         staffId: fixture.staffId,
         customerId: customer.id,
-        startsAt: new Date("2026-07-29T08:00:00.000Z"),
-        endsAt: new Date("2026-07-29T08:45:00.000Z"),
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + 45 * 60_000),
         status: "PENDING_PAYMENT",
         payment: { create: { businessId: fixture.actor.businessId, amountDiram: 5_000 } },
       },
@@ -151,13 +221,13 @@ describe("platform business bot handler", () => {
 });
 
 type ReplyMarkup = {
-  inline_keyboard?: Array<Array<{ text: string; callback_data?: string }>>;
+  inline_keyboard?: Array<Array<{ text: string; callback_data?: string; url?: string }>>;
   keyboard?: Array<Array<{ text: string }>>;
 };
 
 type ActorFixture = {
   actor: BusinessBotPlatformActor;
-  business: { id: string; name: string };
+  business: { id: string; name: string; slug: string };
   branchId: string;
   serviceId: string;
   staffId: string;
@@ -170,11 +240,12 @@ type Output = {
   replyMarkup?: ReplyMarkup;
 };
 
-function fakeDependencies(output: Output[]): BusinessBotHandlerDependencies {
+function fakeDependencies(output: Output[], options: { editFails?: boolean } = {}): BusinessBotHandlerDependencies {
   return {
     now: () => new Date("2026-07-29T07:00:00.000Z"),
     sendMessage: async (_chatId, text, replyMarkup) => { output.push({ kind: "send", text, replyMarkup }); },
     editMessageText: async (_message, text, replyMarkup) => {
+      if (options.editFails) throw new Error("message cannot be edited");
       output.push({ kind: "edit", text, replyMarkup });
       return _message;
     },
@@ -200,4 +271,8 @@ function callbackUpdate(id: string, data: string) {
 
 function findCallback(output: Output | undefined, label: string) {
   return output?.replyMarkup?.inline_keyboard?.flat().find(({ text }) => text.includes(label))?.callback_data;
+}
+
+function findUrl(output: Output | undefined, label: string) {
+  return output?.replyMarkup?.inline_keyboard?.flat().find(({ text }) => text.includes(label))?.url;
 }

@@ -8,3 +8,4 @@ test-results/
 *.tsbuildinfo
 src/generated/prisma/
 .worktrees/
+.superpowers/
