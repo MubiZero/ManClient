@@ -19,7 +19,7 @@ export async function scheduleBookingReminders(bookingId: string, database: Noti
   return Promise.all(channels.map((channel) => database.message.upsert({
     where: { bookingId_channel_kind: { bookingId, channel, kind: "BOOKING_REMINDER" } },
     create: { businessId: booking.businessId, bookingId, channel, kind: "BOOKING_REMINDER", scheduledAt },
-    update: {},
+    update: { scheduledAt, status: "SCHEDULED", attempts: 0, lastError: null },
   })));
 }
 
