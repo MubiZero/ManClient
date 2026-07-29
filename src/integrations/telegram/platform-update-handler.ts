@@ -1,6 +1,7 @@
 import { connectBusinessTelegramBot } from "@/core/integrations/business-telegram-service";
 import { consumePlatformChatLink, getPlatformTelegramActor } from "@/core/integrations/platform-chat-link";
-import { createTelegramApi, type TelegramInlineKeyboard } from "@/integrations/telegram/telegram-api";
+import { handleBusinessBotUpdate } from "@/integrations/telegram/business-bot-handler";
+import { createTelegramApi, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 
 type TelegramUser = { id: number };
 type TelegramChat = { id: number; type: "private" | "group" | "supergroup" | "channel" };
@@ -14,6 +15,7 @@ export type PlatformTelegramUpdate = {
     text?: string;
   };
   callback_query?: {
+    id?: string;
     from: TelegramUser;
     message?: { message_id: number; chat: TelegramChat };
     data?: string;
@@ -22,9 +24,11 @@ export type PlatformTelegramUpdate = {
 
 type PlatformHandlerDependencies = {
   now: () => Date;
-  sendMessage: (chatId: string, text: string, replyMarkup?: TelegramInlineKeyboard) => Promise<void>;
+  sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup) => Promise<void>;
   deleteMessage: (chatId: string, messageId: number) => Promise<void>;
   connectBot: (input: { businessId: string; actorUserId: string; token: string }) => Promise<{ botUsername: string }>;
+  answerCallbackQuery?: (callbackQueryId: string, text?: string) => Promise<void>;
+  editMessageText?: ReturnType<typeof createTelegramApi>["editMessageText"];
 };
 
 const botTokenPattern = /^\d+:[A-Za-z0-9_-]+$/;
@@ -38,10 +42,22 @@ export async function handlePlatformTelegramUpdate(
   if (!actor) return;
 
   if (update.callback_query?.message) {
+    if (update.callback_query.id && dependencies.answerCallbackQuery) {
+      await dependencies.answerCallbackQuery(update.callback_query.id);
+    }
     const platformActor = await getPlatformTelegramActor(actor);
     if (!platformActor) return;
-    await dependencies.sendMessage(actor.chatId, "Действие пока недоступно. Откройте кабинет ManClient.", {
-      inline_keyboard: [[{ text: "Открыть кабинет", url: `${requiredAppUrl()}/login` }]],
+    await handleBusinessBotUpdate({
+      ...platformActor,
+      telegramUserId: actor.telegramUserId,
+    }, update, {
+      now: dependencies.now,
+      sendMessage: dependencies.sendMessage,
+      answerCallbackQuery: async () => {},
+      editMessageText: dependencies.editMessageText ?? (async (message, text, replyMarkup) => {
+        await dependencies.sendMessage(message.chatId, text, replyMarkup);
+        return message;
+      }),
     });
     return;
   }
@@ -86,8 +102,17 @@ export async function handlePlatformTelegramUpdate(
   const loginUrl = `${requiredAppUrl()}/login`;
   const platformActor = await getPlatformTelegramActor(actor);
   if (platformActor) {
-    await dependencies.sendMessage(actor.chatId, `ManClient для бизнеса «${platformActor.business.name}». Управление услугами, сотрудниками и интеграциями доступно в кабинете.`, {
-      inline_keyboard: [[{ text: "Открыть кабинет", url: loginUrl }]],
+    await handleBusinessBotUpdate({
+      ...platformActor,
+      telegramUserId: actor.telegramUserId,
+    }, update, {
+      now: dependencies.now,
+      sendMessage: dependencies.sendMessage,
+      answerCallbackQuery: dependencies.answerCallbackQuery ?? (async () => {}),
+      editMessageText: dependencies.editMessageText ?? (async (messageRef, messageText, replyMarkup) => {
+        await dependencies.sendMessage(messageRef.chatId, messageText, replyMarkup);
+        return messageRef;
+      }),
     });
     return;
   }
@@ -121,6 +146,8 @@ function defaultDependencies(): PlatformHandlerDependencies {
     sendMessage: telegram.sendMessage,
     deleteMessage: telegram.deleteMessage,
     connectBot: input => connectBusinessTelegramBot(input),
+    answerCallbackQuery: telegram.answerCallbackQuery,
+    editMessageText: telegram.editMessageText,
   };
 }
 

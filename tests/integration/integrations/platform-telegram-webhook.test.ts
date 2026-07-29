@@ -11,6 +11,7 @@ import {
 } from "@/core/integrations/platform-chat-link";
 import { prisma } from "@/core/database/prisma";
 import { handlePlatformTelegramUpdate } from "@/integrations/telegram/platform-update-handler";
+import type { TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 
 describe("ManClient business assistant", () => {
   const businessIds: string[] = [];
@@ -106,20 +107,27 @@ describe("ManClient business assistant", () => {
       telegramUserId: "7004",
     }, now);
     const messages: Array<{ text: string; url?: string }> = [];
+    const answered: string[] = [];
     const callback = (telegramUserId: number) => handlePlatformTelegramUpdate({
       update_id: telegramUserId,
       callback_query: {
+        id: String(telegramUserId),
         from: { id: telegramUserId },
         message: { message_id: 44, chat: { id: -10044, type: "supergroup" } },
         data: "business.noop",
       },
-    }, dependencies({ messages }));
+    }, dependencies({ messages, answered }));
 
     await callback(7005);
     expect(messages).toEqual([]);
+    expect(answered).toEqual(["7005"]);
 
     await callback(7004);
-    expect(messages).toEqual([{ text: "Действие пока недоступно. Откройте кабинет ManClient.", url: "https://manclient.example/login" }]);
+    expect(answered).toEqual(["7005", "7004"]);
+    expect(messages).toEqual([{
+      text: "Это действие уже недействительно. Обновите данные или откройте актуальное меню.",
+      url: undefined,
+    }]);
   });
 
   it("rejects an unknown Telegram chat type with the generic link error", async () => {
@@ -256,15 +264,20 @@ describe("ManClient business assistant", () => {
 function dependencies(overrides: {
   messages?: Array<{ text: string; url?: string }>;
   deleted?: number[];
+  answered?: string[];
   now?: () => Date;
   connectBot?: (input: { businessId: string; actorUserId: string; token: string }) => Promise<{ botUsername: string }>;
 } = {}) {
   return {
     now: overrides.now ?? (() => new Date("2026-07-29T06:00:00.000Z")),
-    sendMessage: async (_chatId: string, text: string, replyMarkup?: { inline_keyboard: Array<Array<{ url?: string }>> }) => {
-      overrides.messages?.push({ text, url: replyMarkup?.inline_keyboard[0]?.[0]?.url });
+    sendMessage: async (_chatId: string, text: string, replyMarkup?: TelegramReplyMarkup) => {
+      const url = replyMarkup && "inline_keyboard" in replyMarkup
+        ? replyMarkup.inline_keyboard[0]?.[0]?.url
+        : undefined;
+      overrides.messages?.push({ text, url });
     },
     deleteMessage: async (_chatId: string, messageId: number) => { overrides.deleted?.push(messageId); },
+    answerCallbackQuery: async (callbackId: string) => { overrides.answered?.push(callbackId); },
     connectBot: overrides.connectBot ?? (async () => ({ botUsername: "tenant_bot" })),
   };
 }
