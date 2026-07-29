@@ -15,9 +15,9 @@
 Скопируйте имена из `.env.example`. В production secret manager должны находиться:
 
 - `DATABASE_URL`, `DATABASE_DIRECT_URL`;
-- `AUTH_SECRET`, `CARD_ENCRYPTION_KEY`, `INTERNAL_API_SECRET`, `BOOKING_ACTION_SECRET`;
+- `AUTH_SECRET`, `CARD_ENCRYPTION_KEY`, `INTEGRATION_ENCRYPTION_KEY`, `INTERNAL_API_SECRET`, `BOOKING_ACTION_SECRET`, `PLATFORM_LINK_SECRET`;
 - S3 credentials;
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`;
+- platform bot credentials: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`;
 - `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`.
 
 `APP_URL` и `AUTH_URL` должны указывать на публичный HTTPS origin. `TELEGRAM_BOT_USERNAME` задаётся без `@`. Не используйте значения из тестов или `.env.example`.
@@ -25,7 +25,7 @@
 Генерация ключей:
 
 ```bash
-openssl rand -base64 32   # CARD_ENCRYPTION_KEY
+openssl rand -base64 32   # CARD_ENCRYPTION_KEY и INTEGRATION_ENCRYPTION_KEY
 openssl rand -hex 32      # остальные HMAC/session secrets
 ```
 
@@ -59,17 +59,50 @@ Restore сначала проверяется на отдельной БД. `--c
 
 Demo seed создаёт `demo-barber` и `demo-auto` только для локальной/CI проверки. Не запускайте demo seed в production.
 
-## 5. Telegram webhook
+## 5. Telegram platform и клиентские боты
 
-Webhook URL: `https://<host>/api/webhooks/telegram`. При регистрации передайте `TELEGRAM_WEBHOOK_SECRET` как `secret_token`. Endpoint принимает запрос только с совпадающим `X-Telegram-Bot-Api-Secret-Token`.
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` и `TELEGRAM_WEBHOOK_SECRET` принадлежат только бизнес-ассистенту ManClient. Токены клиентских ботов не добавляются в environment: владелец подключает их в `Настройки -> Интеграции`, после чего они хранятся зашифрованно с `INTEGRATION_ENCRYPTION_KEY`.
+
+После deploy зарегистрируйте platform webhook. Скрипт не выводит token или secret:
+
+```bash
+pnpm telegram:register-platform-webhook -- --dry-run
+pnpm telegram:register-platform-webhook
+```
+
+Целевой URL: `https://<host>/api/webhooks/telegram/platform`. Endpoint принимает запрос только с совпадающим `X-Telegram-Bot-Api-Secret-Token`. Старый `/api/webhooks/telegram` после cutover обязан отвечать `410 Gone`.
+
+Проверка без вывода credentials:
+
+```bash
+curl --fail --silent --show-error "$APP_URL/api/health"
+curl --silent --output /dev/null --write-out '%{http_code}\n' "$APP_URL/api/webhooks/telegram"
+```
+
+Ожидается `200` для health и `410` для legacy webhook.
+
+### Подключение tenant bot
+
+1. Владелец или администратор создаёт отдельного бота через `@BotFather`.
+2. В кабинете открывает `Настройки -> Интеграции` и вставляет token.
+3. ManClient проверяет `getMe`, регистрирует уникальный webhook `/api/webhooks/telegram/business/<publicId>` и удаляет token из UI.
+4. Отправьте `/start` в клиентский бот и проверьте выбор языка, филиала и услуги.
+
+При ротации сначала регистрируется новый webhook. Если Telegram недоступен, старый бот остаётся активным. Отключение удаляет webhook и зашифрованные credentials, но не удаляет самого бота в Telegram.
 
 После регистрации проверьте:
 
-1. Public booking показывает персональную Telegram-ссылку.
-2. `/start` связывает chat с конкретной pending payment через HMAC-token.
+1. Public booking показывает ссылку tenant bot, а не `@manclient_bot`.
+2. `/start` в platform bot показывает бизнес-ассистента; подписанная ссылка из кабинета привязывает бизнес-чат и истекает через 15 минут.
 3. Изображение чека сохраняется в private bucket.
 4. Matching receipt подтверждает запись; сомнительный попадает в `NEEDS_ATTENTION`.
 5. Кнопки переноса и отмены не содержат raw booking ID без подписи.
+
+### Rollback Telegram cutover
+
+Код и миграции additive (добавляют таблицы и индексы), поэтому rollback приложения не требует отката схемы. Перед rollback сохраните backup, разверните предыдущий проверенный image/SHA и верните platform webhook на поддерживаемый этим SHA endpoint. Не удаляйте новые таблицы в incident: это необратимо уничтожит tenant integrations и conversation state.
+
+Если потерян `INTEGRATION_ENCRYPTION_KEY`, tenant bot tokens восстановить нельзя. Верните ключ из secret-manager backup или переподключите каждого бота новым token через кабинет. Ротация этого ключа требует отдельной транзакционной утилиты; простая замена environment сломает расшифровку существующих integrations.
 
 ## 6. WhatsApp Cloud API
 

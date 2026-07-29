@@ -1,12 +1,18 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POST } from "@/app/api/bookings/route";
 import { prisma } from "@/core/database/prisma";
 import { createBookingFixture } from "@/../tests/helpers/booking-fixture";
 
 describe("POST /api/bookings", () => {
+  beforeEach(() => {
+    process.env.BOOKING_ACTION_SECRET = "booking-test-secret-at-least-32-characters";
+  });
+
   afterEach(() => {
     vi.useRealTimers();
+    delete process.env.BOOKING_ACTION_SECRET;
+    delete process.env.TELEGRAM_BOT_USERNAME;
   });
 
   it("creates a 15-minute pending-payment booking", async () => {
