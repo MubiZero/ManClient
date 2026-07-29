@@ -106,6 +106,7 @@ model Business {
   payments                         Payment[]
   receiptSubmissions               ReceiptSubmission[]
   messages                         Message[]
+  businessNotifications           BusinessNotification[]
   auditEvents                      AuditEvent[]
   telegramIntegrations             BusinessTelegramIntegration[]
   conversations                    Conversation[]
@@ -220,6 +221,7 @@ model BusinessTelegramChat {
   linkedAt           DateTime                 @default(now())
   disabledAt         DateTime?
   telegramIdentity   BusinessTelegramIdentity @relation(fields: [telegramIdentityId], references: [id], onDelete: Cascade)
+  notificationDeliveries BusinessNotificationDelivery[]
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
 
@@ -383,6 +385,7 @@ model Booking {
   resources   BookingResource[]
   payment     Payment?
   messages    Message[]
+  businessNotifications BusinessNotification[]
   auditEvents AuditEvent[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -412,6 +415,43 @@ model Message {
   @@unique([bookingId, channel, kind])
   @@index([status, scheduledAt])
   @@index([externalId])
+}
+
+model BusinessNotification {
+  id               String                         @id @default(cuid())
+  businessId       String
+  bookingId        String?
+  kind             String
+  deduplicationKey String
+  status           MessageStatus                  @default(SCHEDULED)
+  scheduledAt      DateTime
+  business         Business                       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking          Booking?                       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  deliveries       BusinessNotificationDelivery[]
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+
+  @@unique([businessId, deduplicationKey])
+  @@index([status, scheduledAt])
+  @@index([bookingId, kind])
+}
+
+model BusinessNotificationDelivery {
+  id             String                       @id @default(cuid())
+  notificationId String
+  destinationId  String
+  status         MessageStatus                @default(SCHEDULED)
+  scheduledAt    DateTime
+  attempts       Int                          @default(0)
+  maxAttempts    Int                          @default(3)
+  lastError      String?
+  notification   BusinessNotification         @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  destination    BusinessTelegramChat         @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  @@unique([notificationId, destinationId])
+  @@index([status, scheduledAt])
 }
 
 model AuditEvent {

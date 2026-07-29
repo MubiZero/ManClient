@@ -7,6 +7,7 @@ import { prisma } from "@/core/database/prisma";
 import { recognizeDushanbeCityReceipt } from "@/core/payments/dushanbe-city-receipt-recognizer";
 import { confirmFromReceipt, DuplicateOperationError } from "@/core/payments/payment-service";
 import { getReceipt, storeReceipt } from "@/core/payments/receipt-storage";
+import { scheduleBusinessNotification } from "@/core/notifications/business-notification-service";
 
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 const MAX_RECEIPT_PIXELS = 24_000_000;
@@ -53,6 +54,7 @@ export async function submitReceipt(input: { paymentId: string; file: File; chan
     });
     await transaction.payment.update({ where: { id: payment.id }, data: { status: "RECEIPT_PROCESSING", reviewDeadline } });
     await writeAuditEvent({ businessId: payment.businessId, bookingId: payment.bookingId, type: "receipt.submitted", actorType: "customer", actorId: payment.booking.customerId, metadata: { submissionId: created.id, channel: input.channel } }, transaction);
+    await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "RECEIPT_PROCESSING", deduplicationKey: `receipt:${created.id}:processing`, scheduledAt: now }, transaction);
     return created;
   });
 
@@ -112,6 +114,7 @@ async function markNeedsReview(
     await transaction.receiptSubmission.update({ where: { id: submission.id }, data: { status: "NEEDS_REVIEW", failureCode: reason, processedAt: now } });
     await transaction.payment.update({ where: { id: submission.paymentId }, data: { status: "NEEDS_ATTENTION", attentionReason: reason, receiptStorageKey: submission.storageKey } });
     await writeAuditEvent({ businessId: submission.businessId, bookingId: submission.payment.bookingId, type: "receipt.needs_review", actorType: "system", metadata: { submissionId: submission.id, reason } }, transaction);
+    await scheduleBusinessNotification({ businessId: submission.businessId, bookingId: submission.payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW", deduplicationKey: `receipt:${submission.id}:needs-review`, scheduledAt: now }, transaction);
   });
   return prisma.receiptSubmission.findUniqueOrThrow({ where: { id: submission.id } });
 }

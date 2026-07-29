@@ -10,6 +10,11 @@ import { prisma } from "@/core/database/prisma";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
 import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 import { scheduleBookingReminders } from "@/core/notifications/notification-service";
+import {
+  scheduleBusinessNotification,
+  scheduleUpcomingBusinessVisit,
+  skipUpcomingBusinessVisit,
+} from "@/core/notifications/business-notification-service";
 
 type ActorInput = { businessId: string; actorUserId: string };
 const manualSchema = z.object({ branchId: z.string().min(1), serviceId: z.string().min(1), staffId: z.string().min(1), startsAt: z.date(), customer: z.object({ name: z.string().trim().min(2).max(120), phone: z.string().min(1) }) });
@@ -31,6 +36,8 @@ export async function createManualBooking(input: ActorInput & z.input<typeof man
   try {
     const booking = await reserveAllocation({ branchId: value.branchId, serviceId: value.serviceId, staffId: value.staffId, customerId: customer.id, resourceIds, startsAt: value.startsAt, durationMinutes: service.durationMinutes, expiresAt: null, amountDiram: service.amountDiram, status: "CONFIRMED", source: "DASHBOARD", actor: { type: "membership", id: scope.id }, confirmedAt: now, confirmedBy: `membership:${scope.id}` });
     await scheduleBookingReminders(booking.id);
+    await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CONFIRMED", deduplicationKey: `booking:${booking.id}:confirmed`, scheduledAt: now });
+    await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id, startsAt: value.startsAt });
     return { bookingId: booking.id };
   } catch (error) {
     if (error instanceof Error && (error.message === "STAFF_UNAVAILABLE" || error.message === "RESOURCE_UNAVAILABLE")) throw new BookingOperationError("SLOT_UNAVAILABLE");
@@ -47,6 +54,8 @@ export async function confirmBusinessBooking(input: ActorInput & { bookingId: st
     if (booking.status !== "PENDING_PAYMENT") throw new BookingOperationError("INVALID_STATUS");
     await transaction.booking.update({ where: { id: booking.id }, data: { status: "CONFIRMED", expiresAt: null, confirmedAt: now, confirmedBy: `membership:${scope.id}` } });
     await writeAuditEvent({ businessId: input.businessId, bookingId: booking.id, type: "booking.confirmed_manually", actorType: "membership", actorId: scope.id, metadata: { paymentStatus: booking.payment?.status ?? "NONE" } }, transaction);
+    await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CONFIRMED", deduplicationKey: `booking:${booking.id}:confirmed`, scheduledAt: now }, transaction);
+    await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id, startsAt: booking.startsAt }, transaction);
     return { id: booking.id, changed: true };
   });
   if (result.changed) await scheduleBookingReminders(result.id);
@@ -71,6 +80,8 @@ export async function rescheduleBusinessBooking(input: ActorInput & { bookingId:
         if (conflict) throw new BookingOperationError("SLOT_UNAVAILABLE");
         await transaction.booking.update({ where: { id: current.id }, data: { startsAt: input.startsAt, endsAt } });
         await writeAuditEvent({ businessId: input.businessId, bookingId: current.id, type: "booking.rescheduled", actorType: "membership", actorId: currentScope.id, metadata: { previousStartsAt: current.startsAt.toISOString(), startsAt: input.startsAt.toISOString() } }, transaction);
+        await scheduleBusinessNotification({ businessId: input.businessId, bookingId: current.id, kind: "BOOKING_RESCHEDULED", deduplicationKey: `booking:${current.id}:rescheduled:${input.startsAt.toISOString()}`, scheduledAt: now }, transaction);
+        await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: current.id, startsAt: input.startsAt }, transaction);
       }, { isolationLevel: "Serializable" });
       await scheduleBookingReminders(input.bookingId);
       return { bookingId: input.bookingId };
@@ -93,6 +104,8 @@ export async function cancelBusinessBooking(input: ActorInput & { bookingId: str
     if (!(["PENDING_PAYMENT", "CONFIRMED"] as string[]).includes(booking.status)) throw new BookingOperationError("INVALID_STATUS");
     await transaction.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED", cancelledAt: now, cancelledBy: `membership:${scope.id}`, cancellationReason: reason } });
     await transaction.message.updateMany({ where: { bookingId: booking.id, status: "SCHEDULED" }, data: { status: "SKIPPED", lastError: "BOOKING_CANCELLED" } });
+    await skipUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id }, transaction);
+    await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CANCELLED", deduplicationKey: `booking:${booking.id}:cancelled`, scheduledAt: now }, transaction);
     await writeAuditEvent({ businessId: input.businessId, bookingId: booking.id, type: "booking.cancelled", actorType: "membership", actorId: scope.id, metadata: { cancelledAt: now.toISOString(), reason } }, transaction);
     return { bookingId: booking.id };
   });

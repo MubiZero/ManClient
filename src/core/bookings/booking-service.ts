@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { reserveAllocation } from "@/core/bookings/booking-allocation";
 import { prisma } from "@/core/database/prisma";
+import { scheduleBusinessNotificationSafely } from "@/core/notifications/business-notification-service";
 
 const RESERVATION_MINUTES = 15;
 
@@ -104,6 +105,14 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
   if (!booking.payment) {
     throw new Error("Payment was not created with booking");
   }
+
+  await scheduleBusinessNotificationSafely({
+    businessId: configuration.id,
+    bookingId: booking.id,
+    kind: "NEW_BOOKING",
+    deduplicationKey: `booking:${booking.id}:created`,
+    scheduledAt: now,
+  });
 
   return { bookingId: booking.id, paymentId: booking.payment.id, expiresAt };
 }

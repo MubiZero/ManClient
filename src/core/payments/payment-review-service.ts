@@ -6,6 +6,7 @@ import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { scheduleBookingReminders, scheduleWhatsAppConfirmation } from "@/core/notifications/notification-service";
 import { getReceipt, type ReceiptObject } from "@/core/payments/receipt-storage";
+import { scheduleBusinessNotification, scheduleUpcomingBusinessVisit } from "@/core/notifications/business-notification-service";
 
 export class PaymentReviewError extends Error {
   constructor(public readonly code: "INVALID_INPUT" | "FORBIDDEN" | "NOT_FOUND" | "INVALID_STATUS") { super(code); this.name = "PaymentReviewError"; }
@@ -118,6 +119,8 @@ export async function approvePaymentReview(input: ActorInput & { paymentId: stri
     await writeAuditEvent({ businessId: input.businessId, bookingId: payment.bookingId, type: "payment.review_approved", actorType: "membership", actorId: actor.id, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
     await scheduleBookingReminders(payment.bookingId, transaction);
     await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
+    await scheduleBusinessNotification({ businessId: input.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: now }, transaction);
+    await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
   return result;
@@ -146,6 +149,7 @@ export async function rejectPaymentReview(input: ActorInput & { paymentId: strin
     }
     await transaction.receiptSubmission.update({ where: { id: submission.id }, data: { status: "REJECTED", reviewedAt: now, reviewedBy: `membership:${actor.id}`, reviewNote: reason } });
     await writeAuditEvent({ businessId: input.businessId, bookingId: payment.bookingId, type: "payment.review_rejected", actorType: "membership", actorId: actor.id, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
+    await scheduleBusinessNotification({ businessId: input.businessId, bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", deduplicationKey: `payment:${payment.id}:rejected`, scheduledAt: now }, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
 }

@@ -137,16 +137,27 @@ export async function listBusinessTelegramDestinations(businessId: string) {
       telegramIdentity: { membership: { businessId } },
     },
     select: {
+      id: true,
       chatId: true,
       chatType: true,
-      telegramIdentity: { select: { membershipId: true, telegramUserId: true } },
+      telegramIdentity: {
+        select: {
+          membershipId: true,
+          telegramUserId: true,
+          membership: { select: { userId: true, role: true, staff: { select: { id: true } } } },
+        },
+      },
     },
     orderBy: { linkedAt: "asc" },
   }).then(destinations => destinations.map(destination => ({
+    destinationId: destination.id,
     chatId: destination.chatId,
     chatType: destination.chatType.toLowerCase(),
     membershipId: destination.telegramIdentity.membershipId,
     telegramUserId: destination.telegramIdentity.telegramUserId,
+    userId: destination.telegramIdentity.membership.userId,
+    role: destination.telegramIdentity.membership.role,
+    staffId: destination.telegramIdentity.membership.staff?.id ?? null,
   })));
 }
 

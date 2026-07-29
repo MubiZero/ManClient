@@ -6,6 +6,7 @@ import { scheduleBookingReminders, scheduleWhatsAppConfirmation } from "@/core/n
 import { decryptCardNumber } from "@/core/payments/card-encryption";
 import { receiptInputSchema, type ReceiptInput } from "@/core/payments/receipt-recognizer";
 import { createPaymentUrl } from "@/integrations/dushanbe-city/payment-link";
+import { scheduleBusinessNotification, scheduleUpcomingBusinessVisit } from "@/core/notifications/business-notification-service";
 
 export class DuplicateOperationError extends Error {
   readonly code = "DUPLICATE_OPERATION";
@@ -90,7 +91,7 @@ export async function confirmFromReceipt(input: ReceiptInput) {
           : receipt.recipientCardSuffix !== payment.booking.branch.recipientCardLast4 ? "RECIPIENT_MISMATCH"
           : receipt.operationAt < payment.booking.createdAt || payment.booking.expiresAt === null || receipt.operationAt > payment.booking.expiresAt ? "OPERATION_TIME_MISMATCH"
           : "RECEIPT_MISMATCH";
-        return transaction.payment.update({
+        const needsAttention = await transaction.payment.update({
           where: { id: payment.id },
           data: {
             status: "NEEDS_ATTENTION",
@@ -102,6 +103,8 @@ export async function confirmFromReceipt(input: ReceiptInput) {
             attentionReason,
           },
         });
+        await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW", deduplicationKey: `payment:${payment.id}:needs-review:${receipt.operationNumber}`, scheduledAt: new Date() }, transaction);
+        return needsAttention;
       }
 
       const confirmedPayment = await transaction.payment.update({
@@ -136,6 +139,8 @@ export async function confirmFromReceipt(input: ReceiptInput) {
       }, transaction);
       await scheduleBookingReminders(payment.bookingId, transaction);
       await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
+      await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: new Date() }, transaction);
+      await scheduleUpcomingBusinessVisit({ businessId: payment.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
 
       return confirmedPayment;
     }, { isolationLevel: "Serializable" });
