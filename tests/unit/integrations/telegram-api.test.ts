@@ -33,6 +33,45 @@ describe("Telegram API", () => {
     });
   });
 
+  it("reports BotFather management capability", async () => {
+    const api = createTelegramApi("123456:secret", async () => new Response(JSON.stringify({
+      ok: true,
+      result: { id: 123456, is_bot: true, username: "manclient_bot", can_manage_bots: true },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    await expect(api.getMe()).resolves.toMatchObject({ canManageBots: true });
+  });
+
+  it("gets a managed bot token by bot user id", async () => {
+    const calls: RecordedCall[] = [];
+    const api = createTelegramApi("123:manager-secret", (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        method: new URL(String(input)).pathname.split("/").at(-1)!,
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : init?.body,
+      });
+      return new Response(JSON.stringify({ ok: true, result: "9001:managed-secret" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch);
+
+    await expect(api.getManagedBotToken(9001)).resolves.toBe("9001:managed-secret");
+    expect(calls).toEqual([{ method: "getManagedBotToken", body: { user_id: 9001 } }]);
+  });
+
+  it("redacts the platform token and bounds Telegram descriptions", async () => {
+    const token = "123456:manager-secret";
+    const api = createTelegramApi(token, async () => new Response(JSON.stringify({
+      ok: false,
+      description: `${token}-${"x".repeat(400)}`,
+    }), { status: 400, headers: { "content-type": "application/json" } }));
+
+    const error = await api.getManagedBotToken(9001).catch((caught: unknown) => caught);
+
+    expect((error as Error).message).not.toContain(token);
+    expect((error as Error).message.length).toBeLessThan(280);
+  });
+
   it("returns a safe Telegram error without a token-bearing URL", async () => {
     const token = "123456:top-secret-token";
     const api = createTelegramApi(token, async () => new Response(JSON.stringify({

@@ -2,6 +2,7 @@ export type TelegramIdentity = {
   id: number;
   isBot: true;
   username: string;
+  canManageBots?: boolean;
 };
 
 export type TelegramInlineKeyboard = {
@@ -52,7 +53,8 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
       description?: string;
     };
     if (!response.ok || !payload.ok || payload.result === undefined) {
-      throw new TelegramApiError(method, response.status, payload.description ?? "Unknown error");
+      const description = (payload.description ?? "Unknown error").replaceAll(token, "[redacted]").slice(0, 200);
+      throw new TelegramApiError(method, response.status, description);
     }
     return payload.result;
   }
@@ -83,11 +85,25 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
         id: number;
         is_bot: boolean;
         username?: string;
+        can_manage_bots?: boolean;
       }>("getMe", {});
       if (!identity.is_bot || !identity.username) {
         throw new Error("Telegram bot must have a username");
       }
-      return { id: identity.id, isBot: true, username: identity.username };
+      return {
+        id: identity.id,
+        isBot: true,
+        username: identity.username,
+        ...(identity.can_manage_bots !== undefined ? { canManageBots: identity.can_manage_bots } : {}),
+      };
+    },
+
+    async getManagedBotToken(userId: number): Promise<string> {
+      const managedToken = await call<string>("getManagedBotToken", { user_id: userId });
+      if (!/^\d+:[A-Za-z0-9_-]+$/.test(managedToken)) {
+        throw new Error("Telegram did not return a valid managed bot token");
+      }
+      return managedToken;
     },
 
     async setWebhook(url: string, secretToken: string): Promise<void> {
