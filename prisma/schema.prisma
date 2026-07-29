@@ -39,20 +39,40 @@ enum MessageStatus {
   SKIPPED
 }
 
+enum TelegramIntegrationStatus {
+  PENDING
+  ACTIVE
+  ERROR
+  DISCONNECTED
+}
+
+enum ConversationStatus {
+  ACTIVE
+  WAITING_FOR_OPERATOR
+  CLOSED
+}
+
+enum ConversationChannel {
+  TELEGRAM
+  WHATSAPP
+  WEB
+}
+
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  displayName  String
-  passwordHash String?
-  memberships  Membership[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id                            String                        @id @default(cuid())
+  email                         String                        @unique
+  displayName                   String
+  passwordHash                  String?
+  memberships                   Membership[]
+  connectedTelegramIntegrations BusinessTelegramIntegration[] @relation("TelegramIntegrationConnector")
+  createdAt                     DateTime                      @default(now())
+  updatedAt                     DateTime                      @updatedAt
 }
 
 model Business {
-  id                               String       @id @default(cuid())
+  id                               String                        @id @default(cuid())
   name                             String
-  slug                             String       @unique
+  slug                             String                        @unique
   branches                         Branch[]
   memberships                      Membership[]
   bookings                         Booking[]
@@ -60,12 +80,15 @@ model Business {
   payments                         Payment[]
   messages                         Message[]
   auditEvents                      AuditEvent[]
+  telegramIntegrations             BusinessTelegramIntegration[]
+  conversations                    Conversation[]
+  conversationActions              ConversationAction[]
   whatsappPhoneNumberId            String?
   whatsappTemplateName             String?
   whatsappConfirmationTemplateName String?
-  whatsappLanguageCode             String       @default("ru")
-  createdAt                        DateTime     @default(now())
-  updatedAt                        DateTime     @updatedAt
+  whatsappLanguageCode             String                        @default("ru")
+  createdAt                        DateTime                      @default(now())
+  updatedAt                        DateTime                      @updatedAt
 }
 
 model Branch {
@@ -90,18 +113,121 @@ model Branch {
 }
 
 model Membership {
-  id         String       @id @default(cuid())
-  businessId String
-  userId     String
-  role       BusinessRole
-  business   Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  staff      StaffMember?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id            String                 @id @default(cuid())
+  businessId    String
+  userId        String
+  role          BusinessRole
+  business      Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staff         StaffMember?
+  telegramChats BusinessTelegramChat[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
   @@unique([businessId, userId])
   @@index([userId])
+}
+
+model BusinessTelegramIntegration {
+  id                     String                    @id @default(cuid())
+  businessId             String
+  publicId               String                    @unique
+  botId                  String
+  botUsername            String
+  botTokenEncrypted      String?
+  webhookSecretEncrypted String?
+  status                 TelegramIntegrationStatus @default(PENDING)
+  lastWebhookError       String?
+  connectedByUserId      String?
+  connectedAt            DateTime?
+  disconnectedAt         DateTime?
+  business               Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  connectedBy            User?                     @relation("TelegramIntegrationConnector", fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  conversations          Conversation[]
+  inboundUpdates         InboundChannelUpdate[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  @@index([businessId, status])
+  @@index([botId, status])
+}
+
+model BusinessTelegramChat {
+  id           String     @id @default(cuid())
+  membershipId String
+  chatId       String
+  active       Boolean    @default(true)
+  linkedAt     DateTime   @default(now())
+  disabledAt   DateTime?
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([membershipId, chatId])
+  @@index([chatId, active])
+}
+
+model Conversation {
+  id             String                       @id @default(cuid())
+  businessId     String
+  integrationId  String?
+  channel        ConversationChannel
+  externalChatId String
+  status         ConversationStatus           @default(ACTIVE)
+  flowVersion    Int                          @default(1)
+  business       Business                     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  integration    BusinessTelegramIntegration? @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  sessions       ConversationSession[]
+  actions        ConversationAction[]
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  @@unique([businessId, channel, externalChatId])
+  @@index([integrationId])
+  @@index([businessId, status])
+}
+
+model ConversationSession {
+  id             String       @id @default(cuid())
+  conversationId String
+  state          String
+  data           Json
+  expiresAt      DateTime
+  version        Int          @default(0)
+  active         Boolean      @default(true)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([conversationId, active])
+  @@index([expiresAt])
+}
+
+model ConversationAction {
+  id             String       @id @default(cuid())
+  businessId     String
+  conversationId String
+  kind           String
+  payload        Json
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  business       Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@index([businessId, expiresAt])
+  @@index([conversationId, consumedAt])
+}
+
+model InboundChannelUpdate {
+  id               String                      @id @default(cuid())
+  integrationId    String
+  externalUpdateId String
+  integration      BusinessTelegramIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  receivedAt       DateTime                    @default(now())
+
+  @@unique([integrationId, externalUpdateId])
+  @@index([receivedAt])
 }
 
 model StaffMember {
