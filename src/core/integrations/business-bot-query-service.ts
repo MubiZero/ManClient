@@ -160,6 +160,7 @@ function safePaymentReview(payment: Awaited<ReturnType<typeof getPaymentForRevie
     reviewedAt: payment.reviewedAt,
     updatedAt: payment.updatedAt,
     hasReceipt: payment.submissions.length > 0,
+    submissionId: payment.submissions[0]?.id ?? null,
     booking: payment.booking,
   };
 }

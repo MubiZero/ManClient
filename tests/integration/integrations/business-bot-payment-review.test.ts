@@ -207,6 +207,48 @@ describe("business bot payment review", () => {
     await expect(prisma.receiptSubmission.findUniqueOrThrow({ where: { id: newer.id } })).resolves.toMatchObject({ status: "UPLOADED" });
   });
 
+  it("expires a displayed decision when a newer review receipt appears", async () => {
+    const workspace = await createWorkspace("OWNER");
+    const review = await createReview(workspace, "Обновлённый чек", {
+      submissionCreatedAt: new Date("2026-07-29T06:00:00.000Z"),
+    });
+    const output: Output[] = [];
+    const dependencies = fakeDependencies(output);
+    const card = await openFirstReview(workspace.actor, dependencies, output);
+    const confirmation = await invoke(
+      workspace.actor,
+      findCallback(card, "Подтвердить оплату")!,
+      dependencies,
+      output,
+    );
+
+    await prisma.receiptSubmission.create({
+      data: {
+        businessId: workspace.business.id,
+        paymentId: review.payment.id,
+        storageKey: "receipts/newer-review.jpg",
+        contentType: "image/jpeg",
+        sizeBytes: 4,
+        status: "NEEDS_REVIEW",
+        createdAt: new Date("2026-07-29T06:30:00.000Z"),
+      },
+    });
+
+    const recovered = await invoke(
+      workspace.actor,
+      findCallback(confirmation, "Да, подтвердить")!,
+      dependencies,
+      output,
+    );
+
+    expect(recovered.text).toContain("Состояние изменилось");
+    await expect(prisma.payment.findUniqueOrThrow({ where: { id: review.payment.id } }))
+      .resolves.toMatchObject({ status: "NEEDS_ATTENTION" });
+    await expect(prisma.auditEvent.count({
+      where: { bookingId: review.booking.id, type: "payment.review_approved" },
+    })).resolves.toBe(0);
+  });
+
   it("hides decisions and reports the actual state when booking or actionable receipt changed", async () => {
     const workspace = await createWorkspace("OWNER");
     const changedBooking = await createReview(workspace, "Изменённая запись");
@@ -222,7 +264,10 @@ describe("business bot payment review", () => {
     expect(findCallback(bookingCard, "Обновить")).toBeTruthy();
     expect(findCallback(bookingCard, "К очереди")).toBeTruthy();
 
-    const staleApprove = await createAction(workspace.actor, "PAYMENT_APPROVE_CONFIRM", { paymentId: changedBooking.payment.id }, "MUTATION");
+    const staleApprove = await createAction(workspace.actor, "PAYMENT_APPROVE_CONFIRM", {
+      paymentId: changedBooking.payment.id,
+      submissionId: changedBooking.submission.id,
+    }, "MUTATION");
     const recovered = await invoke(workspace.actor, staleApprove, dependencies, output);
     expect(recovered.text).toContain("Текущее состояние: запись подтверждена; оплата требует проверки");
     expect(recovered.text).not.toContain("Чек уже обработан");
@@ -302,6 +347,25 @@ describe("business bot payment review", () => {
     await expect(prisma.message.count({ where: { bookingId: review.booking.id } })).resolves.toBe(0);
   });
 
+  it("rejects a stale rejection after the booking status changes", async () => {
+    const workspace = await createWorkspace("OWNER");
+    const review = await createReview(workspace, "Устаревшее отклонение");
+    await prisma.booking.update({ where: { id: review.booking.id }, data: { status: "CANCELLED" } });
+
+    await expect(rejectPaymentReview({
+      businessId: workspace.business.id,
+      actorUserId: workspace.actor.userId,
+      paymentId: review.payment.id,
+      submissionId: review.submission.id,
+      reason: "Оплата не подтверждена банком",
+    })).rejects.toMatchObject({ code: "INVALID_STATUS" });
+
+    await expect(prisma.payment.findUniqueOrThrow({ where: { id: review.payment.id } }))
+      .resolves.toMatchObject({ status: "NEEDS_ATTENTION" });
+    await expect(prisma.receiptSubmission.findUniqueOrThrow({ where: { id: review.submission.id } }))
+      .resolves.toMatchObject({ status: "NEEDS_REVIEW" });
+  });
+
   it("allows exactly one outcome in an approve-versus-reject race", async () => {
     const workspace = await createWorkspace("OWNER", { customerNotifications: true });
     const review = await createReview(workspace, "Гонка решения", { telegramChatId: "race-customer" });
@@ -340,6 +404,7 @@ describe("business bot payment review", () => {
     const dependencies = fakeDependencies(output);
     const action = await createAction(workspace.actor, "PAYMENT_REJECT_REASON", {
       paymentId: review.payment.id,
+      submissionId: review.submission.id,
       reason: "Карта получателя указана неверно",
     }, "MUTATION");
     const result = await invoke(workspace.actor, action, dependencies, output);

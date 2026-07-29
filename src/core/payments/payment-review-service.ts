@@ -75,22 +75,25 @@ export async function getPaymentForReview(input: ActorInput & { paymentId: strin
 }
 
 export async function getPaymentReceiptForReview(
-  input: ActorInput & { paymentId: string },
+  input: ActorInput & { paymentId: string; submissionId?: string },
 ): Promise<ReceiptObject> {
   const submission = await prisma.$transaction(async (transaction) => {
     await requireReviewAccess(transaction, input);
     const row = await transaction.receiptSubmission.findFirst({
       where: { paymentId: input.paymentId, businessId: input.businessId, status: "NEEDS_REVIEW" },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      select: { storageKey: true },
+      select: { id: true, storageKey: true },
     });
     if (!row) throw new PaymentReviewError("NOT_FOUND");
+    if (input.submissionId && row.id !== input.submissionId) {
+      throw new PaymentReviewError("INVALID_STATUS");
+    }
     return row;
   });
   return getReceipt(submission.storageKey);
 }
 
-export async function approvePaymentReview(input: ActorInput & { paymentId: string; reason?: string }, now = new Date()) {
+export async function approvePaymentReview(input: ActorInput & { paymentId: string; submissionId?: string; reason?: string }, now = new Date()) {
   const result = await prisma.$transaction(async (transaction) => {
     const actor = await requireReviewAccess(transaction, input);
     const payment = await transaction.payment.findFirst({ where: { id: input.paymentId, businessId: input.businessId }, include: { booking: true, submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } });
@@ -100,6 +103,7 @@ export async function approvePaymentReview(input: ActorInput & { paymentId: stri
     const reason = input.reason?.trim().slice(0, 300) || "Подтверждено после ручной проверки";
     const submission = payment.submissions[0];
     if (!submission) throw new PaymentReviewError("INVALID_STATUS");
+    if (input.submissionId && submission.id !== input.submissionId) throw new PaymentReviewError("INVALID_STATUS");
     const claimed = await transaction.payment.updateMany({
       where: { id: payment.id, businessId: input.businessId, status: "NEEDS_ATTENTION" },
       data: { status: "RECEIPT_ACCEPTED", receiptAcceptedAt: now, reviewedAt: now, reviewedBy: `membership:${actor.id}`, reviewReason: reason, isBankVerified: false },
@@ -119,17 +123,18 @@ export async function approvePaymentReview(input: ActorInput & { paymentId: stri
   return result;
 }
 
-export async function rejectPaymentReview(input: ActorInput & { paymentId: string; reason: string }, now = new Date()) {
+export async function rejectPaymentReview(input: ActorInput & { paymentId: string; submissionId?: string; reason: string }, now = new Date()) {
   const reason = input.reason.trim();
   if (reason.length < 3 || reason.length > 300) throw new PaymentReviewError("INVALID_INPUT");
   return prisma.$transaction(async (transaction) => {
     const actor = await requireReviewAccess(transaction, input);
-    const payment = await transaction.payment.findFirst({ where: { id: input.paymentId, businessId: input.businessId }, include: { submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } });
+    const payment = await transaction.payment.findFirst({ where: { id: input.paymentId, businessId: input.businessId }, include: { booking: true, submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } });
     if (!payment) throw new PaymentReviewError("NOT_FOUND");
     if (payment.status === "REJECTED") return { bookingId: payment.bookingId, changed: false };
-    if (payment.status !== "NEEDS_ATTENTION") throw new PaymentReviewError("INVALID_STATUS");
+    if (payment.status !== "NEEDS_ATTENTION" || payment.booking.status !== "PENDING_PAYMENT") throw new PaymentReviewError("INVALID_STATUS");
     const submission = payment.submissions[0];
     if (!submission) throw new PaymentReviewError("INVALID_STATUS");
+    if (input.submissionId && submission.id !== input.submissionId) throw new PaymentReviewError("INVALID_STATUS");
     const claimed = await transaction.payment.updateMany({
       where: { id: payment.id, businessId: input.businessId, status: "NEEDS_ATTENTION" },
       data: { status: "REJECTED", reviewedAt: now, reviewedBy: `membership:${actor.id}`, reviewReason: reason },

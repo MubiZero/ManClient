@@ -164,21 +164,24 @@ async function handleCallback(
     }
     case "PAYMENT_RECEIPT": {
       const paymentId = stringValue(action.payload.paymentId);
-      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
-      await showPaymentReceipt(actor, paymentId, dependencies, callback.message);
+      const submissionId = stringValue(action.payload.submissionId);
+      if (!paymentId || !submissionId) return showStaleAction(actor, callback.message, dependencies);
+      await showPaymentReceipt(actor, paymentId, submissionId, dependencies, callback.message);
       return;
     }
     case "PAYMENT_APPROVE_BEGIN": {
       const paymentId = stringValue(action.payload.paymentId);
-      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
-      await showPaymentApprovalConfirmation(actor, paymentId, dependencies, callback.message);
+      const submissionId = stringValue(action.payload.submissionId);
+      if (!paymentId || !submissionId) return showStaleAction(actor, callback.message, dependencies);
+      await showPaymentApprovalConfirmation(actor, paymentId, submissionId, dependencies, callback.message);
       return;
     }
     case "PAYMENT_APPROVE_CONFIRM": {
       const paymentId = stringValue(action.payload.paymentId);
-      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
+      const submissionId = stringValue(action.payload.submissionId);
+      if (!paymentId || !submissionId) return showStaleAction(actor, callback.message, dependencies);
       try {
-        const result = await approvePaymentReview({ businessId: actor.businessId, actorUserId: actor.userId, paymentId }, dependencies.now());
+        const result = await approvePaymentReview({ businessId: actor.businessId, actorUserId: actor.userId, paymentId, submissionId }, dependencies.now());
         await showPaymentReviewCard(
           actor,
           paymentId,
@@ -193,16 +196,18 @@ async function handleCallback(
     }
     case "PAYMENT_REJECT_BEGIN": {
       const paymentId = stringValue(action.payload.paymentId);
-      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
-      await showPaymentRejectionReasons(actor, paymentId, dependencies, callback.message);
+      const submissionId = stringValue(action.payload.submissionId);
+      if (!paymentId || !submissionId) return showStaleAction(actor, callback.message, dependencies);
+      await showPaymentRejectionReasons(actor, paymentId, submissionId, dependencies, callback.message);
       return;
     }
     case "PAYMENT_REJECT_REASON": {
       const paymentId = stringValue(action.payload.paymentId);
+      const submissionId = stringValue(action.payload.submissionId);
       const reason = stringValue(action.payload.reason);
-      if (!paymentId || !reason) return showStaleAction(actor, callback.message, dependencies);
+      if (!paymentId || !submissionId || !reason) return showStaleAction(actor, callback.message, dependencies);
       try {
-        const result = await rejectPaymentReview({ businessId: actor.businessId, actorUserId: actor.userId, paymentId, reason }, dependencies.now());
+        const result = await rejectPaymentReview({ businessId: actor.businessId, actorUserId: actor.userId, paymentId, submissionId, reason }, dependencies.now());
         await showPaymentReviewCard(
           actor,
           paymentId,
@@ -608,11 +613,11 @@ async function showPaymentReviewCard(
     const actions: BusinessBotAction[] = [];
     if (isPaymentReviewActionable(payment)) {
       if (payment.hasReceipt) {
-        actions.push(await navigationAction(actor, "PAYMENT_RECEIPT", { paymentId }, "Показать чек", dependencies.now()));
+        actions.push(await navigationAction(actor, "PAYMENT_RECEIPT", { paymentId, submissionId: payment.submissionId! }, "Показать чек", dependencies.now()));
       }
       actions.push(
-        await navigationAction(actor, "PAYMENT_APPROVE_BEGIN", { paymentId }, "Подтвердить оплату", dependencies.now()),
-        await navigationAction(actor, "PAYMENT_REJECT_BEGIN", { paymentId }, "Отклонить чек", dependencies.now()),
+        await navigationAction(actor, "PAYMENT_APPROVE_BEGIN", { paymentId, submissionId: payment.submissionId! }, "Подтвердить оплату", dependencies.now()),
+        await navigationAction(actor, "PAYMENT_REJECT_BEGIN", { paymentId, submissionId: payment.submissionId! }, "Отклонить чек", dependencies.now()),
       );
     }
     actions.push(
@@ -629,7 +634,7 @@ async function showPaymentReviewCard(
       recipientCardLast4: payment.recipientCardLast4 ?? undefined,
       attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason) : undefined,
     });
-    const statusNotice = [notice, paymentDecisionNotice(payment)].filter(Boolean).join("\n");
+    const statusNotice = [...new Set([notice, paymentDecisionNotice(payment)].filter((value): value is string => Boolean(value)))].join("\n");
     await deliver(viewWithActions(statusNotice ? { ...base, text: `${statusNotice}\n\n${base.text}` } : base, actions), actor, dependencies, message);
   } catch (error) {
     await showPaymentReviewError(actor, paymentId, error, message, dependencies);
@@ -639,6 +644,7 @@ async function showPaymentReviewCard(
 async function showPaymentReceipt(
   actor: BusinessBotPlatformActor,
   paymentId: string,
+  submissionId: string,
   dependencies: BusinessBotHandlerDependencies,
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
 ) {
@@ -652,6 +658,7 @@ async function showPaymentReceipt(
       businessId: actor.businessId,
       actorUserId: actor.userId,
       paymentId,
+      submissionId,
     });
     const back = await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Назад к проверке", dependencies.now());
     const caption = paymentReviewView({
@@ -672,6 +679,7 @@ async function showPaymentReceipt(
 async function showPaymentApprovalConfirmation(
   actor: BusinessBotPlatformActor,
   paymentId: string,
+  submissionId: string,
   dependencies: BusinessBotHandlerDependencies,
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
 ) {
@@ -681,8 +689,12 @@ async function showPaymentApprovalConfirmation(
       await showPaymentReviewCard(actor, paymentId, dependencies, message);
       return;
     }
+    if (payment.submissionId !== submissionId) {
+      await showPaymentReviewCard(actor, paymentId, dependencies, message, "Состояние изменилось. Проверьте новый чек перед решением.");
+      return;
+    }
     const [confirmAction, dismissAction] = await Promise.all([
-      mutationAction(actor, "PAYMENT_APPROVE_CONFIRM", { paymentId }, "Да, подтвердить", dependencies.now()),
+      mutationAction(actor, "PAYMENT_APPROVE_CONFIRM", { paymentId, submissionId }, "Да, подтвердить", dependencies.now()),
       navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Назад", dependencies.now()),
     ]);
     await deliver(paymentReviewView({
@@ -707,6 +719,7 @@ async function showPaymentApprovalConfirmation(
 async function showPaymentRejectionReasons(
   actor: BusinessBotPlatformActor,
   paymentId: string,
+  submissionId: string,
   dependencies: BusinessBotHandlerDependencies,
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
 ) {
@@ -716,11 +729,15 @@ async function showPaymentRejectionReasons(
       await showPaymentReviewCard(actor, paymentId, dependencies, message);
       return;
     }
+    if (payment.submissionId !== submissionId) {
+      await showPaymentReviewCard(actor, paymentId, dependencies, message, "Состояние изменилось. Проверьте новый чек перед решением.");
+      return;
+    }
     const reasons = ["Сумма не совпадает", "Карта получателя не совпадает", "Оплата не подтверждена банком"];
     const actions = await Promise.all(reasons.map(reason => mutationAction(
       actor,
       "PAYMENT_REJECT_REASON",
-      { paymentId, reason },
+      { paymentId, submissionId, reason },
       reason,
       dependencies.now(),
     )));
@@ -787,11 +804,13 @@ function attentionReasonLabel(reason: string | null) {
 function isPaymentReviewActionable(payment: {
   status: string;
   hasReceipt: boolean;
+  submissionId: string | null;
   booking: { status: string };
 }) {
   return payment.status === "NEEDS_ATTENTION"
     && payment.booking.status === "PENDING_PAYMENT"
-    && payment.hasReceipt;
+    && payment.hasReceipt
+    && Boolean(payment.submissionId);
 }
 
 function paymentDecisionNotice(payment: {
