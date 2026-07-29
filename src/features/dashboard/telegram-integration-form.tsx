@@ -15,6 +15,7 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [assistantState, setAssistantState] = useState<"idle" | "opening">("idle");
   const [assistantError, setAssistantError] = useState<string | null>(null);
+  const [showExistingBot, setShowExistingBot] = useState(false);
   const configured = integration.status !== "DISCONNECTED";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -75,17 +76,18 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
     <div className="telegram-settings-grid">
       <section className="integration-status-panel" aria-labelledby="business-assistant-title">
         <div>
-          <p className="context-label">Для владельца и команды</p>
-          <h2 id="business-assistant-title">Бизнес-ассистент ManClient</h2>
-          <p className="integration-help">Показывает записи, помогает подтвердить визит, перенести или отменить запись и проверить чек. Ссылка персональная и действует 15 минут.</p>
+          <p className="context-label">Один бот от вашего бизнеса</p>
+          <h2 id="business-assistant-title">Создайте только одного бота — для клиентов</h2>
+          <p className="integration-help">Владельцы и команда уже работают в готовом <strong>@manclient_bot</strong>. Telegram привяжет ваш аккаунт к бизнесу, а клиентский бот сразу будет принадлежать вам.</p>
         </div>
         <div className="integration-actions">
           <button className="primary-button" type="button" disabled={assistantState === "opening"} onClick={openBusinessAssistant}>
-            {assistantState === "opening" ? "Открываем Telegram..." : "Подключить бизнес-ассистента"}
+            {assistantState === "opening" ? "Открываем Telegram..." : configured ? "Открыть @manclient_bot" : "Создать клиентского бота"}
           </button>
+          {!configured ? <button className="secondary-action" type="button" onClick={() => setShowExistingBot(true)}>Подключить существующего бота</button> : null}
         </div>
         {assistantError ? <p className="integration-error" role="alert">{assistantError}</p> : null}
-        <small>Не отправляйте эту ссылку клиентам: она даёт доступ сотруднику согласно его роли в ManClient.</small>
+        <small>Создание подтверждается в Telegram. ManClient не получает пароль, код входа или Telegram-сессию владельца.</small>
       </section>
 
       <section className="integration-status-panel" aria-live="polite">
@@ -99,10 +101,13 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
         {configured ? (
           <>
             <p className="integration-bot-name">@{integration.botUsername}</p>
-            <p className="integration-help">Это отдельный бот вашего бизнеса для клиентов: запись, оплата и управление визитом без доступа к кабинету команды.</p>
+            <p className="integration-help">Это единственный бот, который создаёт бизнес. Он принимает записи и оплату клиентов; команда продолжает работать через @manclient_bot.</p>
             <div className="integration-actions">
-              <button className="secondary-action" type="button" disabled={requestState === "checking"} onClick={() => { setRotating(true); setConfirmDisconnect(false); }}>
-                Сменить бота
+              <button className="secondary-action" type="button" disabled={requestState === "checking"} onClick={openBusinessAssistant}>
+                Создать другого бота
+              </button>
+              <button className="quiet-action" type="button" disabled={requestState === "checking"} onClick={() => { setRotating(true); setShowExistingBot(true); setConfirmDisconnect(false); }}>
+                Подключить существующего
               </button>
               <button className="danger-action" type="button" disabled={requestState === "checking"} onClick={() => { setConfirmDisconnect(true); setRotating(false); }}>
                 Отключить бота
@@ -110,15 +115,15 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
             </div>
           </>
         ) : (
-          <p className="integration-help">Создайте отдельного клиентского бота через @BotFather и вставьте токен. Не используйте бизнес-ассистента ManClient: у двух ботов разные роли и аудитории.</p>
+          <p className="integration-help">Клиентский бот пока не создан. Нажмите «Создать клиентского бота»: Telegram оформит ownership сразу на ваш аккаунт, а ManClient подключит интеграцию автоматически.</p>
         )}
       </section>
 
-      {(!configured || rotating) ? (
+      {(showExistingBot || rotating) ? (
         <form className="integration-token-form" onSubmit={submit} noValidate>
           <div>
-            <h2>{rotating ? "Подключить другого бота" : "Подключить клиентского бота"}</h2>
-            <p>Токен нужен только для подключения. После отправки он исчезнет с экрана и хранится в зашифрованном виде.</p>
+            <h2>{rotating ? "Подключить другого существующего бота" : "Подключить существующего бота"}</h2>
+            <p>Этот запасной путь нужен, только если бот уже создан через @BotFather. Токен исчезнет с экрана и будет храниться в зашифрованном виде.</p>
           </div>
           <label className="field-label" htmlFor="telegram-bot-token">Токен клиентского бота</label>
           <input
@@ -140,7 +145,9 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
             <button className="primary-button integration-submit" type="submit" disabled={requestState === "checking"}>
               {requestState === "checking" ? "Проверяем бота..." : rotating ? "Сменить бота" : "Подключить бота"}
             </button>
-            {rotating ? <button className="quiet-action" type="button" onClick={() => { setRotating(false); setToken(""); setError(null); }}>Оставить текущего бота</button> : null}
+            <button className="quiet-action" type="button" onClick={() => { setRotating(false); setShowExistingBot(false); setToken(""); setError(null); }}>
+              {rotating ? "Оставить текущего бота" : "Отмена"}
+            </button>
           </div>
         </form>
       ) : null}

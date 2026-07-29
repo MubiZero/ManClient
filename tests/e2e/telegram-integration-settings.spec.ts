@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
 
-test("owner connects a customer bot without retaining its token", async ({ page }) => {
+test("owner can choose the secondary existing-bot path without retaining its token", async ({ page }) => {
   await page.route("**/api/integrations/telegram", async route => {
     if (route.request().method() !== "POST") return route.continue();
     const body = route.request().postDataJSON() as { token: string };
@@ -14,7 +14,9 @@ test("owner connects a customer bot without retaining its token", async ({ page 
 
   await signIn(page);
   await page.goto("/dashboard/settings/integrations");
-  await expect(page.getByRole("heading", { name: "Telegram для клиентов" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Telegram" })).toBeVisible();
+  await expect(page.getByText("Создайте только одного бота")).toBeVisible();
+  await page.getByRole("button", { name: "Подключить существующего бота" }).click();
 
   const token = page.getByLabel("Токен клиентского бота");
   await expect(token).toHaveAttribute("autocomplete", "off");
@@ -31,7 +33,7 @@ test("settings remain usable on a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
   await page.goto("/dashboard/settings/integrations");
-  await expect(page.getByRole("heading", { name: "Telegram для клиентов" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Telegram" })).toBeVisible();
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
 

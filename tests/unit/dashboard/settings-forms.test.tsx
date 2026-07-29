@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ResourceForm } from "@/features/dashboard/resource-form";
 import { ServiceForm } from "@/features/dashboard/service-form";
 import { StaffForm } from "@/features/dashboard/staff-form";
+import { TelegramIntegrationForm } from "@/features/dashboard/telegram-integration-form";
 
 const action = async () => undefined;
 const branches = [{ id: "branch-1", name: "Центр" }, { id: "branch-2", name: "Сино" }];
@@ -34,5 +35,20 @@ describe("business settings forms", () => {
     expect(html).toContain("Тип ресурса");
     expect(html).toContain("Вместимость");
     expect(html).toContain("Доступен для записи");
+  });
+
+  it("makes one managed customer bot the primary Telegram setup", () => {
+    const html = renderToStaticMarkup(<TelegramIntegrationForm initialStatus={{
+      status: "DISCONNECTED",
+      botUsername: null,
+      connectedAt: null,
+      lastWebhookError: null,
+    }} />);
+
+    expect(html).toContain("Создайте только одного бота");
+    expect(html).toContain("Создать клиентского бота");
+    expect(html).toContain("Подключить существующего бота");
+    expect(html).toContain("@manclient_bot");
+    expect(html).not.toContain("Токен клиентского бота");
   });
 });
