@@ -16,16 +16,26 @@ import {
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import {
   getBusinessBotBooking,
+  getBusinessBotPaymentReview,
   getBusinessBotSummary,
   listBusinessBotBookings,
+  listBusinessBotPaymentReviews,
   type BusinessBotBookingFilter,
 } from "@/core/integrations/business-bot-query-service";
 import { formatTajikPhoneInput } from "@/core/formatting/tajik-phone";
 import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
+import { formatSomoni } from "@/core/formatting/money";
+import {
+  approvePaymentReview,
+  getPaymentReceiptForReview,
+  PaymentReviewError,
+  rejectPaymentReview,
+} from "@/core/payments/payment-review-service";
 import {
   bookingCardView,
   bookingListView,
   mainMenuView,
+  paymentReviewView,
   type BusinessBotAction,
   type BusinessBotView,
 } from "@/integrations/telegram/business-bot-renderer";
@@ -58,6 +68,8 @@ export type BusinessBotHandlerDependencies = {
   sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup) => Promise<void>;
   answerCallbackQuery: (callbackQueryId: string, text?: string) => Promise<void>;
   editMessageText: (message: TelegramMessageRef, text: string, replyMarkup?: TelegramReplyMarkup) => Promise<TelegramMessageRef>;
+  sendPhoto?: (chatId: string, photo: Uint8Array, caption?: string, replyMarkup?: TelegramReplyMarkup) => Promise<TelegramMessageRef>;
+  loadPaymentReceipt?: typeof getPaymentReceiptForReview;
 };
 
 const actionLifetimeMs = 15 * 60_000;
@@ -138,6 +150,69 @@ async function handleCallback(
         return;
       }
       await showBookingCard(actor, bookingId, dependencies, callback.message);
+      return;
+    }
+    case "payments.list":
+      await showPaymentReviewList(actor, stringValue(action.payload.cursor), dependencies, callback.message);
+      return;
+    case "payment.open":
+    case "PAYMENT_REFRESH": {
+      const paymentId = stringValue(action.payload.paymentId);
+      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
+      await showPaymentReviewCard(actor, paymentId, dependencies, callback.message);
+      return;
+    }
+    case "PAYMENT_RECEIPT": {
+      const paymentId = stringValue(action.payload.paymentId);
+      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
+      await showPaymentReceipt(actor, paymentId, dependencies, callback.message);
+      return;
+    }
+    case "PAYMENT_APPROVE_BEGIN": {
+      const paymentId = stringValue(action.payload.paymentId);
+      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
+      await showPaymentApprovalConfirmation(actor, paymentId, dependencies, callback.message);
+      return;
+    }
+    case "PAYMENT_APPROVE_CONFIRM": {
+      const paymentId = stringValue(action.payload.paymentId);
+      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
+      try {
+        const result = await approvePaymentReview({ businessId: actor.businessId, actorUserId: actor.userId, paymentId }, dependencies.now());
+        await showPaymentReviewCard(
+          actor,
+          paymentId,
+          dependencies,
+          callback.message,
+          result.changed ? "Оплата подтверждена. Запись подтверждена." : "Оплата уже подтверждена. Показано текущее состояние.",
+        );
+      } catch (error) {
+        await showPaymentReviewError(actor, paymentId, error, callback.message, dependencies);
+      }
+      return;
+    }
+    case "PAYMENT_REJECT_BEGIN": {
+      const paymentId = stringValue(action.payload.paymentId);
+      if (!paymentId) return showStaleAction(actor, callback.message, dependencies);
+      await showPaymentRejectionReasons(actor, paymentId, dependencies, callback.message);
+      return;
+    }
+    case "PAYMENT_REJECT_REASON": {
+      const paymentId = stringValue(action.payload.paymentId);
+      const reason = stringValue(action.payload.reason);
+      if (!paymentId || !reason) return showStaleAction(actor, callback.message, dependencies);
+      try {
+        const result = await rejectPaymentReview({ businessId: actor.businessId, actorUserId: actor.userId, paymentId, reason }, dependencies.now());
+        await showPaymentReviewCard(
+          actor,
+          paymentId,
+          dependencies,
+          callback.message,
+          result.changed ? "Чек отклонён. Причина сохранена." : "Чек уже отклонён. Показано текущее состояние.",
+        );
+      } catch (error) {
+        await showPaymentReviewError(actor, paymentId, error, callback.message, dependencies);
+      }
       return;
     }
     case "BOOKING_REFRESH": {
@@ -477,13 +552,238 @@ async function showStaleAction(
   }, actor, dependencies, message);
 }
 
+async function showPaymentReviewList(
+  actor: BusinessBotPlatformActor,
+  cursor: string | null,
+  dependencies: BusinessBotHandlerDependencies,
+  message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+) {
+  try {
+    const result = await listBusinessBotPaymentReviews(actor, cursor);
+    const openActions = await Promise.all(result.items.map(payment => navigationAction(
+      actor,
+      "payment.open",
+      { paymentId: payment.id },
+      `Открыть · ${payment.booking.customer.name}`,
+      dependencies.now(),
+    )));
+    const navigation: BusinessBotAction[] = [];
+    if (result.nextCursor) {
+      navigation.push(await navigationAction(
+        actor,
+        "payments.list",
+        { cursor: result.nextCursor },
+        "Показать ещё",
+        dependencies.now(),
+      ));
+    }
+    navigation.push(
+      await navigationAction(actor, "payments.list", {}, "Обновить", dependencies.now()),
+      await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+    );
+    const text = result.items.length
+      ? ["Чеки на проверке", "", ...result.items.map((payment, index) => [
+        `${index + 1}. ${payment.booking.customer.name} · ${payment.booking.service.name}`,
+        `${formatSomoni(payment.amountDiram)} · ${attentionReasonLabel(payment.attentionReason)}`,
+      ].join("\n"))].join("\n\n")
+      : "Чеки на проверке\n\nВсе чеки проверены.";
+    await deliver({
+      text,
+      replyMarkup: inlineView([...openActions.map(action => [action]), ...pairRows(navigation)]),
+    }, actor, dependencies, message);
+  } catch (error) {
+    await showPaymentReviewError(actor, null, error, message, dependencies);
+  }
+}
+
+async function showPaymentReviewCard(
+  actor: BusinessBotPlatformActor,
+  paymentId: string,
+  dependencies: BusinessBotHandlerDependencies,
+  message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+  notice?: string,
+) {
+  try {
+    const payment = await getBusinessBotPaymentReview(actor, paymentId);
+    const actions: BusinessBotAction[] = [];
+    if (payment.status === "NEEDS_ATTENTION") {
+      if (payment.hasReceipt) {
+        actions.push(await navigationAction(actor, "PAYMENT_RECEIPT", { paymentId }, "Показать чек", dependencies.now()));
+      }
+      actions.push(
+        await navigationAction(actor, "PAYMENT_APPROVE_BEGIN", { paymentId }, "Подтвердить оплату", dependencies.now()),
+        await navigationAction(actor, "PAYMENT_REJECT_BEGIN", { paymentId }, "Отклонить чек", dependencies.now()),
+      );
+    }
+    actions.push(
+      await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Обновить", dependencies.now()),
+      await navigationAction(actor, "payments.list", {}, "К очереди", dependencies.now()),
+      await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+    );
+    const base = paymentReviewView({
+      customerName: payment.booking.customer.name,
+      serviceName: payment.booking.service.name,
+      startsAt: payment.booking.startsAt,
+      timeZone: payment.booking.branch.timeZone,
+      amountDiram: payment.amountDiram,
+      recipientCardLast4: payment.recipientCardLast4 ?? undefined,
+      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason) : undefined,
+    });
+    const statusNotice = notice ?? paymentDecisionNotice(payment.status, payment.reviewReason);
+    await deliver(viewWithActions(statusNotice ? { ...base, text: `${statusNotice}\n\n${base.text}` } : base, actions), actor, dependencies, message);
+  } catch (error) {
+    await showPaymentReviewError(actor, paymentId, error, message, dependencies);
+  }
+}
+
+async function showPaymentReceipt(
+  actor: BusinessBotPlatformActor,
+  paymentId: string,
+  dependencies: BusinessBotHandlerDependencies,
+  message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+) {
+  try {
+    const payment = await getBusinessBotPaymentReview(actor, paymentId);
+    if (!dependencies.sendPhoto) {
+      await deliver({ text: "Фото чека временно недоступно. Обновите карточку и попробуйте снова." }, actor, dependencies, message);
+      return;
+    }
+    const receipt = await (dependencies.loadPaymentReceipt ?? getPaymentReceiptForReview)({
+      businessId: actor.businessId,
+      actorUserId: actor.userId,
+      paymentId,
+    });
+    const back = await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Назад к проверке", dependencies.now());
+    const caption = paymentReviewView({
+      customerName: payment.booking.customer.name,
+      serviceName: payment.booking.service.name,
+      startsAt: payment.booking.startsAt,
+      timeZone: payment.booking.branch.timeZone,
+      amountDiram: payment.amountDiram,
+      recipientCardLast4: payment.recipientCardLast4 ?? undefined,
+      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason) : undefined,
+    }).text;
+    await dependencies.sendPhoto(actor.destination.chatId, receipt.body, caption, inlineView([[back]]));
+  } catch (error) {
+    await showPaymentReviewError(actor, paymentId, error, message, dependencies);
+  }
+}
+
+async function showPaymentApprovalConfirmation(
+  actor: BusinessBotPlatformActor,
+  paymentId: string,
+  dependencies: BusinessBotHandlerDependencies,
+  message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+) {
+  try {
+    const payment = await getBusinessBotPaymentReview(actor, paymentId);
+    if (payment.status !== "NEEDS_ATTENTION") {
+      await showPaymentReviewCard(actor, paymentId, dependencies, message);
+      return;
+    }
+    const [confirmAction, dismissAction] = await Promise.all([
+      mutationAction(actor, "PAYMENT_APPROVE_CONFIRM", { paymentId }, "Да, подтвердить", dependencies.now()),
+      navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Назад", dependencies.now()),
+    ]);
+    await deliver(paymentReviewView({
+      customerName: payment.booking.customer.name,
+      serviceName: payment.booking.service.name,
+      startsAt: payment.booking.startsAt,
+      timeZone: payment.booking.branch.timeZone,
+      amountDiram: payment.amountDiram,
+      recipientCardLast4: payment.recipientCardLast4 ?? undefined,
+      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason) : undefined,
+      confirmation: {
+        text: "Подтвердить оплату после сверки чека? Запись станет подтверждённой.",
+        confirmAction,
+        dismissAction,
+      },
+    }), actor, dependencies, message);
+  } catch (error) {
+    await showPaymentReviewError(actor, paymentId, error, message, dependencies);
+  }
+}
+
+async function showPaymentRejectionReasons(
+  actor: BusinessBotPlatformActor,
+  paymentId: string,
+  dependencies: BusinessBotHandlerDependencies,
+  message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+) {
+  try {
+    const payment = await getBusinessBotPaymentReview(actor, paymentId);
+    if (payment.status !== "NEEDS_ATTENTION") {
+      await showPaymentReviewCard(actor, paymentId, dependencies, message);
+      return;
+    }
+    const reasons = ["Сумма не совпадает", "Карта получателя не совпадает", "Оплата не подтверждена банком"];
+    const actions = await Promise.all(reasons.map(reason => mutationAction(
+      actor,
+      "PAYMENT_REJECT_REASON",
+      { paymentId, reason },
+      reason,
+      dependencies.now(),
+    )));
+    const back = await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Назад", dependencies.now());
+    await deliver({
+      text: "Отклонить чек? Выберите причину отклонения. Решение сохранится в истории записи.",
+      replyMarkup: inlineView([...actions.map(action => [action]), [back]]),
+    }, actor, dependencies, message);
+  } catch (error) {
+    await showPaymentReviewError(actor, paymentId, error, message, dependencies);
+  }
+}
+
+async function showPaymentReviewError(
+  actor: BusinessBotPlatformActor,
+  paymentId: string | null,
+  error: unknown,
+  message: NonNullable<BusinessBotUpdate["callback_query"]>["message"] | undefined,
+  dependencies: BusinessBotHandlerDependencies,
+) {
+  if (!(error instanceof PaymentReviewError)) {
+    await showStaleAction(actor, message, dependencies);
+    return;
+  }
+  const actions = [
+    ...(paymentId ? [await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Обновить", dependencies.now())] : []),
+    await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+  ];
+  const text = {
+    FORBIDDEN: "У вас нет доступа к проверке чеков.",
+    NOT_FOUND: "Чек не найден или у вас нет доступа к нему.",
+    INVALID_STATUS: "Чек уже обработан. Обновите карточку, чтобы увидеть текущее состояние.",
+    INVALID_INPUT: "Причина должна содержать от 3 до 300 символов.",
+  }[error.code];
+  await deliver({ text, replyMarkup: inlineView([actions]) }, actor, dependencies, message);
+}
+
 async function showChecks(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
   if (actor.role === "STAFF") {
     await dependencies.sendMessage(actor.destination.chatId, "Проверка чеков доступна владельцу и администратору.");
     return;
   }
-  const summary = await getBusinessBotSummary(actor, dependencies.now());
-  await dependencies.sendMessage(actor.destination.chatId, `Чеков на проверке: ${summary.needsAttentionCount}.`);
+  await showPaymentReviewList(actor, null, dependencies);
+}
+
+function attentionReasonLabel(reason: string | null) {
+  return ({
+    AMOUNT_MISMATCH: "Сумма не совпадает",
+    RECIPIENT_MISMATCH: "Карта не совпадает",
+    OPERATION_TIME_MISMATCH: "Время операции не совпадает",
+    RECEIPT_NOT_SUCCESSFUL: "Оплата неуспешна",
+    BOOKING_NOT_PENDING: "Статус записи изменился",
+    OCR_FAILED: "Чек не распознан",
+    OCR_UNRELIABLE: "Чек не распознан",
+    RECEIPT_MISMATCH: "Данные не совпадают",
+    DUPLICATE_OPERATION: "Операция уже использована",
+  } as Record<string, string>)[reason ?? ""] ?? "Нужна ручная проверка";
+}
+
+function paymentDecisionNotice(status: string, reason: string | null) {
+  if (status === "RECEIPT_ACCEPTED") return "Оплата подтверждена. Запись подтверждена.";
+  if (status === "REJECTED") return `Чек отклонён.${reason ? ` Причина: ${reason}.` : ""}`;
+  return null;
 }
 
 async function showCustomerLink(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {

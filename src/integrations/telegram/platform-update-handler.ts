@@ -29,6 +29,7 @@ type PlatformHandlerDependencies = {
   connectBot: (input: { businessId: string; actorUserId: string; token: string }) => Promise<{ botUsername: string }>;
   answerCallbackQuery?: (callbackQueryId: string, text?: string) => Promise<void>;
   editMessageText?: ReturnType<typeof createTelegramApi>["editMessageText"];
+  sendPhoto?: ReturnType<typeof createTelegramApi>["sendPhoto"];
 };
 
 const botTokenPattern = /^\d+:[A-Za-z0-9_-]+$/;
@@ -58,6 +59,7 @@ export async function handlePlatformTelegramUpdate(
         await dependencies.sendMessage(message.chatId, text, replyMarkup);
         return message;
       }),
+      sendPhoto: dependencies.sendPhoto,
     });
     return;
   }
@@ -113,6 +115,7 @@ export async function handlePlatformTelegramUpdate(
         await dependencies.sendMessage(messageRef.chatId, messageText, replyMarkup);
         return messageRef;
       }),
+      sendPhoto: dependencies.sendPhoto,
     });
     return;
   }
@@ -148,6 +151,7 @@ function defaultDependencies(): PlatformHandlerDependencies {
     connectBot: input => connectBusinessTelegramBot(input),
     answerCallbackQuery: telegram.answerCallbackQuery,
     editMessageText: telegram.editMessageText,
+    sendPhoto: telegram.sendPhoto,
   };
 }
 

@@ -6,6 +6,11 @@ export type StoreReceiptInput = {
   body: Uint8Array;
 };
 
+export type ReceiptObject = {
+  body: Uint8Array;
+  contentType: string;
+};
+
 export async function storeReceipt(input: StoreReceiptInput): Promise<string> {
   const client = createClient();
   const bucket = getBucket();
@@ -20,7 +25,7 @@ export async function storeReceipt(input: StoreReceiptInput): Promise<string> {
   return input.storageKey;
 }
 
-export async function getReceipt(storageKey: string): Promise<{ body: Uint8Array; contentType: string }> {
+export async function getReceipt(storageKey: string): Promise<ReceiptObject> {
   const response = await createClient().send(new GetObjectCommand({ Bucket: getBucket(), Key: storageKey }));
   if (!response.Body) throw new Error("Receipt body is missing");
   return { body: await response.Body.transformToByteArray(), contentType: response.ContentType ?? "image/jpeg" };

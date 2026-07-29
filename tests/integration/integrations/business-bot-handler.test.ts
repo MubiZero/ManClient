@@ -110,7 +110,17 @@ describe("platform business bot handler", () => {
   it("serves help, the public client link and owner-only check counts", async () => {
     const owner = await createActor("OWNER");
     const booking = await createPendingBooking(owner, "Чек клиента");
-    await prisma.payment.update({ where: { bookingId: booking.id }, data: { status: "NEEDS_ATTENTION" } });
+    const payment = await prisma.payment.update({ where: { bookingId: booking.id }, data: { status: "NEEDS_ATTENTION" } });
+    await prisma.receiptSubmission.create({
+      data: {
+        businessId: owner.actor.businessId,
+        paymentId: payment.id,
+        storageKey: `receipts/${owner.actor.businessId}/${payment.id}/${randomUUID()}.jpg`,
+        contentType: "image/jpeg",
+        sizeBytes: 4,
+        status: "NEEDS_REVIEW",
+      },
+    });
     const output: Output[] = [];
     const dependencies = fakeDependencies(output);
 
@@ -121,7 +131,9 @@ describe("platform business bot handler", () => {
     expect(findUrl(output.at(-1), "Открыть запись")).toBe(`https://manclient.example/b/${owner.business.slug}`);
 
     await handleBusinessBotUpdate(owner.actor, messageUpdate("Проверить чеки"), dependencies);
-    expect(output.at(-1)?.text).toBe("Чеков на проверке: 1.");
+    expect(output.at(-1)?.text).toContain("Чеки на проверке");
+    expect(output.at(-1)?.text).toContain("Чек клиента");
+    expect(findCallback(output.at(-1), "Открыть")).toBeTruthy();
   });
 
   it("opens the next page through an opaque Show more action", async () => {

@@ -4,6 +4,7 @@ import { bookingScopeWhere, requireBookingAccess } from "@/core/booking-operatio
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { prisma } from "@/core/database/prisma";
 import { localDateTimeToUtc, todayInTimeZone } from "@/core/formatting/dushanbe-date";
+import { getPaymentForReview, listPaymentsForReview } from "@/core/payments/payment-review-service";
 
 export type BusinessBotQueryActor = {
   businessId: string;
@@ -30,7 +31,12 @@ export async function getBusinessBotSummary(actor: BusinessBotQueryActor, now = 
   const [todayCount, pendingPaymentCount, needsAttentionCount, integration] = await Promise.all([
     prisma.booking.count({ where: { ...scoped, ...today } }),
     prisma.booking.count({ where: { ...scoped, status: "PENDING_PAYMENT" } }),
-    prisma.booking.count({ where: { ...scoped, payment: { status: "NEEDS_ATTENTION" } } }),
+    prisma.booking.count({
+      where: {
+        ...scoped,
+        payment: { status: "NEEDS_ATTENTION", submissions: { some: { status: "NEEDS_REVIEW" } } },
+      },
+    }),
     prisma.businessTelegramIntegration.findFirst({
       where: { businessId: actor.businessId },
       select: { status: true, botUsername: true },
@@ -89,6 +95,33 @@ export async function getBusinessBotBooking(actor: BusinessBotQueryActor, bookin
   return booking;
 }
 
+export async function listBusinessBotPaymentReviews(
+  actor: BusinessBotQueryActor,
+  cursor: string | null = null,
+  limit = 10,
+) {
+  const pageSize = Math.min(Math.max(limit, 1), 20);
+  const rows = await listPaymentsForReview({
+    businessId: actor.businessId,
+    actorUserId: actor.userId,
+  }, { cursor, limit: pageSize + 1 });
+  const hasMore = rows.length > pageSize;
+  const page = hasMore ? rows.slice(0, pageSize) : rows;
+  return {
+    items: page.map(safePaymentReview),
+    nextCursor: hasMore ? page.at(-1)?.id ?? null : null,
+  };
+}
+
+export async function getBusinessBotPaymentReview(actor: BusinessBotQueryActor, paymentId: string) {
+  const payment = await getPaymentForReview({
+    businessId: actor.businessId,
+    actorUserId: actor.userId,
+    paymentId,
+  });
+  return safePaymentReview(payment);
+}
+
 async function todayWhere(businessId: string, now: Date): Promise<Prisma.BookingWhereInput> {
   const branches = await prisma.branch.findMany({
     where: { businessId, archivedAt: null },
@@ -112,4 +145,21 @@ function nextDate(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + 1);
   return date.toISOString().slice(0, 10);
+}
+
+function safePaymentReview(payment: Awaited<ReturnType<typeof getPaymentForReview>>) {
+  return {
+    id: payment.id,
+    status: payment.status,
+    amountDiram: payment.amountDiram,
+    receiptAmountDiram: payment.receiptAmountDiram,
+    recipientCardLast4: payment.recipientCardSuffix?.slice(-4) ?? null,
+    expectedCardLast4: payment.booking.branch.recipientCardLast4?.slice(-4) ?? null,
+    attentionReason: payment.attentionReason,
+    reviewReason: payment.reviewReason,
+    reviewedAt: payment.reviewedAt,
+    updatedAt: payment.updatedAt,
+    hasReceipt: payment.submissions.length > 0,
+    booking: payment.booking,
+  };
 }
