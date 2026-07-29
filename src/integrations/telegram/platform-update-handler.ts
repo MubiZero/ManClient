@@ -92,7 +92,10 @@ export async function handlePlatformTelegramUpdate(
   if (text.startsWith("/start b_")) {
     try {
       const membership = await consumePlatformChatLink(text.slice(9).trim(), actor, dependencies.now());
-      await dependencies.sendMessage(actor.chatId, `Бизнес «${membership.business.name}» подключён к этому чату. Теперь можно отправить токен клиентского Telegram-бота.`);
+      await dependencies.sendMessage(actor.chatId, `Бизнес «${membership.business.name}» подключён. Создайте единственного бота, который нужен бизнесу — клиентского. Он сразу будет принадлежать вам.`, {
+        keyboard: [[{ text: "Создать клиентского бота" }], [{ text: "Главное меню" }]],
+        resize_keyboard: true,
+      });
     } catch {
       await dependencies.sendMessage(actor.chatId, "Ссылка подключения недействительна или истекла. Создайте новую ссылку в кабинете ManClient.");
     }

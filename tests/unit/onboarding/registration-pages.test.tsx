@@ -31,6 +31,8 @@ describe("web business onboarding", () => {
     expect(html).toContain('href="/dashboard/settings/integrations"');
     expect(html).toContain('href="/b/salon-sino"');
     expect(html).not.toContain('href="https://t.me/');
+    expect(html).toContain("Создать клиентского Telegram-бота");
+    expect(html).not.toContain("Подключить Telegram");
   });
 
   it("shows one onboarding question at a time", () => {

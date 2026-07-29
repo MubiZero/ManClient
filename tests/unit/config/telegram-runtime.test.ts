@@ -29,4 +29,12 @@ describe("Telegram runtime configuration", () => {
     expect(output).not.toContain(token);
     expect(output).not.toContain(secret);
   });
+
+  it("registers managed-bot updates and verifies manager capability", () => {
+    const script = readFileSync("scripts/register-platform-telegram-webhook.ts", "utf8");
+
+    expect(script).toContain('"getMe", {}');
+    expect(script).toContain("can_manage_bots");
+    expect(script).toContain('"managed_bot"');
+  });
 });

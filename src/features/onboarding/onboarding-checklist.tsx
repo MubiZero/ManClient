@@ -12,7 +12,7 @@ export function OnboardingChecklist({ businessSlug, readiness = defaultReadiness
     { ready: readiness.staff, label: "Добавить специалиста", href: "/dashboard/settings/staff" },
     { ready: readiness.schedule, label: "Настроить расписание", href: "/dashboard/settings/schedule" },
     { ready: readiness.payment, label: "Настроить оплату", href: "/dashboard/onboarding" },
-    { ready: readiness.telegram, label: "Подключить Telegram", href: "/dashboard/settings/integrations" },
+    { ready: readiness.telegram, label: "Создать клиентского Telegram-бота", href: "/dashboard/settings/integrations" },
   ];
 
   return <div className="onboarding-checklist">

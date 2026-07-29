@@ -43,7 +43,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         <div className="brand" aria-hidden>MC</div>
         <p className="context-label">Новый бизнес в ManClient</p>
         <h1>Создайте кабинет бизнеса</h1>
-        <p className="login-intro">Начните на сайте. Telegram можно подключить позже как канал для клиентов и команды.</p>
+        <p className="login-intro">Начните на сайте. Позже вы создадите одного Telegram-бота для клиентов, а команда будет работать через готовый @manclient_bot.</p>
         <RegistrationForm action={register} error={message} />
       </section>
     </main>

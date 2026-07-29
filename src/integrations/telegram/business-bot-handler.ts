@@ -869,7 +869,7 @@ async function showCustomerLink(actor: BusinessBotPlatformActor, dependencies: B
 async function showHelp(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
   await dependencies.sendMessage(
     actor.destination.chatId,
-    "Используйте меню, чтобы открыть записи и рабочий день. Владельцы и администраторы могут отправить сюда токен клиентского Telegram-бота для подключения.",
+    "Используйте меню для записей и рабочего дня. Бизнес создаёт только одного бота — клиентского; владельцы и команда работают здесь, в общем @manclient_bot.",
   );
 }
 

@@ -43,7 +43,7 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await page.getByLabel("Карта DushanbeCity").fill("9762000128351953");
   await page.getByRole("button", { name: "Сохранить карту" }).click();
   await expect(page.getByText("Бизнес готов к первым записям")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Подключить Telegram" })).toHaveAttribute("href", "/dashboard/settings/integrations");
+  await expect(page.getByRole("link", { name: "Создать клиентского Telegram-бота" })).toHaveAttribute("href", "/dashboard/settings/integrations");
   await expect(page.getByRole("link", { name: "Ваша ссылка для записи" })).toHaveAttribute("href", /\/b\//);
 });
 
