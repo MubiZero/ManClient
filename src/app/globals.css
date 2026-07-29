@@ -76,6 +76,19 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .entity-form-heading > p:last-child { color: var(--muted); line-height: 1.5; }
 .entity-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
 .entity-form-wide { grid-column: 1 / -1; }
+.ui-textarea { min-height: 112px; resize: vertical; }
+.entity-assignment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.entity-options { min-width: 0; display: grid; gap: 8px; margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.entity-options legend { padding: 0 6px; font-weight: 700; }
+.entity-options > label { min-height: 44px; display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.entity-options > label:has(input:checked) { background: var(--brand-soft); color: var(--brand-strong); }
+.entity-options input { width: 18px; height: 18px; accent-color: var(--brand); }
+.entity-options label > span { display: grid; gap: 2px; }
+.entity-options small, .entity-options p { color: var(--muted); }
+.entity-toggle { min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--surface-subtle); cursor: pointer; }
+.entity-toggle input { width: 20px; height: 20px; accent-color: var(--brand); }
+.entity-toggle span { display: grid; gap: 3px; }
+.entity-toggle small { color: var(--muted); }
 .entity-form-actions { display: flex; justify-content: flex-end; gap: 12px; }
 .entity-list { overflow: hidden; border-radius: var(--radius-md); background: var(--surface); }
 .entity-list article { min-height: 100px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 20px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
@@ -314,6 +327,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   .onboarding-ready-actions { display: grid; }
   .entity-form { padding: 24px 20px; }
   .entity-form-grid { grid-template-columns: 1fr; }
+  .entity-assignment-grid { grid-template-columns: 1fr; }
   .entity-form-wide { grid-column: auto; }
   .entity-form-actions { display: grid; }
   .entity-list article { grid-template-columns: 1fr; }
