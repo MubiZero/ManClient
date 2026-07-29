@@ -19,6 +19,19 @@ test("staff cannot open business settings", async ({ page }) => {
   await expect(page.getByText("Настройки доступны владельцу и администратору")).toBeVisible();
 });
 
+test("owner can reach settings and sign out controls on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, "owner@demo-barber.local", ownerPassword);
+
+  await page.getByRole("button", { name: "Ещё" }).click();
+  await expect(page.getByRole("link", { name: /Услуги/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выйти из кабинета" })).toBeVisible();
+  await page.getByRole("link", { name: /Услуги/ }).click();
+
+  await expect(page).toHaveURL(/\/dashboard\/settings\/services$/);
+  await expect(page.getByRole("heading", { name: "Услуги" })).toBeVisible();
+});
+
 async function signIn(page: import("@playwright/test").Page, email: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("Телефон или электронная почта").fill(email);
