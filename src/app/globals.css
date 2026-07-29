@@ -414,7 +414,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   .hero-actions { align-items: stretch; flex-direction: column; }
   .hero-actions .marketing-button, .hero-actions .onboarding-fallback { width: 100%; }
   .hero-facts { grid-template-columns: 1fr; gap: 12px; margin-top: 36px; }
-  .hero-facts div { display: grid; grid-template-columns: 104px 1fr; gap: 12px; }
+  .hero-facts div { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 16px; }
   .hero-facts dd { margin: 0; }
   .journey-panel { padding: 24px 20px; border-radius: var(--radius-md); }
   .journey-panel li { min-height: 108px; grid-template-columns: 42px 1fr; gap: 13px; }
