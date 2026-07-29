@@ -63,6 +63,18 @@ enum TelegramIntegrationStatus {
   DISCONNECTED
 }
 
+enum TelegramConnectionMethod {
+  TOKEN
+  MANAGED
+}
+
+enum ManagedBotConnectionStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+  FAILED
+}
+
 enum TelegramChatType {
   PRIVATE
   GROUP
@@ -115,6 +127,7 @@ model Business {
   businessNotifications           BusinessNotification[]
   auditEvents                      AuditEvent[]
   telegramIntegrations             BusinessTelegramIntegration[]
+  managedBotConnectionIntents      ManagedBotConnectionIntent[]
   conversations                    Conversation[]
   conversationActions              ConversationAction[]
   whatsappPhoneNumberId            String?
@@ -162,6 +175,7 @@ model Membership {
   staff             StaffMember?
   telegramIdentities BusinessTelegramIdentity[]
   platformChatLinks PlatformChatLink[]
+  managedBotConnectionIntents ManagedBotConnectionIntent[]
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
@@ -190,6 +204,9 @@ model BusinessTelegramIntegration {
   botTokenEncrypted      String?
   webhookSecretEncrypted String?
   status                 TelegramIntegrationStatus @default(PENDING)
+  connectionMethod       TelegramConnectionMethod @default(TOKEN)
+  managedOwnerTelegramUserId String?
+  managedAt              DateTime?
   lastWebhookError       String?
   connectedByUserId      String?
   connectedAt            DateTime?
@@ -203,6 +220,28 @@ model BusinessTelegramIntegration {
 
   @@index([businessId, status])
   @@index([botId, status])
+}
+
+model ManagedBotConnectionIntent {
+  id                    String                     @id @default(cuid())
+  businessId            String
+  membershipId          String
+  telegramUserId        String
+  suggestedUsername     String
+  displayName           String
+  status                ManagedBotConnectionStatus @default(PENDING)
+  botId                 String?
+  expiresAt             DateTime
+  completedAt           DateTime?
+  lastErrorCode         String?
+  business              Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership            Membership                 @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  @@index([membershipId, status, expiresAt])
+  @@index([telegramUserId, status, expiresAt])
+  @@index([botId])
 }
 
 model BusinessTelegramIdentity {
