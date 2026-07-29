@@ -87,6 +87,29 @@ test("owner configures schedule, lunch break and a day off", async ({ page }) =>
   await expect(page.getByText("На эту дату свободного времени нет")).toBeVisible();
 });
 
+test("settings remain usable without horizontal overflow at supported widths", async ({ page }) => {
+  await signIn(page);
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/dashboard/settings/schedule");
+    await expect(page.getByRole("heading", { name: "Расписание" })).toBeVisible();
+    const overflow = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      document: document.documentElement.scrollWidth,
+      elements: [...document.querySelectorAll("body *")].flatMap((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.right > document.documentElement.clientWidth + 1 ? [`${element.tagName.toLowerCase()}.${element.className}: ${Math.round(rect.right)}`] : [];
+      }).slice(0, 8),
+    }));
+    expect(overflow, `overflow at ${width}px`).toEqual({ viewport: width, document: width, elements: [] });
+    if (width < 768) {
+      await page.getByRole("button", { name: "Ещё" }).click();
+      await expect(page.getByRole("link", { name: "Интеграции" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Выйти" })).toBeVisible();
+    }
+  }
+});
+
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");

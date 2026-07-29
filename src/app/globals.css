@@ -634,6 +634,27 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   .footer-layout { grid-template-columns: 1fr; gap: 12px; }
 }
 
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.route-loading { display: grid; gap: 18px; }
+.skeleton { overflow: hidden; position: relative; border-radius: 10px; background: #dfe7e2; }
+.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.62), transparent); animation: skeleton-sweep 1.25s infinite; }
+.skeleton-kicker { width: 120px; height: 18px; }
+.skeleton-title { width: min(420px, 80%); height: 48px; }
+.skeleton-action { width: 150px; height: 44px; justify-self: end; }
+.skeleton-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.skeleton-card { height: 140px; }
+.skeleton-list { display: grid; gap: 10px; }
+.skeleton-row { height: 88px; }
+.route-error { max-width: 680px; min-height: 440px; display: grid; align-content: center; justify-items: start; gap: 14px; }
+.route-error h1, .route-error p { margin: 0; }
+.route-error > p:not(.context-label) { color: var(--muted); line-height: 1.55; }
+.route-error-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+@keyframes skeleton-sweep { to { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .hero-copy { animation: marketing-enter 450ms cubic-bezier(.05, .7, .1, 1) both; }
   .journey-panel { animation: marketing-enter 500ms 80ms cubic-bezier(.05, .7, .1, 1) both; }
@@ -653,6 +674,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .schedule-toolbar p, .schedule-exceptions p { margin: 0; color: var(--muted); }
 .schedule-days { display: grid; gap: 10px; }
 .schedule-day { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(250px, 1.5fr) minmax(120px, .7fr) minmax(250px, 1.5fr); gap: 16px; align-items: center; border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; }
+.schedule-day > *, .schedule-time-range, .schedule-time-range > label { min-width: 0; }
 .schedule-day legend { float: left; width: 100%; font-weight: 750; }
 .schedule-enabled { display: flex; gap: 10px; align-items: center; min-height: 44px; }
 .schedule-form { max-width: none; }
@@ -677,7 +699,16 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   .exception-form { grid-template-columns: 1fr 1fr; }
 }
 
+@media (max-width: 1100px) {
+  .schedule-target { grid-template-columns: 1fr 1fr; }
+  .schedule-target > .ui-button { grid-column: 1 / -1; }
+}
+
 @media (max-width: 640px) {
   .schedule-target, .schedule-day, .exception-form { grid-template-columns: 1fr; }
   .schedule-toolbar, .schedule-context, .schedule-inherited { align-items: stretch; flex-direction: column; }
+}
+
+@media (max-width: 360px) {
+  .schedule-time-range { grid-template-columns: 1fr; }
 }
