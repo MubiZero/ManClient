@@ -184,6 +184,7 @@ async function renderState(
     const rangeStartsAt = new Date(`${required(session.data.date)}T00:00:00+05:00`);
     const starts = await getAvailableStarts({
       branchId: required(session.data.branchId),
+      serviceId: required(session.data.serviceId),
       staffId: required(session.data.staffId),
       resourceIds: service.resources.map(({ resourceId }) => resourceId),
       rangeStartsAt,

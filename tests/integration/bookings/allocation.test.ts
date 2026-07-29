@@ -68,6 +68,7 @@ describe("reserveAllocation", () => {
         name: "Service",
         durationMinutes: 60,
         amountDiram: 5_000,
+        isPublished: true,
         staffMembers: { connect: [{ id: firstStaff.id }, { id: secondStaff.id }] },
       },
     });

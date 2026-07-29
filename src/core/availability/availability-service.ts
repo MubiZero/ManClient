@@ -4,6 +4,7 @@ import { prisma } from "@/core/database/prisma";
 
 type AvailabilityQuery = {
   branchId: string;
+  serviceId: string;
   staffId: string;
   resourceIds: string[];
   rangeStartsAt: Date;
@@ -33,14 +34,22 @@ export async function getAvailableStarts(query: AvailabilityQuery): Promise<Date
     throw new Error("Interval must be a positive integer");
   }
 
-  const branch = await prisma.branch.findUnique({
-    where: { id: query.branchId },
-    include: { scheduleRules: true },
-  });
+  const [branch, service, staff, resourceCount] = await Promise.all([
+    prisma.branch.findFirst({
+      where: { id: query.branchId, archivedAt: null },
+      include: {
+        scheduleRules: true,
+        scheduleBreaks: { where: { OR: [{ staffId: null }, { staffId: query.staffId }] } },
+        scheduleExceptions: { where: { startsAt: { lt: query.rangeEndsAt }, endsAt: { gt: query.rangeStartsAt }, OR: [{ staffId: null }, { staffId: query.staffId }] } },
+      },
+    }),
+    prisma.service.findFirst({ where: { id: query.serviceId, branchId: query.branchId, archivedAt: null, isPublished: true, staffMembers: { some: { id: query.staffId, archivedAt: null, branches: { some: { branchId: query.branchId } } } } }, select: { id: true } }),
+    prisma.staffMember.findFirst({ where: { id: query.staffId, archivedAt: null, branches: { some: { branchId: query.branchId } } }, include: { scheduleRules: { where: { branchId: query.branchId } } } }),
+    query.resourceIds.length ? prisma.resource.count({ where: { id: { in: query.resourceIds }, branchId: query.branchId, archivedAt: null, isAvailable: true } }) : Promise.resolve(0),
+  ]);
 
-  if (!branch) {
-    throw new Error("Branch does not exist");
-  }
+  if (!branch || !service || !staff || resourceCount !== new Set(query.resourceIds).size) return [];
+  const effectiveRules = staff.scheduleRules.length ? staff.scheduleRules : branch.scheduleRules;
 
   const availableStarts: Date[] = [];
   const lastStartTime = query.rangeEndsAt.getTime() - query.durationMinutes * 60_000;
@@ -53,7 +62,10 @@ export async function getAvailableStarts(query: AvailabilityQuery): Promise<Date
     const startsAt = new Date(candidateTime);
     const endsAt = new Date(candidateTime + query.durationMinutes * 60_000);
 
-    if (!isWithinSchedule(startsAt, endsAt, branch.timeZone, branch.scheduleRules)) {
+    const availableException = branch.scheduleExceptions.some(item => item.available && item.startsAt <= startsAt && item.endsAt >= endsAt);
+    const unavailableException = branch.scheduleExceptions.some(item => !item.available && item.startsAt < endsAt && item.endsAt > startsAt);
+    const withinBreak = isWithinSchedule(startsAt, endsAt, branch.timeZone, branch.scheduleBreaks);
+    if (unavailableException || (!availableException && !isWithinSchedule(startsAt, endsAt, branch.timeZone, effectiveRules)) || withinBreak) {
       continue;
     }
 

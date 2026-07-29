@@ -47,6 +47,7 @@ export async function createFirstService(input: z.input<typeof inputSchema>) {
           name: parsed.data.serviceName,
           durationMinutes: parsed.data.durationMinutes,
           amountDiram,
+          isPublished: true,
           staffMembers: { connect: { id: membership.staff.id } },
         },
       });
@@ -81,6 +82,7 @@ export async function updateFirstService(input: z.input<typeof updateInputSchema
       name: parsed.data.serviceName,
       durationMinutes: parsed.data.durationMinutes,
       amountDiram,
+      isPublished: true,
     },
   });
   if (result.count !== 1) throw new OnboardingStepError("FORBIDDEN");

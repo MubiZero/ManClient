@@ -36,6 +36,7 @@ export async function createBookingFixture() {
       name: "Haircut",
       durationMinutes: 45,
       amountDiram: 5_000,
+      isPublished: true,
       staffMembers: { connect: { id: staff.id } },
     },
   });

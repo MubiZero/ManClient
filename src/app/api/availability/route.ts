@@ -18,6 +18,8 @@ export async function GET(request: Request): Promise<Response> {
       where: {
         id: query.serviceId,
         branchId: query.branchId,
+        archivedAt: null,
+        isPublished: true,
         staffMembers: { some: { id: query.staffId } },
       },
       select: {
@@ -33,6 +35,7 @@ export async function GET(request: Request): Promise<Response> {
     const rangeEndsAt = new Date(rangeStartsAt.getTime() + 24 * 60 * 60_000);
     const starts = await getAvailableStarts({
       branchId: query.branchId,
+      serviceId: query.serviceId,
       staffId: query.staffId,
       resourceIds: service.resources.map(({ resourceId }) => resourceId),
       rangeStartsAt,

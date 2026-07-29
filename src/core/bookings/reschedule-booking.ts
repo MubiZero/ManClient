@@ -17,6 +17,7 @@ export async function rescheduleBooking(input: RescheduleBookingInput) {
   const endsAt = new Date(input.startsAt.getTime() + booking.service.durationMinutes * 60_000);
   const availableStarts = await getAvailableStarts({
     branchId: booking.branchId,
+    serviceId: booking.serviceId,
     staffId: booking.staffId,
     resourceIds: booking.resources.map(({ resourceId }) => resourceId),
     rangeStartsAt: input.startsAt,

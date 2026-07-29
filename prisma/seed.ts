@@ -112,6 +112,7 @@ async function main() {
       data: {
         durationMinutes: 45,
         amountDiram: 5_000,
+        isPublished: true,
         staffMembers: { set: [{ id: staff.id }] },
       },
     });
@@ -122,6 +123,7 @@ async function main() {
         name: "Мужская стрижка",
         durationMinutes: 45,
         amountDiram: 5_000,
+        isPublished: true,
         staffMembers: { connect: { id: staff.id } },
       },
     });
@@ -191,6 +193,7 @@ async function seedAutoService(paymentCardEncrypted: string | undefined) {
       data: {
         durationMinutes: 60,
         amountDiram: 12_000,
+        isPublished: true,
         staffMembers: { set: [{ id: staff.id }] },
         resources: { deleteMany: {}, create: { resourceId: resource.id } },
       },
@@ -202,6 +205,7 @@ async function seedAutoService(paymentCardEncrypted: string | undefined) {
         name: "Замена масла",
         durationMinutes: 60,
         amountDiram: 12_000,
+        isPublished: true,
         staffMembers: { connect: { id: staff.id } },
         resources: { create: { resourceId: resource.id } },
       },

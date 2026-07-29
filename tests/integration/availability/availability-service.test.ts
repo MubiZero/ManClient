@@ -8,6 +8,7 @@ import { prisma } from "@/core/database/prisma";
 describe("getAvailableStarts", () => {
   let branchId: string;
   let staffId: string;
+  let serviceId: string;
 
   beforeEach(async () => {
     const suffix = randomUUID();
@@ -33,15 +34,20 @@ describe("getAvailableStarts", () => {
     const staff = await prisma.staffMember.create({
       data: { businessId: business.id, membershipId: membership.id, displayName: "Barber", branches: { create: { branchId: branch.id, isPrimary: true } } },
     });
+    const service = await prisma.service.create({
+      data: { branchId: branch.id, name: "Стрижка", durationMinutes: 30, amountDiram: 5_000, isPublished: true, staffMembers: { connect: { id: staff.id } } },
+    });
 
     branchId = branch.id;
     staffId = staff.id;
+    serviceId = service.id;
   });
 
   it("does not return a slot outside the branch schedule", async () => {
     await expect(
       getAvailableStarts({
         branchId,
+        serviceId,
         staffId,
         resourceIds: [],
         rangeStartsAt: new Date("2026-08-01T06:00:00.000Z"),
@@ -56,6 +62,7 @@ describe("getAvailableStarts", () => {
     await expect(
       getAvailableStarts({
         branchId,
+        serviceId,
         staffId,
         resourceIds: [],
         rangeStartsAt: new Date("2026-08-01T04:00:00.000Z"),

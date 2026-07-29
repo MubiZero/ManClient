@@ -39,7 +39,7 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
         select: {
           id: true,
           services: {
-            where: { id: validatedInput.serviceId },
+            where: { id: validatedInput.serviceId, archivedAt: null, isPublished: true },
             select: {
               id: true,
               amountDiram: true,
@@ -66,6 +66,7 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
 
   const availableStarts = await getAvailableStarts({
     branchId: validatedInput.branchId,
+    serviceId: validatedInput.serviceId,
     staffId: validatedInput.staffId,
     resourceIds: selectedResourceIds,
     rangeStartsAt: validatedInput.startsAt,
