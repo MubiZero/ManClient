@@ -17,7 +17,7 @@ export type BusinessBotBookingFilter = {
 
 const bookingInclude = {
   branch: { select: { id: true, name: true, timeZone: true } },
-  customer: { select: { id: true, name: true, phone: true } },
+  customer: { select: { id: true, name: true, phone: true, telegramChatId: true } },
   service: { select: { id: true, name: true, durationMinutes: true, amountDiram: true } },
   staff: { select: { id: true, displayName: true } },
   payment: { select: { id: true, status: true, amountDiram: true, isBankVerified: true } },

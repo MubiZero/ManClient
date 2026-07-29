@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/core/database/prisma";
+import { rescheduleBusinessBooking } from "@/core/booking-operations/booking-command-service";
+import type { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { createBusinessBotAction, type BusinessBotActionKind } from "@/core/integrations/business-bot-actions";
 import { encryptSecret } from "@/core/security/secret-encryption";
 import {
@@ -72,10 +74,12 @@ describe("business bot booking mutations", () => {
 
     const confirmation = await invoke(workspace.owner, findCallback(card, "Отменить запись")!);
     expect(confirmation.at(-1)?.text).toContain("Выберите причину");
+    expect(confirmation.at(-1)?.text).not.toContain("получит уведомление");
     await expect(prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).resolves.toMatchObject({ status: "CONFIRMED" });
 
     const cancelled = await invoke(workspace.owner, findCallback(confirmation, "Клиент попросил отменить")!);
     expect(cancelled.at(-1)?.text).toContain("Отменена");
+    expect(cancelled.at(-1)?.text).not.toContain("уведом");
     await expect(prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).resolves.toMatchObject({
       status: "CANCELLED",
       cancellationReason: "Клиент попросил отменить",
@@ -107,6 +111,57 @@ describe("business bot booking mutations", () => {
       startsAt: oldStartsAt,
       status: "CONFIRMED",
     });
+  });
+
+  it("rejects a past reschedule in the domain and preserves the old time", async () => {
+    const workspace = await createWorkspace();
+    await prisma.businessScheduleRule.create({
+      data: { branchId: workspace.branch.id, dayOfWeek: 3, startsAt: "00:00", endsAt: "23:59" },
+    });
+    const oldStartsAt = new Date("2026-08-02T05:00:00.000Z");
+    const booking = await createPendingBooking(workspace, { status: "CONFIRMED", startsAt: oldStartsAt });
+
+    await expect(rescheduleBusinessBooking({
+      businessId: workspace.business.id,
+      actorUserId: workspace.owner.userId,
+      bookingId: booking.id,
+      startsAt: new Date("2026-07-29T06:30:00.000Z"),
+    })).rejects.toMatchObject({ code: "INVALID_INPUT" } satisfies Partial<BookingOperationError>);
+    await expect(prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).resolves.toMatchObject({ startsAt: oldStartsAt });
+  });
+
+  it("offers only future slots and completes a valid native reschedule", async () => {
+    const workspace = await createWorkspace();
+    await prisma.businessScheduleRule.create({
+      data: { branchId: workspace.branch.id, dayOfWeek: 3, startsAt: "00:00", endsAt: "23:59" },
+    });
+    const booking = await createPendingBooking(workspace, { status: "CONFIRMED" });
+    const card = await openBooking(workspace.owner, booking.id);
+    const dates = await invoke(workspace.owner, findCallback(card, "Перенести")!);
+    const todaySlots = await invoke(workspace.owner, findCallback(dates, "29 июл")!);
+    const todayLabels = buttonLabels(todaySlots);
+
+    expect(todayLabels).not.toContain("12:00");
+    expect(todayLabels).toContain("12:30");
+
+    const sundaySlots = await invoke(workspace.owner, findCallback(dates, "2 авг")!);
+    const result = await invoke(workspace.owner, findCallback(sundaySlots, "09:00")!);
+    expect(result.at(-1)?.text).toContain("Запись перенесена");
+    await expect(prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).resolves.toMatchObject({
+      startsAt: new Date("2026-08-02T04:00:00.000Z"),
+    });
+  });
+
+  it("hides payment reminders without a linked customer Telegram and explains a stale action", async () => {
+    const workspace = await createWorkspace();
+    const booking = await createPendingBooking(workspace);
+    const card = await openBooking(workspace.owner, booking.id);
+
+    expect(findCallback(card, "Напомнить об оплате")).toBeUndefined();
+
+    const staleAction = await mutationAction(workspace.owner, "BOOKING_REMIND_PAYMENT", { bookingId: booking.id });
+    const result = await invoke(workspace.owner, staleAction);
+    expect(result.at(-1)?.text).toContain("Клиент не привязал Telegram");
   });
 
   it("deduplicates a Telegram payment reminder and leaves payment pending", async () => {
@@ -281,4 +336,10 @@ function findCallback(output: Output[] | undefined, label: string) {
   const replyMarkup = output?.at(-1)?.replyMarkup;
   if (!replyMarkup || !("inline_keyboard" in replyMarkup)) return undefined;
   return replyMarkup.inline_keyboard.flat().find(({ text }) => text.includes(label))?.callback_data;
+}
+
+function buttonLabels(output: Output[] | undefined) {
+  const replyMarkup = output?.at(-1)?.replyMarkup;
+  if (!replyMarkup || !("inline_keyboard" in replyMarkup)) return [];
+  return replyMarkup.inline_keyboard.flat().map(({ text }) => text);
 }

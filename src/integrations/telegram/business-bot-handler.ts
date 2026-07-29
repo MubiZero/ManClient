@@ -189,7 +189,7 @@ async function handleCallback(
         const value = new Date(startsAt);
         if (Number.isNaN(value.getTime())) return showStaleAction(actor, callback.message, dependencies);
         try {
-          await rescheduleBusinessBooking({ businessId: actor.businessId, actorUserId: actor.userId, bookingId, startsAt: value });
+          await rescheduleBusinessBooking({ businessId: actor.businessId, actorUserId: actor.userId, bookingId, startsAt: value }, dependencies.now());
           await showBookingCard(actor, bookingId, dependencies, callback.message, "Запись перенесена.");
         } catch (error) {
           await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
@@ -311,6 +311,8 @@ async function showBookingCard(
     const actions = await Promise.all([
       ...(booking.status === "PENDING_PAYMENT" ? [
         mutationAction(actor, "BOOKING_CONFIRM", { bookingId }, "Подтвердить запись", dependencies.now()),
+      ] : []),
+      ...(booking.status === "PENDING_PAYMENT" && booking.payment?.status === "PENDING" && booking.customer.telegramChatId ? [
         mutationAction(actor, "BOOKING_REMIND_PAYMENT", { bookingId }, "Напомнить об оплате", dependencies.now()),
       ] : []),
       ...(["PENDING_PAYMENT", "CONFIRMED"].includes(booking.status) ? [
@@ -357,7 +359,7 @@ async function showRescheduleDates(
         bookingId,
         date,
       }),
-    })))).filter(item => item.options.starts.length > 0);
+    })))).filter(item => item.options.starts.some(startsAt => startsAt > dependencies.now()));
     const actions = await Promise.all(available.map(item => navigationAction(
       actor,
       "BOOKING_RESCHEDULE_SLOT",
@@ -391,7 +393,7 @@ async function showRescheduleSlots(
       bookingId,
       date,
     });
-    const actions = await Promise.all(options.starts.map(startsAt => mutationAction(
+    const actions = await Promise.all(options.starts.filter(startsAt => startsAt > dependencies.now()).map(startsAt => mutationAction(
       actor,
       "BOOKING_RESCHEDULE_SLOT",
       { bookingId, startsAt: startsAt.toISOString() },
@@ -428,7 +430,7 @@ async function showCancellationConfirmation(
     )));
     const back = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Назад", dependencies.now());
     await deliver({
-      text: "Отменить запись? Клиент получит уведомление. Выберите причину для подтверждения отмены.",
+      text: "Отменить запись? Выберите причину для подтверждения отмены.",
       replyMarkup: inlineView(actions.map(action => [action]).concat([[back]])),
     }, actor, dependencies, message);
   } catch (error) {
@@ -455,6 +457,7 @@ async function showBookingOperationError(
     INVALID_STATUS: "Действие недоступно в текущем состоянии записи. Обновите карточку.",
     SLOT_UNAVAILABLE: "Это время уже занято. Старое время записи сохранено. Выберите другой слот.",
     INVALID_INPUT: "Данные действия устарели или заполнены неверно. Обновите карточку.",
+    CUSTOMER_TELEGRAM_UNAVAILABLE: "Клиент не привязал Telegram, поэтому напоминание отправить нельзя.",
   }[error.code];
   await deliver({ text, replyMarkup: inlineView([[refresh, menu]]) }, actor, dependencies, message);
 }

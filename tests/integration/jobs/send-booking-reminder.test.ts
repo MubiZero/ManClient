@@ -60,6 +60,49 @@ describe("sendDueBookingReminders", () => {
 
     await expect(prisma.message.findFirstOrThrow({ where: { bookingId } })).resolves.toMatchObject({ status: "FAILED", attempts: 3, lastError: "TELEGRAM delivery failed" });
   });
+
+  it.each([
+    { name: "booking was confirmed", bookingStatus: "CONFIRMED" as const, paymentStatus: "PENDING" as const },
+    { name: "booking was cancelled", bookingStatus: "CANCELLED" as const, paymentStatus: "PENDING" as const },
+    { name: "payment was accepted", bookingStatus: "PENDING_PAYMENT" as const, paymentStatus: "RECEIPT_ACCEPTED" as const },
+  ])("skips a pending payment reminder when $name", async ({ bookingStatus, paymentStatus }) => {
+    const fixture = await createBookingFixture();
+    const pending = await createPendingBooking({
+      businessSlug: fixture.business.slug,
+      branchId: fixture.branch.id,
+      serviceId: fixture.service.id,
+      staffId: fixture.staff.id,
+      resourceIds: [],
+      startsAt: new Date("2026-08-02T05:00:00.000Z"),
+      customer: { name: "Мухаммад", phone: "+992900001123" },
+    }, new Date("2026-08-01T04:00:00.000Z"));
+    await prisma.booking.update({
+      where: { id: pending.bookingId },
+      data: {
+        status: bookingStatus,
+        customer: { update: { telegramChatId: `chat-${pending.bookingId}` } },
+        payment: { update: { status: paymentStatus } },
+      },
+    });
+    const message = await prisma.message.create({
+      data: {
+        businessId: fixture.business.id,
+        bookingId: pending.bookingId,
+        channel: "TELEGRAM",
+        kind: "PAYMENT_REMINDER",
+        scheduledAt: new Date("2026-08-01T04:00:00.000Z"),
+      },
+    });
+    const delivered: string[] = [];
+
+    await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
+      sendTelegram: async (_token, chatId) => { delivered.push(chatId); },
+      sendWhatsApp: async () => ({ externalId: "unused" }),
+    });
+
+    expect(delivered).toEqual([]);
+    await expect(prisma.message.findUniqueOrThrow({ where: { id: message.id } })).resolves.toMatchObject({ status: "SKIPPED", attempts: 0 });
+  });
 });
 
 async function confirmedTelegramBooking() {

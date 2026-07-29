@@ -53,7 +53,8 @@ export async function confirmBusinessBooking(input: ActorInput & { bookingId: st
   return { bookingId: result.id };
 }
 
-export async function rescheduleBusinessBooking(input: ActorInput & { bookingId: string; startsAt: Date }) {
+export async function rescheduleBusinessBooking(input: ActorInput & { bookingId: string; startsAt: Date }, now = new Date()) {
+  if (input.startsAt <= now) throw new BookingOperationError("INVALID_INPUT");
   const scope = await requireBookingAccess(input);
   const booking = await prisma.booking.findFirst({ where: { id: input.bookingId, ...bookingScopeWhere(scope), status: { in: ["PENDING_PAYMENT", "CONFIRMED"] } }, include: { service: true, resources: true } });
   if (!booking) throw new BookingOperationError("NOT_FOUND");
@@ -105,11 +106,8 @@ export async function remindBusinessBookingPayment(input: ActorInput & { booking
       include: { customer: true, payment: true },
     });
     if (!booking) throw new BookingOperationError("NOT_FOUND");
-    if (
-      booking.status !== "PENDING_PAYMENT"
-      || booking.payment?.status !== "PENDING"
-      || !booking.customer.telegramChatId
-    ) {
+    if (!booking.customer.telegramChatId) throw new BookingOperationError("CUSTOMER_TELEGRAM_UNAVAILABLE");
+    if (booking.status !== "PENDING_PAYMENT" || booking.payment?.status !== "PENDING") {
       throw new BookingOperationError("INVALID_STATUS");
     }
     const created = await transaction.message.createMany({
