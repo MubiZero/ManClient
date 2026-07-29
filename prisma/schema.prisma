@@ -28,8 +28,19 @@ enum BookingSource {
 
 enum PaymentStatus {
   PENDING
+  RECEIPT_PROCESSING
   RECEIPT_ACCEPTED
   NEEDS_ATTENTION
+  REJECTED
+}
+
+enum ReceiptSubmissionStatus {
+  UPLOADED
+  PROCESSING
+  ACCEPTED
+  NEEDS_REVIEW
+  REJECTED
+  FAILED
 }
 
 enum MessageChannel {
@@ -86,6 +97,7 @@ model Business {
   bookings                         Booking[]
   customers                        Customer[]
   payments                         Payment[]
+  receiptSubmissions               ReceiptSubmission[]
   messages                         Message[]
   auditEvents                      AuditEvent[]
   telegramIntegrations             BusinessTelegramIntegration[]
@@ -426,13 +438,46 @@ model Payment {
   receiptStorageKey   String?
   receiptAcceptedAt   DateTime?
   isBankVerified      Boolean       @default(false)
+  attentionReason     String?
+  reviewReason        String?
+  reviewedAt          DateTime?
+  reviewedBy          String?
+  reviewDeadline      DateTime?
   business            Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   booking             Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  submissions         ReceiptSubmission[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
   @@unique([businessId, operationNumber])
   @@index([businessId, status])
+}
+
+model ReceiptSubmission {
+  id                    String                  @id @default(cuid())
+  businessId            String
+  paymentId             String
+  storageKey            String                  @unique
+  contentType           String
+  sizeBytes             Int
+  status                ReceiptSubmissionStatus @default(UPLOADED)
+  parsedOperationNumber String?
+  parsedAmountDiram     Int?
+  parsedCardSuffix      String?
+  parsedOperationAt     DateTime?
+  failureCode           String?
+  attempts              Int                     @default(0)
+  processedAt           DateTime?
+  reviewedAt            DateTime?
+  reviewedBy            String?
+  reviewNote            String?
+  business              Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payment               Payment                 @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@index([businessId, status, createdAt])
+  @@index([paymentId, createdAt])
 }
 
 model BookingResource {

@@ -6,16 +6,11 @@ const internalSecret = requiredEnv("INTERNAL_API_SECRET");
 test("pilot auto service confirms a resource booking after receipt", async ({ page, request }) => {
   const suffix = String(Date.now()).slice(-7);
   const customerName = `Сорбон ${suffix}`;
-  let paymentUrl = "";
   let booking: { bookingId: string; paymentId: string } | undefined;
   await page.route("**/api/bookings", async route => {
     const response = await route.fetch();
     booking = await response.json() as { bookingId: string; paymentId: string };
     await route.fulfill({ response });
-  });
-  await page.route("http://pay.expresspay.tj/**", route => {
-    paymentUrl = route.request().url();
-    return route.abort();
   });
   await page.goto("/b/demo-auto");
   await page.getByRole("button", { name: /Замена масла/ }).click();
@@ -25,7 +20,8 @@ test("pilot auto service confirms a resource booking after receipt", async ({ pa
   await page.getByLabel("Имя").fill(customerName);
   await page.getByLabel("Телефон").fill(`+99290${suffix}`);
   await page.getByRole("button", { name: "Перейти к оплате" }).click();
-  await expect.poll(() => paymentUrl).toContain("http://pay.expresspay.tj/");
+  await expect(page).toHaveURL(/\/pay\//);
+  await expect(page.getByRole("link", { name: /Оплатить/ })).toHaveAttribute("href", /^http:\/\/pay\.expresspay\.tj\//);
   if (!booking) throw new Error("Booking response was not captured");
 
   const receipt = await request.post(`/api/payments/${booking.paymentId}/receipt`, {

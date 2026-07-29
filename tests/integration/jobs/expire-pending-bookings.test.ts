@@ -30,4 +30,15 @@ describe("expirePendingBookings", () => {
       status: "EXPIRED",
     });
   });
+
+  it("holds an overdue booking while a submitted receipt is inside its review window", async () => {
+    const fixture = await createBookingFixture();
+    const booking = await createPendingBooking({ businessSlug: fixture.business.slug, branchId: fixture.branch.id, serviceId: fixture.service.id, staffId: fixture.staff.id, resourceIds: [], startsAt: new Date("2026-08-02T05:00:00.000Z"), customer: { name: "Мухаммад", phone: "+992900001123" } }, new Date("2026-08-01T04:00:00.000Z"));
+    await prisma.payment.update({ where: { id: booking.paymentId }, data: { status: "NEEDS_ATTENTION", reviewDeadline: new Date("2026-08-01T08:00:00.000Z") } });
+    await prisma.receiptSubmission.create({ data: { businessId: fixture.business.id, paymentId: booking.paymentId, storageKey: `receipts/${booking.paymentId}.jpg`, contentType: "image/jpeg", sizeBytes: 10, status: "NEEDS_REVIEW" } });
+
+    await expect(expirePendingBookings(new Date("2026-08-01T04:16:00.000Z"))).resolves.toBe(0);
+    await expect(prisma.booking.findUnique({ where: { id: booking.bookingId } })).resolves.toMatchObject({ status: "PENDING_PAYMENT" });
+    await expect(expirePendingBookings(new Date("2026-08-01T08:01:00.000Z"))).resolves.toBe(1);
+  });
 });

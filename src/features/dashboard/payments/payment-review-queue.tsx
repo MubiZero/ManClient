@@ -13,6 +13,7 @@ type ReviewPayment = {
   operationAt: Date | null;
   updatedAt: Date;
   attentionReason: string | null;
+  submissions?: Array<{ id: string; status: string; createdAt: Date }>;
   booking: {
     id: string;
     startsAt: Date;
@@ -60,6 +61,7 @@ export function PaymentReviewQueue({
 
 function PaymentReviewCard({ payment, approveAction, rejectAction }: { payment: ReviewPayment; approveAction: ReviewAction; rejectAction: ReviewAction }) {
   const timeZone = payment.booking.branch.timeZone;
+  const receipt = payment.submissions?.[0];
   return (
     <article className="payment-review-card" aria-labelledby="payment-review-title">
       <header>
@@ -80,6 +82,13 @@ function PaymentReviewCard({ payment, approveAction, rejectAction }: { payment: 
         <ComparisonRow label="Карта" expected={cardSuffix(payment.booking.branch.recipientCardLast4)} actual={cardSuffix(payment.recipientCardSuffix)} mismatch={payment.recipientCardSuffix !== payment.booking.branch.recipientCardLast4} />
         <ComparisonRow label="Время операции" expected="До окончания брони" actual={payment.operationAt ? formatDateTime(payment.operationAt, timeZone) : "Не распознано"} mismatch={payment.attentionReason === "OPERATION_TIME_MISMATCH"} />
       </section>
+
+      {receipt ? <section className="payment-review-receipt" aria-labelledby="receipt-title">
+        <div><h3 id="receipt-title">Изображение чека</h3><p>Откройте оригинал и визуально сверьте сумму, карту, дату и статус операции.</p></div>
+        {/* eslint-disable-next-line @next/next/no-img-element -- authenticated binary endpoint is not an optimizable public asset */}
+        <img src={`/api/dashboard/payments/submissions/${receipt.id}/receipt`} alt="Чек, отправленный клиентом" />
+        <a className="ui-button secondary" href={`/api/dashboard/payments/submissions/${receipt.id}/receipt`} target="_blank" rel="noreferrer">Открыть в полном размере</a>
+      </section> : <p className="entity-error" role="alert">Изображение чека недоступно. Не подтверждайте оплату без сверки.</p>}
 
       <section className="payment-review-actions" aria-labelledby="review-actions-title">
         <div><h3 id="review-actions-title">Решение</h3><p>Подтверждайте оплату только после сверки данных. Действие сохранится в истории записи.</p></div>
@@ -103,7 +112,7 @@ function ComparisonRow({ label, expected, actual, mismatch }: { label: string; e
 }
 
 function attentionReasonLabel(reason: string | null) {
-  return ({ AMOUNT_MISMATCH: "Сумма не совпадает", RECIPIENT_MISMATCH: "Карта не совпадает", OPERATION_TIME_MISMATCH: "Время операции не совпадает", RECEIPT_NOT_SUCCESSFUL: "Оплата неуспешна", BOOKING_NOT_PENDING: "Статус записи изменился", OCR_FAILED: "Чек не распознан", RECEIPT_MISMATCH: "Данные не совпадают" } as Record<string, string>)[reason ?? ""] ?? "Нужна проверка";
+  return ({ AMOUNT_MISMATCH: "Сумма не совпадает", RECIPIENT_MISMATCH: "Карта не совпадает", OPERATION_TIME_MISMATCH: "Время операции не совпадает", RECEIPT_NOT_SUCCESSFUL: "Оплата неуспешна", BOOKING_NOT_PENDING: "Статус записи изменился", OCR_FAILED: "Чек не распознан", OCR_UNRELIABLE: "Чек не распознан", RECEIPT_MISMATCH: "Данные не совпадают" } as Record<string, string>)[reason ?? ""] ?? "Нужна проверка";
 }
 
 function cardSuffix(value: string | null) { return value ? `•••• ${value}` : "Не распознана"; }

@@ -652,6 +652,11 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .review-panel { background: #fff8df; color: #685015; }
 .success-panel p, .review-panel p { margin: 5px 0 0; }
 .form-message { margin: 14px 0 0; color: var(--muted); }
+.payment-review-receipt { display: grid; gap: 16px; padding: 20px; border-radius: 16px; background: var(--surface-subtle); }
+.payment-review-receipt h3, .payment-review-receipt p { margin: 0; }
+.payment-review-receipt p { margin-top: 5px; color: var(--muted); }
+.payment-review-receipt img { display: block; width: min(100%, 560px); max-height: 680px; margin-inline: auto; border: 1px solid var(--border); border-radius: 12px; object-fit: contain; background: white; }
+.payment-review-receipt .ui-button { justify-self: start; }
 
 .payment-review-page { max-width: 1240px; }
 .payment-review-layout { display: grid; grid-template-columns: minmax(280px, .72fr) minmax(0, 1.5fr); align-items: start; gap: 20px; }

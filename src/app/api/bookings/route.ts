@@ -22,9 +22,11 @@ export async function POST(request: Request): Promise<Response> {
     } as Parameters<typeof createPendingBooking>[0]);
     const paymentUrl = await getPaymentUrl(booking.paymentId);
     const telegramUrl = await createTelegramStartUrl(booking.paymentId, booking.expiresAt);
+    const paymentTokenExpiresAt = new Date(Math.max(booking.expiresAt.getTime(), new Date(String(payload.startsAt)).getTime() + 24 * 60 * 60_000));
+    const paymentToken = createBookingActionToken({ paymentId: booking.paymentId, action: "view_payment", expiresAt: paymentTokenExpiresAt });
 
     return Response.json(
-      { ...booking, expiresAt: booking.expiresAt.toISOString(), paymentUrl: paymentUrl.toString(), telegramUrl },
+      { ...booking, expiresAt: booking.expiresAt.toISOString(), paymentUrl: paymentUrl.toString(), telegramUrl, paymentPath: `/pay/${paymentToken}` },
       { status: 201 },
     );
   } catch (error) {

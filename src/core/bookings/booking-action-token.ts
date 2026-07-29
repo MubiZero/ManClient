@@ -1,11 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-type BookingAction = "link_payment";
+type BookingAction = "link_payment" | "view_payment";
 type TokenInput = { paymentId: string; action: BookingAction; expiresAt: Date };
 type CustomerBookingAction = "cancel_booking" | "reschedule_booking";
 type CustomerBookingTokenInput = { bookingId: string; action: CustomerBookingAction; expiresAt: Date };
 
-const actionCodes: Record<BookingAction, string> = { link_payment: "p" };
+const actionCodes: Record<BookingAction, string> = { link_payment: "p", view_payment: "w" };
 const customerActionCodes: Record<CustomerBookingAction, string> = { cancel_booking: "c", reschedule_booking: "r" };
 
 export function createBookingActionToken(input: TokenInput): string {
@@ -14,10 +14,11 @@ export function createBookingActionToken(input: TokenInput): string {
   return `${payload}.${sign(payload)}`;
 }
 
-export function verifyBookingActionToken(token: string, now = new Date()): TokenInput {
+export function verifyBookingActionToken(token: string, now = new Date(), expectedAction?: BookingAction): TokenInput {
   const { actionCode, subjectId: paymentId, expiresAt } = decodeToken(token, now);
   const action = Object.entries(actionCodes).find(([, code]) => code === actionCode)?.[0] as BookingAction | undefined;
   if (!action) throw new Error("Booking action token has the wrong action");
+  if (expectedAction && action !== expectedAction) throw new Error("Booking action token has the wrong action");
 
   return { paymentId, action, expiresAt };
 }

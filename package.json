@@ -13,6 +13,7 @@
     "db:rotate-card-key": "tsx scripts/rotate-card-encryption-key.ts",
     "jobs:expire": "tsx src/jobs/run-expiry.ts",
     "jobs:reminders": "tsx src/jobs/run-reminders.ts",
+    "jobs:receipts": "tsx src/jobs/run-receipt-processing.ts",
     "telegram:register-platform-webhook": "tsx scripts/register-platform-telegram-webhook.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

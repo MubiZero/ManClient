@@ -62,7 +62,7 @@ export async function handleTelegramUpdate(businessId: string, update: TelegramU
   if (message.text?.startsWith("/start ")) {
     const token = message.text.slice(7).trim();
     try {
-      const action = verifyBookingActionToken(token, dependencies.now());
+      const action = verifyBookingActionToken(token, dependencies.now(), "link_payment");
       const payment = await prisma.payment.findFirst({ where: { id: action.paymentId, businessId }, include: { booking: true } });
       if (!payment || payment.booking.status !== "PENDING_PAYMENT") throw new Error("Payment is unavailable");
       await prisma.customer.update({ where: { id: payment.booking.customerId }, data: { telegramChatId: chatId } });
@@ -119,13 +119,24 @@ export async function handleTelegramUpdate(businessId: string, update: TelegramU
     metadata: { storageKey, channel: "telegram" },
   });
 
+  const reviewDeadline = new Date(Math.min(payment.booking.startsAt.getTime(), dependencies.now().getTime() + 24 * 60 * 60_000));
+  const submission = await prisma.$transaction(async (transaction) => {
+    const created = await transaction.receiptSubmission.create({ data: { businessId: payment.businessId, paymentId: payment.id, storageKey, contentType: "image/jpeg", sizeBytes: image.byteLength, status: "PROCESSING", attempts: 1 } });
+    await transaction.payment.update({ where: { id: payment.id }, data: { status: "RECEIPT_PROCESSING", reviewDeadline } });
+    return created;
+  });
+
   let confirmationStatus: "RECEIPT_ACCEPTED" | "NEEDS_ATTENTION";
   try {
     const receipt = await dependencies.recognizeReceipt(image);
     const confirmed = await confirmFromReceipt({ ...receipt, paymentId: payment.id, receiptStorageKey: storageKey });
     confirmationStatus = confirmed.status === "RECEIPT_ACCEPTED" ? "RECEIPT_ACCEPTED" : "NEEDS_ATTENTION";
+    await prisma.receiptSubmission.update({ where: { id: submission.id }, data: { status: confirmationStatus === "RECEIPT_ACCEPTED" ? "ACCEPTED" : "NEEDS_REVIEW", parsedOperationNumber: receipt.operationNumber, parsedAmountDiram: receipt.amountDiram, parsedCardSuffix: receipt.recipientCardSuffix, parsedOperationAt: receipt.operationAt, processedAt: dependencies.now() } });
   } catch {
-    await prisma.payment.update({ where: { id: payment.id }, data: { status: "NEEDS_ATTENTION", receiptStorageKey: storageKey } });
+    await prisma.$transaction([
+      prisma.payment.update({ where: { id: payment.id }, data: { status: "NEEDS_ATTENTION", receiptStorageKey: storageKey, attentionReason: "OCR_UNRELIABLE" } }),
+      prisma.receiptSubmission.update({ where: { id: submission.id }, data: { status: "NEEDS_REVIEW", failureCode: "OCR_UNRELIABLE", processedAt: dependencies.now() } }),
+    ]);
     try {
       await dependencies.sendMessage(chatId, "Не удалось надёжно прочитать чек. Он передан администратору на проверку.");
     } catch {

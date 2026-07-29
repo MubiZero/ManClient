@@ -84,6 +84,12 @@ export async function confirmFromReceipt(input: ReceiptInput) {
         payment.booking.expiresAt !== null &&
         receipt.operationAt <= payment.booking.expiresAt;
       if (!isMatching || payment.booking.status !== "PENDING_PAYMENT") {
+        const attentionReason = payment.booking.status !== "PENDING_PAYMENT" ? "BOOKING_NOT_PENDING"
+          : !receipt.isSuccessful ? "RECEIPT_NOT_SUCCESSFUL"
+          : receipt.amountDiram !== payment.amountDiram ? "AMOUNT_MISMATCH"
+          : receipt.recipientCardSuffix !== payment.booking.branch.recipientCardLast4 ? "RECIPIENT_MISMATCH"
+          : receipt.operationAt < payment.booking.createdAt || payment.booking.expiresAt === null || receipt.operationAt > payment.booking.expiresAt ? "OPERATION_TIME_MISMATCH"
+          : "RECEIPT_MISMATCH";
         return transaction.payment.update({
           where: { id: payment.id },
           data: {
@@ -93,6 +99,7 @@ export async function confirmFromReceipt(input: ReceiptInput) {
             recipientCardSuffix: receipt.recipientCardSuffix,
             operationAt: receipt.operationAt,
             receiptStorageKey: receipt.receiptStorageKey,
+            attentionReason,
           },
         });
       }
@@ -108,6 +115,7 @@ export async function confirmFromReceipt(input: ReceiptInput) {
           receiptStorageKey: receipt.receiptStorageKey,
           receiptAcceptedAt: new Date(),
           isBankVerified: false,
+          attentionReason: null,
         },
       });
       await transaction.booking.update({
