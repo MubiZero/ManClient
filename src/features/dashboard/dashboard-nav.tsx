@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 type DashboardRole = "OWNER" | "ADMIN" | "STAFF";
-type NavigationItem = { href: string; label: string; group: "work" | "settings"; mobile: "primary" | "more" };
+type NavigationItem = { href: string; label: string; group: "work" | "settings"; mobile: "primary" | "more"; adminOnly?: boolean };
 
 const allItems: NavigationItem[] = [
   { href: "/dashboard", label: "Обзор", group: "work", mobile: "primary" },
   { href: "/dashboard/bookings", label: "Записи", group: "work", mobile: "primary" },
+  { href: "/dashboard/payments/review", label: "Проверка чеков", group: "work", mobile: "more", adminOnly: true },
   { href: "/dashboard/settings/branches", label: "Филиалы", group: "settings", mobile: "more" },
   { href: "/dashboard/settings/services", label: "Услуги", group: "settings", mobile: "more" },
   { href: "/dashboard/settings/staff", label: "Команда", group: "settings", mobile: "more" },
@@ -19,7 +20,7 @@ const allItems: NavigationItem[] = [
 ];
 
 export function dashboardNavigationForRole(role: DashboardRole): NavigationItem[] {
-  return role === "STAFF" ? allItems.filter(item => item.group === "work") : allItems;
+  return role === "STAFF" ? allItems.filter(item => item.group === "work" && !item.adminOnly) : allItems;
 }
 
 export function isDashboardRouteActive(href: string, pathname: string): boolean {
@@ -44,6 +45,7 @@ export function DashboardNav({
   const items = dashboardNavigationForRole(role);
   const primary = items.filter(item => item.mobile === "primary");
   const secondary = items.filter(item => item.mobile === "more");
+  const settings = items.filter(item => item.group === "settings");
 
   return (
     <>
@@ -51,7 +53,7 @@ export function DashboardNav({
         <Brand businessName={businessName} />
         <nav aria-label="Кабинет">
           <NavigationLinks items={items.filter(item => item.group === "work")} pathname={pathname} />
-          {secondary.length ? <><p>Настройки</p><NavigationLinks items={secondary} pathname={pathname} /></> : null}
+          {settings.length ? <><p>Настройки</p><NavigationLinks items={settings} pathname={pathname} /></> : null}
         </nav>
         <form action={signOutAction}><button className="signout-button" type="submit">Выйти</button></form>
       </aside>

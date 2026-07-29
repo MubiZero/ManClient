@@ -5,7 +5,7 @@ import { dashboardNavigationForRole, isDashboardRouteActive } from "@/features/d
 describe("dashboard navigation", () => {
   it("gives owners all settings and a mobile menu", () => {
     const navigation = dashboardNavigationForRole("OWNER");
-    expect(navigation.map(item => item.label)).toEqual(expect.arrayContaining(["Обзор", "Записи", "Филиалы", "Услуги", "Команда", "Ресурсы", "Расписание", "Интеграции"]));
+    expect(navigation.map(item => item.label)).toEqual(expect.arrayContaining(["Обзор", "Записи", "Проверка чеков", "Филиалы", "Услуги", "Команда", "Ресурсы", "Расписание", "Интеграции"]));
     expect(navigation.filter(item => item.mobile === "primary").map(item => item.label)).toEqual(["Обзор", "Записи"]);
   });
 

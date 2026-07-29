@@ -22,7 +22,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   return <section className="dashboard-content">
     {notice === "settings" && <p className="notice" role="status">Настройки доступны владельцу и администратору</p>}
     <div className="page-heading"><div><p className="context-label">Рабочий день</p><h1>Обзор</h1><p>Сегодняшние записи и задачи, которые требуют внимания.</p></div><Link className="primary-link" href="/dashboard/bookings/new">Создать запись</Link></div>
-    <div className="metric-row"><article><span>Записей сегодня</span><strong>{todayCount}</strong><Link href="/dashboard/bookings?view=day">Открыть день</Link></article><article><span>Чеков требуют внимания</span><strong>{attentionCount}</strong><Link href="/dashboard/bookings?view=list&status=PENDING_PAYMENT">К ожидающим оплаты</Link></article></div>
+    <div className="metric-row"><article><span>Записей сегодня</span><strong>{todayCount}</strong><Link href="/dashboard/bookings?view=day">Открыть день</Link></article><article><span>Чеков требуют внимания</span><strong>{attentionCount}</strong><Link href="/dashboard/payments/review">Проверить чеки</Link></article></div>
     <TodayAgenda items={agenda} />
   </section>;
 }
