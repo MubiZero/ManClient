@@ -7,21 +7,35 @@ async function main() {
   }
   const token = requiredEnv("TELEGRAM_BOT_TOKEN");
   const secretToken = requiredEnv("TELEGRAM_WEBHOOK_SECRET");
-  const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+  await telegramCall(token, "setMyCommands", {
+    commands: [
+      { command: "start", description: "Подключить бизнес или открыть меню" },
+      { command: "menu", description: "Главное меню" },
+      { command: "today", description: "Записи на сегодня" },
+      { command: "bookings", description: "Все записи" },
+      { command: "checks", description: "Чеки на проверке" },
+      { command: "help", description: "Помощь" },
+    ],
+  });
+  await telegramCall(token, "setWebhook", {
+    url: webhookUrl,
+    secret_token: secretToken,
+    allowed_updates: ["message", "callback_query"],
+    drop_pending_updates: false,
+  });
+  process.stdout.write(`Platform Telegram webhook and commands registered: ${webhookUrl}\n`);
+}
+
+async function telegramCall(token: string, method: string, body: Record<string, unknown>) {
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      url: webhookUrl,
-      secret_token: secretToken,
-      allowed_updates: ["message", "callback_query"],
-      drop_pending_updates: false,
-    }),
+    body: JSON.stringify(body),
   });
   const result = await response.json() as { ok?: boolean };
   if (!response.ok || !result.ok) {
-    throw new Error(`Telegram rejected platform webhook registration with HTTP ${response.status}`);
+    throw new Error(`Telegram rejected ${method} with HTTP ${response.status}`);
   }
-  process.stdout.write(`Platform Telegram webhook registered: ${webhookUrl}\n`);
 }
 
 void main().catch((error: unknown) => {

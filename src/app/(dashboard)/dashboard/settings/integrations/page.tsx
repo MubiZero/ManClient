@@ -18,8 +18,8 @@ export default async function IntegrationsPage() {
       <div className="page-heading">
         <div>
           <p className="context-label">Каналы записи</p>
-          <h1>Telegram для клиентов</h1>
-          <p>Подключите собственного бота бизнеса. Клиенты будут записываться через него, а данные останутся внутри вашего кабинета.</p>
+          <h1>Telegram</h1>
+          <p>Подключите бизнес-ассистента для команды и отдельного бота для клиентов. Каждый канал получает только нужные ему функции.</p>
         </div>
       </div>
       <TelegramIntegrationForm initialStatus={initialStatus} />

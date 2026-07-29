@@ -13,6 +13,8 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
   const [error, setError] = useState<string | null>(initialStatus.lastWebhookError);
   const [rotating, setRotating] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [assistantState, setAssistantState] = useState<"idle" | "opening">("idle");
+  const [assistantError, setAssistantError] = useState<string | null>(null);
   const configured = integration.status !== "DISCONNECTED";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -55,8 +57,37 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
     }
   }
 
+  async function openBusinessAssistant() {
+    setAssistantState("opening");
+    setAssistantError(null);
+    try {
+      const response = await fetch("/api/integrations/telegram/platform-link", { method: "POST" });
+      const payload = await response.json() as { url?: string; error?: string };
+      if (!response.ok || !payload.url) throw new Error(payload.error ?? "TELEGRAM_UNAVAILABLE");
+      window.location.assign(payload.url);
+    } catch (caught) {
+      setAssistantError(errorMessage(caught));
+      setAssistantState("idle");
+    }
+  }
+
   return (
     <div className="telegram-settings-grid">
+      <section className="integration-status-panel" aria-labelledby="business-assistant-title">
+        <div>
+          <p className="context-label">Для владельца и команды</p>
+          <h2 id="business-assistant-title">Бизнес-ассистент ManClient</h2>
+          <p className="integration-help">Показывает записи, помогает подтвердить визит, перенести или отменить запись и проверить чек. Ссылка персональная и действует 15 минут.</p>
+        </div>
+        <div className="integration-actions">
+          <button className="primary-button" type="button" disabled={assistantState === "opening"} onClick={openBusinessAssistant}>
+            {assistantState === "opening" ? "Открываем Telegram..." : "Подключить бизнес-ассистента"}
+          </button>
+        </div>
+        {assistantError ? <p className="integration-error" role="alert">{assistantError}</p> : null}
+        <small>Не отправляйте эту ссылку клиентам: она даёт доступ сотруднику согласно его роли в ManClient.</small>
+      </section>
+
       <section className="integration-status-panel" aria-live="polite">
         <div className="integration-status-heading">
           <div>
@@ -68,7 +99,7 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
         {configured ? (
           <>
             <p className="integration-bot-name">@{integration.botUsername}</p>
-            <p className="integration-help">Клиенты могут выбирать филиал, услугу, мастера и время прямо в этом боте.</p>
+            <p className="integration-help">Это отдельный бот вашего бизнеса для клиентов: запись, оплата и управление визитом без доступа к кабинету команды.</p>
             <div className="integration-actions">
               <button className="secondary-action" type="button" disabled={requestState === "checking"} onClick={() => { setRotating(true); setConfirmDisconnect(false); }}>
                 Сменить бота
@@ -79,7 +110,7 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
             </div>
           </>
         ) : (
-          <p className="integration-help">Создайте отдельного бота через @BotFather и вставьте полученный токен. ManClient проверит бота и подключит защищённый webhook.</p>
+          <p className="integration-help">Создайте отдельного клиентского бота через @BotFather и вставьте токен. Не используйте бизнес-ассистента ManClient: у двух ботов разные роли и аудитории.</p>
         )}
       </section>
 
@@ -155,6 +186,7 @@ function errorMessage(error: unknown) {
     NOT_CONNECTED: "Бот уже отключён. Обновите страницу, чтобы увидеть актуальный статус.",
     FORBIDDEN: "У вас нет доступа к настройке интеграций. Обратитесь к владельцу бизнеса.",
     CONFIGURATION_ERROR: "Интеграция пока не настроена на стороне ManClient. Обратитесь в поддержку.",
+    TELEGRAM_NOT_CONFIGURED: "Бизнес-ассистент ещё не настроен на стороне ManClient. Обратитесь в поддержку.",
     TELEGRAM_UNAVAILABLE: "Не удалось связаться с Telegram. Проверьте соединение и попробуйте снова.",
   };
   return messages[code] ?? messages.TELEGRAM_UNAVAILABLE;

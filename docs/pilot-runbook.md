@@ -65,7 +65,7 @@ Demo seed создаёт `demo-barber` и `demo-auto` только для лок
 
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` и `TELEGRAM_WEBHOOK_SECRET` принадлежат только бизнес-ассистенту ManClient. Токены клиентских ботов не добавляются в environment: владелец подключает их в `Настройки -> Интеграции`, после чего они хранятся зашифрованно с `INTEGRATION_ENCRYPTION_KEY`.
 
-После deploy зарегистрируйте platform webhook. Скрипт не выводит token или secret:
+После deploy зарегистрируйте platform webhook и native-команды `/start`, `/menu`, `/today`, `/bookings`, `/checks`, `/help`. Скрипт не выводит token или secret:
 
 ```bash
 pnpm telegram:register-platform-webhook -- --dry-run
@@ -96,9 +96,11 @@ curl --silent --output /dev/null --write-out '%{http_code}\n' "$APP_URL/api/webh
 
 1. Public booking показывает ссылку tenant bot, а не `@manclient_bot`.
 2. `/start` в platform bot показывает бизнес-ассистента; подписанная ссылка из кабинета привязывает бизнес-чат и истекает через 15 минут.
-3. Изображение чека сохраняется в private bucket.
-4. Matching receipt подтверждает запись; сомнительный попадает в `NEEDS_ATTENTION`.
-5. Кнопки переноса и отмены не содержат raw booking ID без подписи.
+3. `/today`, `/bookings` и `/checks` показывают только бизнес и роль подключённого сотрудника; STAFF не видит чужие записи и чеки.
+4. Новая запись, чек, решение по оплате, перенос и отмена появляются в бизнес-ассистенте через durable outbox. Ошибка Telegram не откатывает запись.
+5. Изображение чека сохраняется в private bucket.
+6. Matching receipt подтверждает запись; сомнительный попадает в `NEEDS_ATTENTION`.
+7. Кнопки переноса и отмены не содержат raw booking ID без подписи.
 
 ### Rollback Telegram cutover
 
@@ -119,6 +121,8 @@ Webhook URL: `https://<host>/api/webhooks/whatsapp`. GET challenge провер�
 ```bash
 pnpm jobs:expire
 pnpm jobs:reminders
+pnpm jobs:receipts
+pnpm jobs:business-notifications
 ```
 
 Delivery имеет claim state, максимум три попытки и safe error в Message. Метрики для pilot: `FAILED` messages, `NEEDS_ATTENTION` payments, просроченные `PROCESSING` messages и глубина `SCHEDULED` queue.
