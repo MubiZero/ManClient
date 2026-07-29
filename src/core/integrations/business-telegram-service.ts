@@ -34,6 +34,13 @@ export class BusinessTelegramIntegrationError extends Error {
   }
 }
 
+export async function findConnectedBusinessTelegramBot(businessId: string, botId: string) {
+  return prisma.businessTelegramIntegration.findFirst({
+    where: { businessId, botId, status: "ACTIVE" },
+    select: { botUsername: true },
+  });
+}
+
 export async function connectBusinessTelegramBot(
   input: ConnectInput,
   telegram: BusinessTelegramApi = createTelegramApi(input.token),

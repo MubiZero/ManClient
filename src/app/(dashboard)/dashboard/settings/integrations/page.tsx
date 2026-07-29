@@ -1,11 +1,15 @@
 import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { getBusinessTelegramStatus } from "@/core/integrations/business-telegram-service";
+import { getPlatformTelegramCapability } from "@/core/integrations/platform-telegram-capability";
 import type { TelegramDashboardStatus } from "@/core/integrations/telegram-dashboard-service";
 import { TelegramIntegrationForm } from "@/features/dashboard/telegram-integration-form";
 
 export default async function IntegrationsPage() {
   const membership = await requireBusinessAdmin();
-  const current = await getBusinessTelegramStatus(membership.businessId);
+  const [current, capability] = await Promise.all([
+    getBusinessTelegramStatus(membership.businessId),
+    getPlatformTelegramCapability(),
+  ]);
   const initialStatus: TelegramDashboardStatus = current ? {
     status: current.status === "DISCONNECTED" ? "DISCONNECTED" : current.status,
     botUsername: current.botUsername,
@@ -22,7 +26,7 @@ export default async function IntegrationsPage() {
           <p>Бизнес создаёт одного Telegram-бота для клиентов. Владельцы и сотрудники используют общий бизнес-ассистент @manclient_bot.</p>
         </div>
       </div>
-      <TelegramIntegrationForm initialStatus={initialStatus} />
+      <TelegramIntegrationForm initialStatus={initialStatus} managedBotsAvailable={capability.managedBotsAvailable} />
     </section>
   );
 }

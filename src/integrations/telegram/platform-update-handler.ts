@@ -1,9 +1,10 @@
-import { connectBusinessTelegramBot } from "@/core/integrations/business-telegram-service";
+import { connectBusinessTelegramBot, findConnectedBusinessTelegramBot } from "@/core/integrations/business-telegram-service";
 import {
   claimManagedBotIntent,
   completeManagedBotIntent,
   createManagedBotIntent,
   failManagedBotIntent,
+  ManagedBotIntentBusyError,
 } from "@/core/integrations/managed-bot-intent";
 import { consumePlatformChatLink, getPlatformTelegramActor } from "@/core/integrations/platform-chat-link";
 import { handleBusinessBotUpdate } from "@/integrations/telegram/business-bot-handler";
@@ -103,26 +104,15 @@ export async function handlePlatformTelegramUpdate(
   }
 
   if (botTokenPattern.test(text)) {
+    let deleted = true;
     try {
       await dependencies.deleteMessage(actor.chatId, message.message_id);
     } catch {
-      // Continue without repeating the credential; dashboard entry remains the safer path.
+      deleted = false;
     }
-    const platformActor = await getPlatformTelegramActor(actor);
-    if (!platformActor || !["OWNER", "ADMIN"].includes(platformActor.role)) {
-      await dependencies.sendMessage(actor.chatId, "Сначала привяжите этот чат к бизнесу через кабинет ManClient.");
-      return;
-    }
-    try {
-      const connected = await dependencies.connectBot({
-        businessId: platformActor.businessId,
-        actorUserId: platformActor.userId,
-        token: text,
-      });
-      await dependencies.sendMessage(actor.chatId, `Клиентский бот @${connected.botUsername} подключён.`);
-    } catch {
-      await dependencies.sendMessage(actor.chatId, "Не удалось подключить бота. Проверьте токен или откройте настройки интеграции в кабинете.");
-    }
+    await dependencies.sendMessage(actor.chatId, deleted
+      ? "Токены в чате не принимаются. Подключите существующего бота через защищённую форму в кабинете ManClient."
+      : "Не удалось удалить сообщение с токеном. Удалите его вручную, перевыпустите токен в @BotFather и подключите бота через защищённую форму в кабинете ManClient.");
     return;
   }
 
@@ -222,7 +212,8 @@ async function handleManagedBotUpdate(
   let intent: Awaited<ReturnType<typeof claimManagedBotIntent>>;
   try {
     intent = await claimManagedBotIntent({ telegramUserId, botId }, dependencies.now());
-  } catch {
+  } catch (error) {
+    if (error instanceof ManagedBotIntentBusyError) throw error;
     await dependencies.sendMessage(telegramUserId, "Не удалось определить бизнес для этого бота. Откройте нужный бизнес в ManClient и запустите создание ещё раз.");
     return;
   }
@@ -231,6 +222,12 @@ async function handleManagedBotUpdate(
     return;
   }
   try {
+    const existing = await findConnectedBusinessTelegramBot(intent.businessId, botId);
+    if (existing) {
+      await completeManagedBotIntent(intent.id, botId, dependencies.now());
+      await dependencies.sendMessage(telegramUserId, `Клиентский бот @${existing.botUsername} уже подключён.`);
+      return;
+    }
     const token = await dependencies.getManagedBotToken(update.bot.id);
     const connected = await dependencies.connectBot({
       businessId: intent.businessId,
@@ -245,6 +242,7 @@ async function handleManagedBotUpdate(
   } catch {
     await failManagedBotIntent(intent.id, "CONNECTION_FAILED");
     await dependencies.sendMessage(telegramUserId, "Бот создан и принадлежит вам, но ManClient пока не смог подключить его. Повторите подключение позже — создавать нового бота не нужно.");
+    throw new Error("Managed bot connection failed");
   }
 }
 

@@ -70,6 +70,7 @@ enum TelegramConnectionMethod {
 
 enum ManagedBotConnectionStatus {
   PENDING
+  PROCESSING
   COMPLETED
   EXPIRED
   FAILED
@@ -231,6 +232,7 @@ model ManagedBotConnectionIntent {
   displayName           String
   status                ManagedBotConnectionStatus @default(PENDING)
   botId                 String?
+  processingStartedAt   DateTime?
   expiresAt             DateTime
   completedAt           DateTime?
   lastErrorCode         String?

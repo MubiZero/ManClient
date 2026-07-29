@@ -33,7 +33,7 @@ Managed-bot creation starts only from a private chat already linked to an active
 - the linked Telegram user ID;
 - normalized suggested username and display name;
 - expiration time of 30 minutes;
-- `PENDING`, `COMPLETED`, `EXPIRED`, or `FAILED` status;
+- `PENDING`, `PROCESSING`, `COMPLETED`, `EXPIRED`, or `FAILED` status;
 - the resulting Telegram bot ID when known.
 
 Only one pending intent is allowed per membership. Creating a new intent expires the previous one. A `managed_bot` update is accepted only when its creating user matches the intent's Telegram user, the membership remains active with `OWNER` or `ADMIN` role, and the intent has not expired. The Telegram bot ID is globally unique in active integrations.

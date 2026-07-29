@@ -10,6 +10,7 @@ import {
   listBusinessTelegramDestinations,
 } from "@/core/integrations/platform-chat-link";
 import { prisma } from "@/core/database/prisma";
+import { createManagedBotIntent } from "@/core/integrations/managed-bot-intent";
 import { handlePlatformTelegramUpdate } from "@/integrations/telegram/platform-update-handler";
 import type { TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 
@@ -173,7 +174,7 @@ describe("ManClient business assistant", () => {
     }, now)).resolves.toMatchObject({ id: fixture.membership.id });
   });
 
-  it("connects a customer bot only for a linked owner and deletes the token message", async () => {
+  it("deletes bot tokens sent to chat and never uses them", async () => {
     const fixture = await createMembership("OWNER");
     const now = new Date();
     const token = await createPlatformChatLink({
@@ -202,11 +203,7 @@ describe("ManClient business assistant", () => {
     );
 
     expect(deleted).toEqual([4]);
-    expect(connections).toEqual([{
-      businessId: fixture.business.id,
-      actorUserId: fixture.user.id,
-      token: "10009:customer-bot-secret",
-    }]);
+    expect(connections).toEqual([]);
   });
 
   it("does not accept a bot token from an unlinked chat", async () => {
@@ -223,6 +220,25 @@ describe("ManClient business assistant", () => {
 
     expect(deleted).toEqual([5]);
     expect(connections).toEqual([]);
+  });
+
+  it("fails closed when Telegram cannot delete a token message", async () => {
+    const connections: unknown[] = [];
+    const messages: Array<{ text: string }> = [];
+    const deps = dependencies({
+      messages,
+      connectBot: async (input) => { connections.push(input); return { botUsername: "never" }; },
+    });
+    deps.deleteMessage = async () => { throw new Error("forbidden"); };
+
+    await handlePlatformTelegramUpdate(
+      { update_id: 6, message: { message_id: 6, from: { id: 60 }, chat: { id: 60, type: "private" }, text: "10011:exposed-secret" } },
+      deps,
+    );
+
+    expect(connections).toEqual([]);
+    expect(messages.at(-1)?.text).toContain("перевыпустите токен");
+    expect(JSON.stringify(messages)).not.toContain("exposed-secret");
   });
 
   it("replaces a chat destination when another membership links it", async () => {
@@ -296,6 +312,87 @@ describe("ManClient business assistant", () => {
     }]);
     expect(messages.at(-1)?.text).toContain("@platform_business_bot подключён");
     expect(JSON.stringify(messages)).not.toContain("managed-customer-secret");
+  });
+
+  it("returns a failed managed connection to pending and succeeds on retry", async () => {
+    const fixture = await createMembership("OWNER");
+    const now = new Date("2026-07-30T09:00:00.000Z");
+    const link = await createPlatformChatLink({
+      membershipId: fixture.membership.id,
+      actorUserId: fixture.user.id,
+      expiresAt: new Date(now.getTime() + 15 * 60_000),
+    });
+    let tokenAttempts = 0;
+    const connections: Array<Record<string, unknown>> = [];
+    const deps = dependencies({
+      now: () => now,
+      getManagedBotToken: async () => {
+        tokenAttempts += 1;
+        if (tokenAttempts === 1) throw new Error("Telegram unavailable");
+        return "9010:retry-secret";
+      },
+      connectBot: async input => { connections.push(input); return { botUsername: "retry_bot" }; },
+    });
+    await handlePlatformTelegramUpdate({
+      update_id: 80,
+      message: { message_id: 80, from: { id: 7010 }, chat: { id: 7010, type: "private" }, text: `/start b_${link}` },
+    }, deps);
+    await handlePlatformTelegramUpdate({
+      update_id: 81,
+      message: { message_id: 81, from: { id: 7010 }, chat: { id: 7010, type: "private" }, text: "Создать клиентского бота" },
+    }, deps);
+    const managedUpdate = {
+      update_id: 82,
+      managed_bot: { user: { id: 7010 }, bot: { id: 9010, is_bot: true as const, username: "retry_bot" } },
+    };
+
+    await expect(handlePlatformTelegramUpdate(managedUpdate, deps)).rejects.toThrow("connection failed");
+    await expect(prisma.managedBotConnectionIntent.findFirstOrThrow({ where: { businessId: fixture.business.id } }))
+      .resolves.toMatchObject({ status: "PENDING", botId: null, lastErrorCode: "CONNECTION_FAILED" });
+
+    await expect(handlePlatformTelegramUpdate(managedUpdate, deps)).resolves.toBeUndefined();
+    expect(connections).toHaveLength(1);
+    await expect(prisma.managedBotConnectionIntent.findFirstOrThrow({ where: { businessId: fixture.business.id } }))
+      .resolves.toMatchObject({ status: "COMPLETED", botId: "9010" });
+  });
+
+  it("completes the intent when the bot was connected before finalization", async () => {
+    const fixture = await createMembership("OWNER");
+    const now = new Date("2026-07-30T10:00:00.000Z");
+    await prisma.businessTelegramIdentity.create({
+      data: { membershipId: fixture.membership.id, telegramUserId: "7011" },
+    });
+    await createManagedBotIntent({
+      membershipId: fixture.membership.id,
+      businessId: fixture.business.id,
+      userId: fixture.user.id,
+      role: "OWNER",
+      telegramUserId: "7011",
+    }, { displayName: "Recovered", suggestedUsername: "recovered_customer_bot" }, now);
+    await prisma.businessTelegramIntegration.create({
+      data: {
+        businessId: fixture.business.id,
+        publicId: `recovered-${fixture.business.id}`,
+        botId: "9011",
+        botUsername: "recovered_customer_bot",
+        status: "ACTIVE",
+        connectionMethod: "MANAGED",
+        managedOwnerTelegramUserId: "7011",
+        managedAt: now,
+        connectedByUserId: fixture.user.id,
+        connectedAt: now,
+      },
+    });
+    let exported = false;
+
+    await handlePlatformTelegramUpdate({
+      update_id: 83,
+      managed_bot: { user: { id: 7011 }, bot: { id: 9011, is_bot: true, username: "recovered_customer_bot" } },
+    }, dependencies({ getManagedBotToken: async () => { exported = true; return "9011:unused"; }, now: () => now }));
+
+    expect(exported).toBe(false);
+    await expect(prisma.managedBotConnectionIntent.findFirstOrThrow({ where: { businessId: fixture.business.id } }))
+      .resolves.toMatchObject({ status: "COMPLETED", botId: "9011" });
   });
 
   async function createMembership(role: "OWNER" | "ADMIN") {

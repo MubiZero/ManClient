@@ -14,6 +14,14 @@ type ManagedBotNames = {
 };
 
 const intentLifetimeMs = 30 * 60_000;
+const processingLeaseMs = 60_000;
+
+export class ManagedBotIntentBusyError extends Error {
+  constructor() {
+    super("Managed bot connection is processing");
+    this.name = "ManagedBotIntentBusyError";
+  }
+}
 
 export async function createManagedBotIntent(actor: ManagedBotActor, names: ManagedBotNames, now = new Date()) {
   const displayName = names.displayName.trim();
@@ -78,27 +86,45 @@ export async function claimManagedBotIntent(
         orderBy: { completedAt: "desc" },
       });
       if (completed) return completed;
+      const processing = await transaction.managedBotConnectionIntent.findFirst({
+        where: {
+          telegramUserId: input.telegramUserId,
+          botId: input.botId,
+          status: "PROCESSING",
+          expiresAt: { gt: now },
+          membership: { role: { in: ["OWNER", "ADMIN"] } },
+        },
+        include: { membership: { select: { userId: true } } },
+        orderBy: { updatedAt: "desc" },
+      });
+      if (processing) {
+        const leaseExpiredAt = new Date(now.getTime() - processingLeaseMs);
+        const reclaimed = await transaction.managedBotConnectionIntent.updateMany({
+          where: { id: processing.id, status: "PROCESSING", processingStartedAt: { lte: leaseExpiredAt } },
+          data: { processingStartedAt: now, lastErrorCode: "STALE_PROCESSING_RECLAIMED" },
+        });
+        if (reclaimed.count === 1) return processing;
+        throw new ManagedBotIntentBusyError();
+      }
       throw new Error("Managed bot connection intent not found");
     }
 
     if (intent.botId && intent.botId !== input.botId) {
       throw new Error("Managed bot connection intent not found");
     }
-    if (!intent.botId) {
-      const claimed = await transaction.managedBotConnectionIntent.updateMany({
-        where: { id: intent.id, status: "PENDING", botId: null, expiresAt: { gt: now } },
-        data: { botId: input.botId },
-      });
-      if (claimed.count !== 1) throw new Error("Managed bot connection intent not found");
-    }
-    return { ...intent, botId: input.botId };
+    const claimed = await transaction.managedBotConnectionIntent.updateMany({
+      where: { id: intent.id, status: "PENDING", expiresAt: { gt: now } },
+      data: { botId: input.botId, status: "PROCESSING", processingStartedAt: now },
+    });
+    if (claimed.count !== 1) throw new Error("Managed bot connection intent not found");
+    return { ...intent, botId: input.botId, status: "PROCESSING" as const };
   }, { isolationLevel: "Serializable" });
 }
 
 export async function completeManagedBotIntent(intentId: string, botId: string, now = new Date()) {
   await prisma.managedBotConnectionIntent.updateMany({
-    where: { id: intentId, botId, status: "PENDING" },
-    data: { status: "COMPLETED", completedAt: now, lastErrorCode: null },
+    where: { id: intentId, botId, status: { in: ["PENDING", "PROCESSING"] } },
+    data: { status: "COMPLETED", completedAt: now, processingStartedAt: null, lastErrorCode: null },
   });
   const intent = await prisma.managedBotConnectionIntent.findUnique({ where: { id: intentId } });
   if (!intent || intent.botId !== botId || intent.status !== "COMPLETED") {
@@ -110,6 +136,6 @@ export async function completeManagedBotIntent(intentId: string, botId: string, 
 export async function failManagedBotIntent(intentId: string, errorCode: string) {
   return prisma.managedBotConnectionIntent.update({
     where: { id: intentId },
-    data: { lastErrorCode: errorCode.slice(0, 64) },
+    data: { status: "PENDING", botId: null, processingStartedAt: null, lastErrorCode: errorCode.slice(0, 64) },
   });
 }

@@ -60,10 +60,58 @@ describe("managed customer bot connection intent", () => {
     await expect(claimManagedBotIntent({ telegramUserId: "9999", botId: "9001" }, now))
       .rejects.toThrow("not found");
     await expect(claimManagedBotIntent({ telegramUserId: "7003", botId: "9001" }, now))
-      .resolves.toMatchObject({ id: intent.id, businessId: actor.businessId });
+      .resolves.toMatchObject({ id: intent.id, businessId: actor.businessId, status: "PROCESSING" });
+
+    await expect(claimManagedBotIntent({ telegramUserId: "7003", botId: "9001" }, now))
+      .rejects.toThrow("is processing");
 
     await completeManagedBotIntent(intent.id, "9001", now);
     await expect(completeManagedBotIntent(intent.id, "9001", now)).resolves.toMatchObject({ status: "COMPLETED" });
+  });
+
+  it("allows only one concurrent worker to claim an intent", async () => {
+    const actor = await createActor("OWNER", "7004");
+    await createManagedBotIntent(actor, {
+      displayName: "Concurrent Bot",
+      suggestedUsername: "concurrent_customer_bot",
+    }, now);
+
+    const results = await Promise.allSettled([
+      claimManagedBotIntent({ telegramUserId: "7004", botId: "9002" }, now),
+      claimManagedBotIntent({ telegramUserId: "7004", botId: "9002" }, now),
+    ]);
+
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+  });
+
+  it("reclaims a stale processing intent for the same managed bot", async () => {
+    const actor = await createActor("OWNER", "7008");
+    const intent = await createManagedBotIntent(actor, {
+      displayName: "Recoverable Bot",
+      suggestedUsername: "recoverable_customer_bot",
+    }, now);
+    await claimManagedBotIntent({ telegramUserId: "7008", botId: "9008" }, now);
+    await prisma.managedBotConnectionIntent.update({
+      where: { id: intent.id },
+      data: { processingStartedAt: new Date(now.getTime() - 61_000) },
+    });
+
+    await expect(claimManagedBotIntent({ telegramUserId: "7008", botId: "9008" }, now))
+      .resolves.toMatchObject({ id: intent.id, status: "PROCESSING", botId: "9008" });
+  });
+
+  it("rejects an expired intent and an owner whose membership was revoked", async () => {
+    const expired = await createActor("OWNER", "7005");
+    await createManagedBotIntent(expired, { displayName: "Expired", suggestedUsername: "expired_customer_bot" }, now);
+    await expect(claimManagedBotIntent({ telegramUserId: "7005", botId: "9003" }, new Date(now.getTime() + 31 * 60_000)))
+      .rejects.toThrow("not found");
+
+    const revoked = await createActor("OWNER", "7006");
+    await createManagedBotIntent(revoked, { displayName: "Revoked", suggestedUsername: "revoked_customer_bot" }, now);
+    await prisma.membership.delete({ where: { id: revoked.membershipId } });
+    await expect(claimManagedBotIntent({ telegramUserId: "7006", botId: "9004" }, now))
+      .rejects.toThrow("not found");
   });
 
   async function createActor(role: "OWNER" | "ADMIN" | "STAFF", telegramUserId: string) {

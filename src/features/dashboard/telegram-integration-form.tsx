@@ -6,7 +6,13 @@ import type { TelegramDashboardStatus } from "@/core/integrations/telegram-dashb
 
 type RequestState = "idle" | "checking";
 
-export function TelegramIntegrationForm({ initialStatus }: { initialStatus: TelegramDashboardStatus }) {
+export function TelegramIntegrationForm({
+  initialStatus,
+  managedBotsAvailable = true,
+}: {
+  initialStatus: TelegramDashboardStatus;
+  managedBotsAvailable?: boolean;
+}) {
   const [integration, setIntegration] = useState(initialStatus);
   const [requestState, setRequestState] = useState<RequestState>("idle");
   const [token, setToken] = useState("");
@@ -82,12 +88,13 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
           <p className="integration-help">Владельцы и команда уже работают в готовом <strong>@manclient_bot</strong>. Telegram привяжет ваш аккаунт к бизнесу, а клиентский бот сразу будет принадлежать вам.</p>
         </div>
         <div className="integration-actions">
-          <button className="primary-button" type="button" disabled={assistantState === "opening"} onClick={openBusinessAssistant}>
+          <button className="primary-button" type="button" disabled={assistantState === "opening" || (!configured && !managedBotsAvailable)} onClick={openBusinessAssistant}>
             {assistantState === "opening" ? "Открываем Telegram..." : configured ? "Открыть @manclient_bot" : "Создать клиентского бота"}
           </button>
           {!configured ? <button className="secondary-action" type="button" onClick={() => setShowExistingBot(true)}>Подключить существующего бота</button> : null}
         </div>
         {assistantError ? <p className="integration-error" role="alert">{assistantError}</p> : null}
+        {!configured && !managedBotsAvailable ? <p className="integration-error" role="alert">Автоматическое создание временно недоступно: режим управления ботами не включён у @manclient_bot. Можно подключить уже созданного бота.</p> : null}
         <small>Создание подтверждается в Telegram. ManClient не получает пароль, код входа или Telegram-сессию владельца.</small>
       </section>
 
@@ -104,9 +111,6 @@ export function TelegramIntegrationForm({ initialStatus }: { initialStatus: Tele
             <p className="integration-bot-name">@{integration.botUsername}</p>
             <p className="integration-help">Это единственный бот, который создаёт бизнес. Он принимает записи и оплату клиентов; команда продолжает работать через @manclient_bot.</p>
             <div className="integration-actions">
-              <button className="secondary-action" type="button" disabled={requestState === "checking"} onClick={openBusinessAssistant}>
-                Создать другого бота
-              </button>
               <button className="quiet-action" type="button" disabled={requestState === "checking"} onClick={() => { setRotating(true); setShowExistingBot(true); setConfirmDisconnect(false); }}>
                 Подключить существующего
               </button>

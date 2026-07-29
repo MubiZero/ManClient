@@ -51,4 +51,14 @@ describe("business settings forms", () => {
     expect(html).toContain("@manclient_bot");
     expect(html).not.toContain("Токен клиентского бота");
   });
+
+  it("offers the manual fallback when managed bot creation is unavailable", () => {
+    const html = renderToStaticMarkup(<TelegramIntegrationForm managedBotsAvailable={false} initialStatus={{
+      status: "DISCONNECTED", botUsername: null, connectedAt: null, lastWebhookError: null,
+    }} />);
+
+    expect(html).toContain("Автоматическое создание временно недоступно");
+    expect(html).toContain("Подключить существующего бота");
+    expect(html).toContain("disabled");
+  });
 });
