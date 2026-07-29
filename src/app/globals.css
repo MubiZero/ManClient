@@ -9,11 +9,16 @@
   --brand-strong: #0e5133;
   --brand-soft: #e4f2ea;
   --error: #a62b2b;
+  --warning: #8a5b00;
+  --info: #175c8c;
+  --focus: #087443;
+  --surface-subtle: #edf3ef;
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 24px;
   --shadow: 0 1px 2px rgba(22, 33, 27, .06), 0 12px 32px rgba(22, 33, 27, .08);
   --dur-short: 150ms;
+  --dur-medium: 250ms;
   --ease: cubic-bezier(.2, 0, 0, 1);
   font-family: "Aptos", "Segoe UI", system-ui, sans-serif;
 }
@@ -23,6 +28,50 @@ body { margin: 0; background: var(--bg); color: var(--text); }
 button, input { font: inherit; }
 button { touch-action: manipulation; }
 button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid #0b7042; outline-offset: 3px; }
+
+.ui-button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; border: 1px solid transparent; border-radius: var(--radius-sm); font-weight: 700; text-decoration: none; cursor: pointer; touch-action: manipulation; transition: transform var(--dur-short) var(--ease), background-color var(--dur-short) var(--ease), border-color var(--dur-short) var(--ease), color var(--dur-short) var(--ease); }
+.ui-button:active { transform: scale(.98); }
+.ui-button:disabled { cursor: wait; opacity: .62; }
+.ui-button-primary { background: var(--brand); color: white; }
+.ui-button-secondary { border-color: var(--brand); background: white; color: var(--brand-strong); }
+.ui-button-quiet { background: transparent; color: var(--muted); }
+.ui-button-danger { background: var(--error); color: white; }
+.ui-button-spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ui-spin .7s linear infinite; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+
+.ui-field { display: grid; gap: 8px; color: #33423a; }
+.ui-field-label { font-size: .9rem; font-weight: 700; }
+.ui-input { width: 100%; min-height: 48px; padding: 12px 14px; border: 1px solid #9eada5; border-radius: var(--radius-sm); background: white; color: var(--text); }
+.ui-input[aria-invalid="true"] { border-color: var(--error); box-shadow: inset 0 0 0 1px var(--error); }
+.ui-field-hint, .ui-field-error { font-size: .82rem; line-height: 1.4; }
+.ui-field-hint { color: var(--muted); }
+.ui-field-error { color: var(--error); }
+
+.status-badge { width: max-content; display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: 999px; background: #edf1ef; color: #3d4b43; font-size: .8rem; font-weight: 700; }
+.status-badge-success { background: #dff3e8; color: #125b38; }
+.status-badge-warning { background: #fff2cc; color: #694c00; }
+.status-badge-danger { background: #fae8e8; color: var(--error); }
+.status-badge-info { background: #e4f0f7; color: var(--info); }
+
+.ui-empty-state { min-height: 240px; display: grid; align-content: center; justify-items: start; gap: 20px; padding: 32px; border: 1px dashed #adc0b5; border-radius: var(--radius-md); background: var(--surface); }
+.ui-empty-state h2, .ui-empty-state p { margin: 0; }
+.ui-empty-state p { max-width: 56ch; margin-top: 8px; color: var(--muted); line-height: 1.5; }
+.ui-empty-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: var(--brand-soft); color: var(--brand-strong); font-size: 1.5rem; }
+
+.ui-dialog { width: min(calc(100% - 32px), 520px); padding: 0; border: 0; border-radius: var(--radius-md); color: var(--text); box-shadow: 0 4px 12px rgba(22,33,27,.12), 0 24px 64px rgba(22,33,27,.18); }
+.ui-dialog::backdrop { background: rgba(10, 25, 17, .48); }
+.ui-dialog-content { display: grid; gap: 16px; padding: 28px; }
+.ui-dialog-content h2, .ui-dialog-content p { margin: 0; }
+.ui-dialog-content p { color: var(--muted); line-height: 1.5; }
+.ui-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+
+@media (hover: hover) {
+  .ui-button-primary:hover { background: var(--brand-strong); }
+  .ui-button-secondary:hover { background: var(--brand-soft); }
+  .ui-button-quiet:hover { background: var(--surface-subtle); color: var(--text); }
+  .ui-button-danger:hover { background: #842121; }
+  .ui-input:hover { border-color: #63766b; }
+}
 
 .booking-page { min-height: 100dvh; padding: 0 max(20px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)); }
 .public-header { max-width: 920px; margin: 0 auto; min-height: 72px; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: .9rem; }
