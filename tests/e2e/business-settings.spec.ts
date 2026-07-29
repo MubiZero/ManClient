@@ -60,6 +60,33 @@ test("owner configures a specialist, resource and published service", async ({ p
   await expect(page.getByRole("article").filter({ hasText: serviceName })).toContainText("Опубликована");
 });
 
+test("owner configures schedule, lunch break and a day off", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/dashboard/settings/schedule");
+
+  const monday = page.getByRole("group", { name: "Понедельник" });
+  await monday.getByLabel("Начало").fill("09:00");
+  await monday.getByLabel("Конец").fill("18:00");
+  await monday.getByLabel("Перерыв").check();
+  await monday.getByLabel("С").fill("12:00");
+  await monday.getByLabel("До").fill("13:00");
+  await page.getByRole("button", { name: "Скопировать на будни" }).click();
+  await page.getByRole("button", { name: "Сохранить расписание" }).click();
+  await expect(page.getByText("Расписание сохранено")).toBeVisible();
+
+  await page.getByLabel("Дата").fill("2026-08-10");
+  await page.getByLabel("Комментарий").fill("Праздник");
+  await page.getByRole("button", { name: "Добавить изменение" }).click();
+  await expect(page.getByText("Изменение даты добавлено")).toBeVisible();
+  await expect(page.getByText("Выходной · Праздник", { exact: true }).first()).toBeVisible();
+
+  await page.goto("/b/demo-barber");
+  await page.getByRole("button", { name: /Мужская стрижка/ }).click();
+  await page.getByRole("button", { name: /Алишер/ }).click();
+  await page.getByLabel("Дата записи").fill("2026-08-10");
+  await expect(page.getByText("На эту дату свободного времени нет")).toBeVisible();
+});
+
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");

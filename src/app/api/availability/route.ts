@@ -2,6 +2,7 @@ import { z, ZodError } from "zod";
 
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { prisma } from "@/core/database/prisma";
+import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 
 const querySchema = z.object({
   branchId: z.string().min(1),
@@ -24,6 +25,7 @@ export async function GET(request: Request): Promise<Response> {
       },
       select: {
         durationMinutes: true,
+        branch: { select: { timeZone: true } },
         resources: { select: { resourceId: true } },
       },
     });
@@ -31,8 +33,8 @@ export async function GET(request: Request): Promise<Response> {
       return Response.json({ error: "INVALID_CONFIGURATION" }, { status: 404 });
     }
 
-    const rangeStartsAt = new Date(`${query.date}T00:00:00+05:00`);
-    const rangeEndsAt = new Date(rangeStartsAt.getTime() + 24 * 60 * 60_000);
+    const rangeStartsAt = localDateTimeToUtc(query.date, "00:00", service.branch.timeZone);
+    const rangeEndsAt = localDateTimeToUtc(nextDate(query.date), "00:00", service.branch.timeZone);
     const starts = await getAvailableStarts({
       branchId: query.branchId,
       serviceId: query.serviceId,
@@ -52,4 +54,10 @@ export async function GET(request: Request): Promise<Response> {
 
     throw error;
   }
+}
+
+function nextDate(value: string): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }

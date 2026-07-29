@@ -14,10 +14,13 @@ type OnboardingPageProps = { searchParams: Promise<{ error?: string; step?: stri
 export default async function DashboardOnboardingPage({ searchParams }: OnboardingPageProps) {
   const membership = await requireBusinessAdmin();
   const { error, step: requestedStep } = await searchParams;
-  const [business, service, branch] = await Promise.all([
+  const [business, service, branch, staffCount, scheduleCount, telegramCount] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: membership.businessId }, select: { slug: true } }),
-    prisma.service.findFirst({ where: { branch: { businessId: membership.businessId } }, orderBy: { createdAt: "asc" } }),
-    prisma.branch.findFirst({ where: { businessId: membership.businessId }, orderBy: { createdAt: "asc" }, select: { recipientCardEncrypted: true } }),
+    prisma.service.findFirst({ where: { branch: { businessId: membership.businessId }, archivedAt: null }, orderBy: { createdAt: "asc" } }),
+    prisma.branch.findFirst({ where: { businessId: membership.businessId, archivedAt: null }, orderBy: { createdAt: "asc" }, select: { recipientCardEncrypted: true } }),
+    prisma.staffMember.count({ where: { businessId: membership.businessId, archivedAt: null } }),
+    prisma.businessScheduleRule.count({ where: { branch: { businessId: membership.businessId, archivedAt: null } } }),
+    prisma.businessTelegramIntegration.count({ where: { businessId: membership.businessId, status: "ACTIVE" } }),
   ]);
   const currentStep: 1 | 2 | 3 = branch?.recipientCardEncrypted ? 3 : service && requestedStep !== "service" ? 2 : 1;
 
@@ -71,7 +74,13 @@ export default async function DashboardOnboardingPage({ searchParams }: Onboardi
         <OnboardingProgress currentStep={currentStep} />
         {currentStep === 1 ? <ServiceSetupForm action={saveService} service={service ?? undefined} error={error === "service" ? "Проверьте название, длительность и стоимость услуги." : undefined} /> : null}
         {currentStep === 2 ? <PaymentSetupForm action={saveCard} error={error === "card" ? "Введите 16 цифр карты DushanbeCity и попробуйте ещё раз." : undefined} /> : null}
-        {currentStep === 3 ? <OnboardingChecklist businessSlug={business.slug} /> : null}
+        {currentStep === 3 ? <OnboardingChecklist businessSlug={business.slug} readiness={{
+          service: Boolean(service?.isPublished),
+          staff: staffCount > 0,
+          schedule: scheduleCount > 0,
+          payment: Boolean(branch?.recipientCardEncrypted),
+          telegram: telegramCount > 0,
+        }} /> : null}
       </div>
     </section>
   );
