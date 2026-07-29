@@ -6,6 +6,11 @@ export type ReserveAllocationInput = {
   resourceIds: string[];
   startsAt: Date;
   durationMinutes: number;
-  expiresAt: Date;
+  expiresAt: Date | null;
   amountDiram: number;
+  status?: "PENDING_PAYMENT" | "CONFIRMED";
+  source?: "WEB" | "TELEGRAM" | "DASHBOARD";
+  actor?: { type: "customer" | "membership"; id: string };
+  confirmedAt?: Date;
+  confirmedBy?: string;
 };

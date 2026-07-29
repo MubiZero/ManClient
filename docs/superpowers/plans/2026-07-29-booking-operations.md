@@ -11,11 +11,19 @@
 - OWNER/ADMIN видят все записи своего бизнеса; STAFF только назначенные себе.
 - Ни один ID из URL/form не считается доверенным.
 - Активные записи: `PENDING_PAYMENT`, `CONFIRMED`; отменённые и истёкшие остаются в истории.
-- Ручная запись создаётся `CONFIRMED` без фиктивной оплаты и получает audit event с business actor.
+- Ручная запись создаётся `CONFIRMED`, получает честный `Payment.PENDING` без фиктивного чека и audit event с business actor.
 - Подтверждение pending-записи не подделывает банковскую проверку; это явное ручное действие бизнеса с отдельным audit event.
 - Перенос сначала проверяет effective schedule и конфликты, старое время сохраняется при ошибке.
 - Даты форматируются в timezone филиала; фильтры живут в URL.
 - Не публиковать массовые/пакетные действия в этой волне.
+
+### Task 0: Preserve booking source and business action state
+
+**Files:** Prisma schema and additive migration, booking allocation/payment confirmation.
+
+- [ ] Add `BookingSource`, nullable expiry, confirmation actor/time and cancellation reason.
+- [ ] Backfill receipt confirmation time without inventing receipt data.
+- [ ] Make web and Telegram booking source explicit and keep old callers compatible.
 
 ### Task 1: Domain contracts and tenant-aware reads
 
@@ -38,7 +46,7 @@
 - Create `src/core/booking-operations/booking-command-service.ts`
 - Test `tests/integration/booking-operations/commands.test.ts`
 
-- [ ] Implement `createManualBooking` using service configuration, customer upsert, availability and serializable conflict check; create `CONFIRMED` booking and audit without a Payment row.
+- [ ] Implement `createManualBooking` using service configuration, customer upsert, availability and serializable conflict check; create `CONFIRMED` booking with `Payment.PENDING` and audit without fake receipt data.
 - [ ] Implement idempotent `confirmBooking` only for business-owned `PENDING_PAYMENT`, with `booking.confirmed_manually` audit.
 - [ ] Implement `rescheduleBusinessBooking` with availability, `excludeBookingId`, conflict recheck and audit.
 - [ ] Implement `cancelBusinessBooking` through the existing cancellation boundary with membership actor and stable errors.

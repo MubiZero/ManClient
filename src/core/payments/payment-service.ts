@@ -81,6 +81,7 @@ export async function confirmFromReceipt(input: ReceiptInput) {
         receipt.amountDiram === payment.amountDiram &&
         receipt.recipientCardSuffix === payment.booking.branch.recipientCardLast4 &&
         receipt.operationAt >= payment.booking.createdAt &&
+        payment.booking.expiresAt !== null &&
         receipt.operationAt <= payment.booking.expiresAt;
       if (!isMatching || payment.booking.status !== "PENDING_PAYMENT") {
         return transaction.payment.update({
@@ -111,7 +112,7 @@ export async function confirmFromReceipt(input: ReceiptInput) {
       });
       await transaction.booking.update({
         where: { id: payment.bookingId },
-        data: { status: "CONFIRMED" },
+        data: { status: "CONFIRMED", confirmedAt: new Date(), confirmedBy: "receipt", expiresAt: null },
       });
       await writeAuditEvent({
         businessId: payment.businessId,

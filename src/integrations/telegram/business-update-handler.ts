@@ -267,6 +267,7 @@ async function createBookingForConversation(
   const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { slug: true } });
   await assertPaymentCardConfigured(required(session.data.branchId));
   const booking = await createPendingBooking({
+    source: "TELEGRAM",
     businessSlug: business.slug,
     branchId: required(session.data.branchId),
     serviceId: required(session.data.serviceId),

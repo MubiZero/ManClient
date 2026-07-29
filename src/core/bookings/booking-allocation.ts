@@ -69,6 +69,10 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
         startsAt: input.startsAt,
         endsAt,
         expiresAt: input.expiresAt,
+        status: input.status,
+        source: input.source ?? "WEB",
+        confirmedAt: input.confirmedAt,
+        confirmedBy: input.confirmedBy,
         resources: {
           create: input.resourceIds.map((resourceId) => ({ resourceId })),
         },
@@ -85,9 +89,9 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
       businessId: branch.businessId,
       bookingId: booking.id,
       type: "booking.created",
-      actorType: "customer",
-      actorId: input.customerId,
-      metadata: { startsAt: input.startsAt.toISOString(), staffId: input.staffId },
+      actorType: input.actor?.type ?? "customer",
+      actorId: input.actor?.id ?? input.customerId,
+      metadata: { startsAt: input.startsAt.toISOString(), staffId: input.staffId, source: input.source ?? "WEB" },
     }, transaction);
     return booking;
   });

@@ -17,9 +17,10 @@ const createBookingSchema = z.object({
     name: z.string().trim().min(1).max(120),
     phone: z.string().regex(/^\+992\d{9}$/),
   }),
+  source: z.enum(["WEB", "TELEGRAM"]).default("WEB"),
 });
 
-export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+export type CreateBookingInput = z.input<typeof createBookingSchema>;
 
 export class BookingValidationError extends Error {
   constructor(message: string) {
@@ -96,6 +97,8 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
     durationMinutes: service.durationMinutes,
     expiresAt,
     amountDiram: service.amountDiram,
+    source: validatedInput.source,
+    actor: { type: "customer", id: customer.id },
   });
 
   if (!booking.payment) {
