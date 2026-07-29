@@ -75,7 +75,17 @@ describe("tenant Telegram booking journey", () => {
     expect(findUrl(sent.at(-1), "Оплатить")).toMatch(/^http:\/\/pay\.expresspay\.tj\//);
 
     await callback(context, dependencies, sent, "Я оплатил", 11);
+    const workingStoreReceipt = dependencies.storeReceipt;
+    dependencies.storeReceipt = async () => { throw new Error("storage unavailable"); };
     await send(context, dependencies, { update_id: 12, message: { chat: { id: 701 }, photo: [{ file_id: "receipt" }] } });
+
+    expect(sent.at(-1)?.text).toContain("Отправьте изображение ещё раз");
+    await expect(prisma.booking.findFirst({
+      where: { businessId: fixture.business.id, customer: { telegramChatId: "701" } },
+    })).resolves.toMatchObject({ status: "PENDING_PAYMENT" });
+
+    dependencies.storeReceipt = workingStoreReceipt;
+    await send(context, dependencies, { update_id: 13, message: { chat: { id: 701 }, photo: [{ file_id: "receipt" }] } });
 
     const booking = await prisma.booking.findFirstOrThrow({
       where: { businessId: fixture.business.id, customer: { telegramChatId: "701" } },

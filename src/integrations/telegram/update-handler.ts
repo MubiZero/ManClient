@@ -93,9 +93,23 @@ export async function handleTelegramUpdate(businessId: string, update: TelegramU
   }
 
   const photo = message.photo.at(-1)!;
-  const image = await dependencies.downloadPhoto(photo.file_id);
   const storageKey = `receipts/${payment.businessId}/${randomUUID()}.jpg`;
-  await dependencies.storeReceipt({ storageKey, contentType: "image/jpeg", body: image });
+  let image: Uint8Array;
+  try {
+    image = await dependencies.downloadPhoto(photo.file_id);
+    await dependencies.storeReceipt({ storageKey, contentType: "image/jpeg", body: image });
+  } catch (error) {
+    console.error("Receipt storage failed", {
+      paymentId: payment.id,
+      error: error instanceof Error ? error.message : "Unknown receipt storage error",
+    });
+    try {
+      await dependencies.sendMessage(chatId, "Не удалось сохранить чек из-за временной ошибки. Отправьте изображение ещё раз через минуту.");
+    } catch {
+      // The payment stays pending, so a later receipt image can still be processed.
+    }
+    return;
+  }
   await writeAuditEvent({
     businessId: payment.businessId,
     bookingId: payment.bookingId,
