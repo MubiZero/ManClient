@@ -1,0 +1,1 @@
+export default function BookingDetailsLoading() { return <section className="dashboard-content route-loading" role="status" aria-label="Загружаем запись"><span className="sr-only">Загружаем запись</span><div className="skeleton skeleton-title" /><div className="skeleton skeleton-card" /><div className="skeleton skeleton-row" /></section>; }
