@@ -28,7 +28,7 @@ export async function createBookingFixture() {
     data: { businessId: business.id, userId: user.id, role: "STAFF" },
   });
   const staff = await prisma.staffMember.create({
-    data: { branchId: branch.id, membershipId: membership.id, displayName: "Alisher" },
+    data: { businessId: business.id, membershipId: membership.id, displayName: "Alisher", branches: { create: { branchId: branch.id, isPrimary: true } } },
   });
   const service = await prisma.service.create({
     data: {

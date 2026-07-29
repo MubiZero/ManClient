@@ -76,6 +76,7 @@ model Business {
   slug                             String                        @unique
   branches                         Branch[]
   memberships                      Membership[]
+  staffMembers                     StaffMember[]
   bookings                         Booking[]
   customers                        Customer[]
   payments                         Payment[]
@@ -97,6 +98,8 @@ model Branch {
   businessId             String
   name                   String
   slug                   String
+  address                String?
+  phone                  String?
   timeZone               String                 @default("Asia/Dushanbe")
   recipientCardEncrypted String?
   recipientCardLast4     String?
@@ -104,8 +107,12 @@ model Branch {
   services               Service[]
   resources              Resource[]
   scheduleRules          BusinessScheduleRule[]
-  staffMembers           StaffMember[]
+  staffAssignments       StaffBranch[]
+  staffScheduleRules     StaffScheduleRule[]
+  scheduleBreaks         ScheduleBreak[]
+  scheduleExceptions     ScheduleException[]
   bookings               Booking[]
+  archivedAt             DateTime?
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 
@@ -246,16 +253,33 @@ model InboundChannelUpdate {
 
 model StaffMember {
   id           String     @id @default(cuid())
-  branchId     String
-  membershipId String     @unique
+  businessId   String
+  membershipId String?    @unique
   displayName  String
-  branch       Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  phone        String?
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership   Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  branches     StaffBranch[]
   services     Service[]
   bookings     Booking[]
+  scheduleRules StaffScheduleRule[]
+  scheduleBreaks ScheduleBreak[]
+  scheduleExceptions ScheduleException[]
+  archivedAt   DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  @@index([businessId, archivedAt])
+}
+
+model StaffBranch {
+  staffId   String
+  branchId  String
+  isPrimary Boolean     @default(false)
+  staff     StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  branch    Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([staffId, branchId])
   @@index([branchId])
 }
 
@@ -263,8 +287,11 @@ model Service {
   id              String            @id @default(cuid())
   branchId        String
   name            String
+  description     String?
   durationMinutes Int
   amountDiram     Int
+  isPublished     Boolean           @default(false)
+  archivedAt      DateTime?
   branch          Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
   staffMembers    StaffMember[]
   resources       ServiceResource[]
@@ -279,6 +306,10 @@ model Resource {
   id        String            @id @default(cuid())
   branchId  String
   name      String
+  kind      String            @default("OTHER")
+  capacity  Int               @default(1)
+  isAvailable Boolean         @default(true)
+  archivedAt DateTime?
   branch    Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
   services  ServiceResource[]
   bookings  BookingResource[]
@@ -425,4 +456,53 @@ model BusinessScheduleRule {
   updatedAt DateTime @updatedAt
 
   @@index([branchId, dayOfWeek])
+}
+
+model StaffScheduleRule {
+  id        String      @id @default(cuid())
+  staffId   String
+  branchId  String
+  dayOfWeek Int
+  startsAt  String
+  endsAt    String
+  staff     StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  branch    Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([staffId, branchId, dayOfWeek])
+  @@index([branchId, dayOfWeek])
+}
+
+model ScheduleBreak {
+  id        String       @id @default(cuid())
+  branchId  String
+  staffId   String?
+  dayOfWeek Int
+  startsAt  String
+  endsAt    String
+  branch    Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staff     StaffMember? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([branchId, dayOfWeek])
+  @@index([staffId, dayOfWeek])
+}
+
+model ScheduleException {
+  id        String       @id @default(cuid())
+  branchId  String
+  staffId   String?
+  startsAt  DateTime
+  endsAt    DateTime
+  available Boolean     @default(false)
+  note      String?
+  branch    Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staff     StaffMember? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([branchId, startsAt, endsAt])
+  @@index([staffId, startsAt, endsAt])
 }

@@ -48,7 +48,12 @@ export async function registerBusiness(input: RegisterBusinessInput) {
       });
       await Promise.all([
         transaction.staffMember.create({
-          data: { branchId: branch.id, membershipId: membership.id, displayName: parsed.data.ownerName },
+          data: {
+            businessId: business.id,
+            membershipId: membership.id,
+            displayName: parsed.data.ownerName,
+            branches: { create: { branchId: branch.id, isPrimary: true } },
+          },
         }),
         transaction.businessScheduleRule.createMany({
           data: Array.from({ length: 7 }, (_, dayOfWeek) => ({

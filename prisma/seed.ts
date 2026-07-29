@@ -91,11 +91,16 @@ async function main() {
   const staff = await prisma.staffMember.upsert({
     where: { membershipId: staffMembership.id },
     create: {
-      branchId: branch.id,
+      businessId: business.id,
       membershipId: staffMembership.id,
       displayName: "Алишер",
     },
-    update: { branchId: branch.id, displayName: "Алишер" },
+    update: { businessId: business.id, displayName: "Алишер" },
+  });
+  await prisma.staffBranch.upsert({
+    where: { staffId_branchId: { staffId: staff.id, branchId: branch.id } },
+    create: { staffId: staff.id, branchId: branch.id, isPrimary: true },
+    update: { isPrimary: true },
   });
 
   const existingService = await prisma.service.findFirst({
@@ -169,8 +174,13 @@ async function seedAutoService(paymentCardEncrypted: string | undefined) {
   });
   const staff = await prisma.staffMember.upsert({
     where: { membershipId: membership.id },
-    create: { branchId: branch.id, membershipId: membership.id, displayName: "Бехруз" },
-    update: { branchId: branch.id, displayName: "Бехруз" },
+    create: { businessId: business.id, membershipId: membership.id, displayName: "Бехруз" },
+    update: { businessId: business.id, displayName: "Бехруз" },
+  });
+  await prisma.staffBranch.upsert({
+    where: { staffId_branchId: { staffId: staff.id, branchId: branch.id } },
+    create: { staffId: staff.id, branchId: branch.id, isPrimary: true },
+    update: { isPrimary: true },
   });
   const resource = await prisma.resource.findFirst({ where: { branchId: branch.id, name: "Подъёмник 1" } })
     ?? await prisma.resource.create({ data: { branchId: branch.id, name: "Подъёмник 1" } });

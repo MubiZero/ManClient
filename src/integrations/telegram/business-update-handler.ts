@@ -170,7 +170,7 @@ async function renderState(
     return;
   }
   if (session.state === "STAFF") {
-    const staff = await prisma.staffMember.findMany({ where: { branch: { id: session.data.branchId, businessId }, services: { some: { id: session.data.serviceId } } }, orderBy: { displayName: "asc" }, select: { id: true, displayName: true } });
+    const staff = await prisma.staffMember.findMany({ where: { businessId, archivedAt: null, branches: { some: { branchId: session.data.branchId } }, services: { some: { id: session.data.serviceId } } }, orderBy: { displayName: "asc" }, select: { id: true, displayName: true } });
     await sendOptions(chatId, locale, "STAFF", staff.map(member => ({ text: member.displayName, kind: "SELECT_STAFF", payload: { staffId: member.id } })), businessId, conversationId, expiresAt, dependencies);
     return;
   }
@@ -290,7 +290,7 @@ async function bookingSummary(businessId: string, data: ConversationData, locale
   const [branch, service, staff] = await Promise.all([
     prisma.branch.findFirstOrThrow({ where: { id: required(data.branchId), businessId }, select: { name: true } }),
     selectedService(businessId, data),
-    prisma.staffMember.findFirstOrThrow({ where: { id: required(data.staffId), branch: { businessId } }, select: { displayName: true } }),
+    prisma.staffMember.findFirstOrThrow({ where: { id: required(data.staffId), businessId }, select: { displayName: true } }),
   ]);
   const visit = new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone: "Asia/Dushanbe", dateStyle: "medium", timeStyle: "short" }).format(new Date(required(data.startsAt)));
   return `${branch.name}\n${service.name} · ${staff.displayName}\n${visit}\n${required(data.name)} · ${required(data.phone)}\n${(service.amountDiram / 100).toFixed(2)} TJS`;

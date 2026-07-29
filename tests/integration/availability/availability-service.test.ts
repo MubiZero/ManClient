@@ -31,7 +31,7 @@ describe("getAvailableStarts", () => {
       data: { businessId: business.id, userId: user.id, role: "STAFF" },
     });
     const staff = await prisma.staffMember.create({
-      data: { branchId: branch.id, membershipId: membership.id, displayName: "Barber" },
+      data: { businessId: business.id, membershipId: membership.id, displayName: "Barber", branches: { create: { branchId: branch.id, isPrimary: true } } },
     });
 
     branchId = branch.id;

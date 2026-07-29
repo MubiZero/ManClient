@@ -47,10 +47,10 @@ describe("reserveAllocation", () => {
     );
     const [firstStaff, secondStaff, lift, secondLift, customer] = await Promise.all([
       prisma.staffMember.create({
-        data: { branchId: branch.id, membershipId: firstMembership.id, displayName: "First" },
+        data: { businessId: business.id, membershipId: firstMembership.id, displayName: "First", branches: { create: { branchId: branch.id, isPrimary: true } } },
       }),
       prisma.staffMember.create({
-        data: { branchId: branch.id, membershipId: secondMembership.id, displayName: "Second" },
+        data: { businessId: business.id, membershipId: secondMembership.id, displayName: "Second", branches: { create: { branchId: branch.id, isPrimary: true } } },
       }),
       prisma.resource.create({
         data: { branchId: branch.id, name: "Lift" },

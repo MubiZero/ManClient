@@ -32,7 +32,7 @@ describe("business registration", () => {
       where: { id: result.userId },
       include: {
         memberships: {
-          include: { business: { include: { branches: { include: { scheduleRules: true, staffMembers: true } } } } },
+          include: { business: { include: { branches: { include: { scheduleRules: true, staffAssignments: true } } } } },
         },
       },
     });
@@ -44,7 +44,7 @@ describe("business registration", () => {
     expect(membership.role).toBe("OWNER");
     expect(membership.business.name).toBe("Салон Сино");
     expect(branch.name).toBe("Основной филиал");
-    expect(branch.staffMembers).toHaveLength(1);
+    expect(branch.staffAssignments).toHaveLength(1);
     expect(branch.scheduleRules).toHaveLength(7);
   });
 

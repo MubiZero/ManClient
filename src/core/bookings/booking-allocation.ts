@@ -115,7 +115,12 @@ async function assertAllocationBelongsToBranch(
 
   const [staff, service, customer] = await Promise.all([
     transaction.staffMember.findFirst({
-      where: { id: input.staffId, branchId: input.branchId },
+      where: {
+        id: input.staffId,
+        businessId: branch.businessId,
+        archivedAt: null,
+        branches: { some: { branchId: input.branchId } },
+      },
       select: { id: true },
     }),
     transaction.service.findFirst({
