@@ -1,3 +1,5 @@
+import type { Prisma } from "@/generated/prisma/client";
+
 import { prisma } from "@/core/database/prisma";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
@@ -21,6 +23,11 @@ const bookingReviewSelect = {
   staff: { select: { id: true, displayName: true } },
 } as const;
 
+const reviewSubmissionOrder: Prisma.ReceiptSubmissionOrderByWithRelationInput[] = [
+  { createdAt: "desc" },
+  { id: "desc" },
+];
+
 const reviewSelect = {
   id: true,
   amountDiram: true,
@@ -35,7 +42,7 @@ const reviewSelect = {
   booking: { select: bookingReviewSelect },
   submissions: {
     where: { status: "NEEDS_REVIEW" as const },
-    orderBy: { createdAt: "desc" as const },
+    orderBy: reviewSubmissionOrder,
     take: 1,
     select: { id: true, status: true, contentType: true, sizeBytes: true, createdAt: true },
   },
@@ -73,8 +80,8 @@ export async function getPaymentReceiptForReview(
   const submission = await prisma.$transaction(async (transaction) => {
     await requireReviewAccess(transaction, input);
     const row = await transaction.receiptSubmission.findFirst({
-      where: { paymentId: input.paymentId, businessId: input.businessId },
-      orderBy: { createdAt: "desc" },
+      where: { paymentId: input.paymentId, businessId: input.businessId, status: "NEEDS_REVIEW" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { storageKey: true },
     });
     if (!row) throw new PaymentReviewError("NOT_FOUND");
@@ -86,7 +93,7 @@ export async function getPaymentReceiptForReview(
 export async function approvePaymentReview(input: ActorInput & { paymentId: string; reason?: string }, now = new Date()) {
   const result = await prisma.$transaction(async (transaction) => {
     const actor = await requireReviewAccess(transaction, input);
-    const payment = await transaction.payment.findFirst({ where: { id: input.paymentId, businessId: input.businessId }, include: { booking: true, submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: { createdAt: "desc" }, take: 1 } } });
+    const payment = await transaction.payment.findFirst({ where: { id: input.paymentId, businessId: input.businessId }, include: { booking: true, submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } });
     if (!payment) throw new PaymentReviewError("NOT_FOUND");
     if (payment.status === "RECEIPT_ACCEPTED") return { bookingId: payment.bookingId, changed: false };
     if (payment.status !== "NEEDS_ATTENTION" || payment.booking.status !== "PENDING_PAYMENT") throw new PaymentReviewError("INVALID_STATUS");
@@ -117,7 +124,7 @@ export async function rejectPaymentReview(input: ActorInput & { paymentId: strin
   if (reason.length < 3 || reason.length > 300) throw new PaymentReviewError("INVALID_INPUT");
   return prisma.$transaction(async (transaction) => {
     const actor = await requireReviewAccess(transaction, input);
-    const payment = await transaction.payment.findFirst({ where: { id: input.paymentId, businessId: input.businessId }, include: { submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: { createdAt: "desc" }, take: 1 } } });
+    const payment = await transaction.payment.findFirst({ where: { id: input.paymentId, businessId: input.businessId }, include: { submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } });
     if (!payment) throw new PaymentReviewError("NOT_FOUND");
     if (payment.status === "REJECTED") return { bookingId: payment.bookingId, changed: false };
     if (payment.status !== "NEEDS_ATTENTION") throw new PaymentReviewError("INVALID_STATUS");

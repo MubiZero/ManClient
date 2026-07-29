@@ -606,7 +606,7 @@ async function showPaymentReviewCard(
   try {
     const payment = await getBusinessBotPaymentReview(actor, paymentId);
     const actions: BusinessBotAction[] = [];
-    if (payment.status === "NEEDS_ATTENTION") {
+    if (isPaymentReviewActionable(payment)) {
       if (payment.hasReceipt) {
         actions.push(await navigationAction(actor, "PAYMENT_RECEIPT", { paymentId }, "Показать чек", dependencies.now()));
       }
@@ -629,7 +629,7 @@ async function showPaymentReviewCard(
       recipientCardLast4: payment.recipientCardLast4 ?? undefined,
       attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason) : undefined,
     });
-    const statusNotice = notice ?? paymentDecisionNotice(payment.status, payment.reviewReason);
+    const statusNotice = [notice, paymentDecisionNotice(payment)].filter(Boolean).join("\n");
     await deliver(viewWithActions(statusNotice ? { ...base, text: `${statusNotice}\n\n${base.text}` } : base, actions), actor, dependencies, message);
   } catch (error) {
     await showPaymentReviewError(actor, paymentId, error, message, dependencies);
@@ -677,7 +677,7 @@ async function showPaymentApprovalConfirmation(
 ) {
   try {
     const payment = await getBusinessBotPaymentReview(actor, paymentId);
-    if (payment.status !== "NEEDS_ATTENTION") {
+    if (!isPaymentReviewActionable(payment)) {
       await showPaymentReviewCard(actor, paymentId, dependencies, message);
       return;
     }
@@ -712,7 +712,7 @@ async function showPaymentRejectionReasons(
 ) {
   try {
     const payment = await getBusinessBotPaymentReview(actor, paymentId);
-    if (payment.status !== "NEEDS_ATTENTION") {
+    if (!isPaymentReviewActionable(payment)) {
       await showPaymentReviewCard(actor, paymentId, dependencies, message);
       return;
     }
@@ -743,6 +743,10 @@ async function showPaymentReviewError(
 ) {
   if (!(error instanceof PaymentReviewError)) {
     await showStaleAction(actor, message, dependencies);
+    return;
+  }
+  if (error.code === "INVALID_STATUS" && paymentId) {
+    await showPaymentReviewCard(actor, paymentId, dependencies, message, "Состояние изменилось. Показаны актуальные данные.");
     return;
   }
   const actions = [
@@ -780,10 +784,53 @@ function attentionReasonLabel(reason: string | null) {
   } as Record<string, string>)[reason ?? ""] ?? "Нужна ручная проверка";
 }
 
-function paymentDecisionNotice(status: string, reason: string | null) {
-  if (status === "RECEIPT_ACCEPTED") return "Оплата подтверждена. Запись подтверждена.";
-  if (status === "REJECTED") return `Чек отклонён.${reason ? ` Причина: ${reason}.` : ""}`;
+function isPaymentReviewActionable(payment: {
+  status: string;
+  hasReceipt: boolean;
+  booking: { status: string };
+}) {
+  return payment.status === "NEEDS_ATTENTION"
+    && payment.booking.status === "PENDING_PAYMENT"
+    && payment.hasReceipt;
+}
+
+function paymentDecisionNotice(payment: {
+  status: string;
+  reviewReason: string | null;
+  hasReceipt: boolean;
+  booking: { status: string };
+}) {
+  if (payment.status === "RECEIPT_ACCEPTED") return "Оплата подтверждена. Запись подтверждена.";
+  if (payment.status === "REJECTED") return `Чек отклонён.${payment.reviewReason ? ` Причина: ${payment.reviewReason}.` : ""}`;
+  if (payment.booking.status !== "PENDING_PAYMENT") {
+    return `Текущее состояние: запись ${bookingReviewStatusLabel(payment.booking.status)}; оплата ${paymentReviewStatusLabel(payment.status)}. Решение по чеку недоступно.`;
+  }
+  if (payment.status === "NEEDS_ATTENTION" && !payment.hasReceipt) {
+    return "Текущее состояние: запись ожидает оплаты; оплата требует проверки, но актуального чека на проверке нет.";
+  }
+  if (payment.status !== "NEEDS_ATTENTION") {
+    return `Текущее состояние: запись ожидает оплаты; оплата ${paymentReviewStatusLabel(payment.status)}.`;
+  }
   return null;
+}
+
+function bookingReviewStatusLabel(status: string) {
+  return ({
+    PENDING_PAYMENT: "ожидает оплаты",
+    CONFIRMED: "подтверждена",
+    CANCELLED: "отменена",
+    EXPIRED: "истекла",
+  } as Record<string, string>)[status] ?? "изменилась";
+}
+
+function paymentReviewStatusLabel(status: string) {
+  return ({
+    PENDING: "ожидает оплаты",
+    RECEIPT_PROCESSING: "обрабатывается",
+    NEEDS_ATTENTION: "требует проверки",
+    RECEIPT_ACCEPTED: "подтверждена",
+    REJECTED: "отклонена",
+  } as Record<string, string>)[status] ?? "изменилась";
 }
 
 async function showCustomerLink(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
