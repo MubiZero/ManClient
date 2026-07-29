@@ -92,6 +92,52 @@ describe("ManClient business assistant", () => {
     await expect(getPlatformTelegramActor({ chatId: "-10042", telegramUserId: "7002" })).resolves.toBeNull();
   });
 
+  it("routes a group callback only for the Telegram user who linked its destination", async () => {
+    const fixture = await createMembership("OWNER");
+    const now = new Date();
+    const token = await createPlatformChatLink({
+      membershipId: fixture.membership.id,
+      actorUserId: fixture.user.id,
+      expiresAt: new Date(now.getTime() + 15 * 60_000),
+    });
+    await consumePlatformChatLink(token, {
+      chatId: "-10044",
+      chatType: "supergroup",
+      telegramUserId: "7004",
+    }, now);
+    const messages: Array<{ text: string; url?: string }> = [];
+    const callback = (telegramUserId: number) => handlePlatformTelegramUpdate({
+      update_id: telegramUserId,
+      callback_query: {
+        from: { id: telegramUserId },
+        message: { message_id: 44, chat: { id: -10044, type: "supergroup" } },
+        data: "business.noop",
+      },
+    }, dependencies({ messages }));
+
+    await callback(7005);
+    expect(messages).toEqual([]);
+
+    await callback(7004);
+    expect(messages).toEqual([{ text: "Действие пока недоступно. Откройте кабинет ManClient.", url: "https://manclient.example/login" }]);
+  });
+
+  it("rejects an unknown Telegram chat type with the generic link error", async () => {
+    const fixture = await createMembership("OWNER");
+    const now = new Date();
+    const token = await createPlatformChatLink({
+      membershipId: fixture.membership.id,
+      actorUserId: fixture.user.id,
+      expiresAt: new Date(now.getTime() + 15 * 60_000),
+    });
+
+    await expect(consumePlatformChatLink(token, {
+      chatId: "7006",
+      chatType: "forum" as never,
+      telegramUserId: "7006",
+    }, now)).rejects.toThrow("invalid or expired");
+  });
+
   it("rejects a shared destination for staff while allowing their private identity", async () => {
     const fixture = await createStaffMembership();
     const now = new Date();

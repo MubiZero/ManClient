@@ -10,7 +10,7 @@ type CreatePlatformChatLinkInput = {
 
 type PlatformTelegramDestinationInput = {
   chatId: string;
-  chatType: "private" | "group" | "supergroup" | "channel";
+  chatType: string;
   telegramUserId: string;
 };
 
@@ -150,8 +150,14 @@ export async function listBusinessTelegramDestinations(businessId: string) {
   })));
 }
 
-function normalizeChatType(chatType: PlatformTelegramDestinationInput["chatType"]) {
-  return chatType.toUpperCase() as "PRIVATE" | "GROUP" | "SUPERGROUP" | "CHANNEL";
+function normalizeChatType(chatType: string) {
+  switch (chatType) {
+    case "private": return "PRIVATE";
+    case "group": return "GROUP";
+    case "supergroup": return "SUPERGROUP";
+    case "channel": return "CHANNEL";
+    default: throw invalidLink();
+  }
 }
 
 function sign(linkId: string) {

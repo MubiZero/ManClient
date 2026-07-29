@@ -35,7 +35,18 @@ export async function handlePlatformTelegramUpdate(
 ) {
   const message = update.message;
   const actor = telegramActorFromUpdate(update);
-  if (!message?.text || !actor) return;
+  if (!actor) return;
+
+  if (update.callback_query?.message) {
+    const platformActor = await getPlatformTelegramActor(actor);
+    if (!platformActor) return;
+    await dependencies.sendMessage(actor.chatId, "Действие пока недоступно. Откройте кабинет ManClient.", {
+      inline_keyboard: [[{ text: "Открыть кабинет", url: `${requiredAppUrl()}/login` }]],
+    });
+    return;
+  }
+
+  if (!message?.text) return;
   const text = message.text.trim();
 
   if (text.startsWith("/start b_")) {
