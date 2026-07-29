@@ -41,6 +41,21 @@ describe("tenant Telegram schema", () => {
     ).rejects.toThrow();
   });
 
+  it("keeps each membership Telegram identity unique", async () => {
+    await createBusinesses();
+    const user = await prisma.user.create({ data: { email: `telegram-identity-${runId}@example.test`, displayName: "Identity User" } });
+    const membership = await prisma.membership.create({
+      data: { businessId: businessIds[0], userId: user.id, role: "OWNER" },
+    });
+
+    await prisma.businessTelegramIdentity.create({
+      data: { membershipId: membership.id, telegramUserId: "7001" },
+    });
+    await expect(prisma.businessTelegramIdentity.create({
+      data: { membershipId: membership.id, telegramUserId: "7001" },
+    })).rejects.toThrow();
+  });
+
   async function createBusinesses() {
     await prisma.business.createMany({
       data: businessIds.map((id, index) => ({ id, name: `Schema ${index}`, slug: id })),

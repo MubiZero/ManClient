@@ -63,6 +63,13 @@ enum TelegramIntegrationStatus {
   DISCONNECTED
 }
 
+enum TelegramChatType {
+  PRIVATE
+  GROUP
+  SUPERGROUP
+  CHANNEL
+}
+
 enum ConversationStatus {
   ACTIVE
   WAITING_FOR_OPERATOR
@@ -146,7 +153,7 @@ model Membership {
   business          Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   staff             StaffMember?
-  telegramChats     BusinessTelegramChat[]
+  telegramIdentities BusinessTelegramIdentity[]
   platformChatLinks PlatformChatLink[]
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
@@ -191,18 +198,32 @@ model BusinessTelegramIntegration {
   @@index([botId, status])
 }
 
-model BusinessTelegramChat {
-  id           String     @id @default(cuid())
-  membershipId String
-  chatId       String
-  active       Boolean    @default(true)
-  linkedAt     DateTime   @default(now())
-  disabledAt   DateTime?
-  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+model BusinessTelegramIdentity {
+  id             String                 @id @default(cuid())
+  membershipId   String
+  telegramUserId String
+  membership     Membership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  destinations   BusinessTelegramChat[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
 
-  @@unique([membershipId, chatId])
+  @@unique([membershipId, telegramUserId])
+  @@index([telegramUserId])
+}
+
+model BusinessTelegramChat {
+  id                 String                   @id @default(cuid())
+  telegramIdentityId String
+  chatId             String
+  chatType           TelegramChatType
+  active             Boolean                  @default(true)
+  linkedAt           DateTime                 @default(now())
+  disabledAt         DateTime?
+  telegramIdentity   BusinessTelegramIdentity @relation(fields: [telegramIdentityId], references: [id], onDelete: Cascade)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@unique([telegramIdentityId, chatId])
   @@index([chatId, active])
 }
 

@@ -6,7 +6,8 @@ import { POST } from "@/app/api/webhooks/telegram/platform/route";
 import {
   consumePlatformChatLink,
   createPlatformChatLink,
-  getActivePlatformChatMembership,
+  getPlatformTelegramActor,
+  listBusinessTelegramDestinations,
 } from "@/core/integrations/platform-chat-link";
 import { prisma } from "@/core/database/prisma";
 import { handlePlatformTelegramUpdate } from "@/integrations/telegram/platform-update-handler";
@@ -39,7 +40,7 @@ describe("ManClient business assistant", () => {
     const messages: Array<{ text: string; url?: string }> = [];
 
     await handlePlatformTelegramUpdate(
-      { update_id: 2, message: { message_id: 2, chat: { id: 20 }, text: "/start" } },
+      { update_id: 2, message: { message_id: 2, from: { id: 20 }, chat: { id: 20, type: "private" }, text: "/start" } },
       dependencies({ messages }),
     );
 
@@ -58,17 +59,63 @@ describe("ManClient business assistant", () => {
       expiresAt: new Date(now.getTime() + 15 * 60_000),
     });
 
-    await expect(consumePlatformChatLink(token, "30", now)).resolves.toMatchObject({
+    await expect(consumePlatformChatLink(token, { chatId: "30", chatType: "private", telegramUserId: "30" }, now)).resolves.toMatchObject({
       id: fixture.membership.id,
     });
-    await expect(consumePlatformChatLink(token, "30", now)).rejects.toThrow("invalid or expired");
+    await expect(consumePlatformChatLink(token, { chatId: "30", chatType: "private", telegramUserId: "30" }, now)).rejects.toThrow("invalid or expired");
 
     const expired = await createPlatformChatLink({
       membershipId: fixture.membership.id,
       actorUserId: fixture.user.id,
       expiresAt: new Date(now.getTime() + 15 * 60_000),
     });
-    await expect(consumePlatformChatLink(expired, "30", new Date(now.getTime() + 16 * 60_000))).rejects.toThrow("invalid or expired");
+    await expect(consumePlatformChatLink(expired, { chatId: "30", chatType: "private", telegramUserId: "30" }, new Date(now.getTime() + 16 * 60_000))).rejects.toThrow("invalid or expired");
+  });
+
+  it("authorizes a group callback only for a linked Telegram identity", async () => {
+    const fixture = await createMembership("OWNER");
+    const now = new Date();
+    const token = await createPlatformChatLink({
+      membershipId: fixture.membership.id,
+      actorUserId: fixture.user.id,
+      expiresAt: new Date(now.getTime() + 15 * 60_000),
+    });
+
+    await consumePlatformChatLink(token, {
+      chatId: "-10042",
+      chatType: "supergroup",
+      telegramUserId: "7001",
+    }, now);
+
+    await expect(getPlatformTelegramActor({ chatId: "-10042", telegramUserId: "7001" }))
+      .resolves.toMatchObject({ membershipId: fixture.membership.id, businessId: fixture.business.id, role: "OWNER" });
+    await expect(getPlatformTelegramActor({ chatId: "-10042", telegramUserId: "7002" })).resolves.toBeNull();
+  });
+
+  it("rejects a shared destination for staff while allowing their private identity", async () => {
+    const fixture = await createStaffMembership();
+    const now = new Date();
+    const groupToken = await createPlatformChatLink({
+      membershipId: fixture.membership.id,
+      actorUserId: fixture.user.id,
+      expiresAt: new Date(now.getTime() + 15 * 60_000),
+    });
+    const privateToken = await createPlatformChatLink({
+      membershipId: fixture.membership.id,
+      actorUserId: fixture.user.id,
+      expiresAt: new Date(now.getTime() + 15 * 60_000),
+    });
+
+    await expect(consumePlatformChatLink(groupToken, {
+      chatId: "-10043",
+      chatType: "group",
+      telegramUserId: "7003",
+    }, now)).rejects.toThrow("invalid or expired");
+    await expect(consumePlatformChatLink(privateToken, {
+      chatId: "7003",
+      chatType: "private",
+      telegramUserId: "7003",
+    }, now)).resolves.toMatchObject({ id: fixture.membership.id });
   });
 
   it("connects a customer bot only for a linked owner and deletes the token message", async () => {
@@ -91,11 +138,11 @@ describe("ManClient business assistant", () => {
     });
 
     await handlePlatformTelegramUpdate(
-      { update_id: 3, message: { message_id: 3, chat: { id: 40 }, text: `/start b_${token}` } },
+      { update_id: 3, message: { message_id: 3, from: { id: 40 }, chat: { id: 40, type: "private" }, text: `/start b_${token}` } },
       deps,
     );
     await handlePlatformTelegramUpdate(
-      { update_id: 4, message: { message_id: 4, chat: { id: 40 }, text: "10009:customer-bot-secret" } },
+      { update_id: 4, message: { message_id: 4, from: { id: 40 }, chat: { id: 40, type: "private" }, text: "10009:customer-bot-secret" } },
       deps,
     );
 
@@ -112,7 +159,7 @@ describe("ManClient business assistant", () => {
     const deleted: number[] = [];
 
     await handlePlatformTelegramUpdate(
-      { update_id: 5, message: { message_id: 5, chat: { id: 50 }, text: "10010:customer-bot-secret" } },
+      { update_id: 5, message: { message_id: 5, from: { id: 50 }, chat: { id: 50, type: "private" }, text: "10010:customer-bot-secret" } },
       dependencies({
         deleted,
         connectBot: async (input) => { connections.push(input); return { botUsername: "never" }; },
@@ -123,20 +170,22 @@ describe("ManClient business assistant", () => {
     expect(connections).toEqual([]);
   });
 
-  it("switches the active business when another membership link is consumed", async () => {
+  it("replaces a chat destination when another membership links it", async () => {
     const first = await createMembership("OWNER");
     const second = await createMembership("ADMIN");
     const now = new Date();
     const firstToken = await createPlatformChatLink({ membershipId: first.membership.id, actorUserId: first.user.id, expiresAt: new Date(now.getTime() + 15 * 60_000) });
     const secondToken = await createPlatformChatLink({ membershipId: second.membership.id, actorUserId: second.user.id, expiresAt: new Date(now.getTime() + 15 * 60_000) });
 
-    await consumePlatformChatLink(firstToken, "60", now);
-    await consumePlatformChatLink(secondToken, "60", now);
+    await consumePlatformChatLink(firstToken, { chatId: "60", chatType: "private", telegramUserId: "60" }, now);
+    await consumePlatformChatLink(secondToken, { chatId: "60", chatType: "private", telegramUserId: "60" }, now);
 
-    await expect(getActivePlatformChatMembership("60")).resolves.toMatchObject({
-      id: second.membership.id,
-      businessId: second.business.id,
-    });
+    await expect(listBusinessTelegramDestinations(first.business.id)).resolves.toEqual([]);
+    await expect(listBusinessTelegramDestinations(second.business.id)).resolves.toMatchObject([{
+      chatId: "60",
+      chatType: "private",
+      membershipId: second.membership.id,
+    }]);
   });
 
   async function createMembership(role: "OWNER" | "ADMIN") {
@@ -145,6 +194,15 @@ describe("ManClient business assistant", () => {
     businessIds.push(business.id);
     const user = await prisma.user.create({ data: { email: `platform-${suffix}@example.test`, displayName: "Business User" } });
     const membership = await prisma.membership.create({ data: { businessId: business.id, userId: user.id, role } });
+    return { business, user, membership };
+  }
+
+  async function createStaffMembership() {
+    const suffix = randomUUID();
+    const business = await prisma.business.create({ data: { id: `platform-business-${suffix}`, name: "Platform Business", slug: `platform-${suffix}` } });
+    businessIds.push(business.id);
+    const user = await prisma.user.create({ data: { email: `platform-${suffix}@example.test`, displayName: "Business Staff" } });
+    const membership = await prisma.membership.create({ data: { businessId: business.id, userId: user.id, role: "STAFF" } });
     return { business, user, membership };
   }
 });
