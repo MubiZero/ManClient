@@ -95,12 +95,15 @@ export async function handleBusinessBotUpdate(
     case "Главное меню":
       await showMainMenu(actor, dependencies);
       return;
+    case "/today":
     case "Сегодня":
       await showBookingList(actor, { kind: "today" }, null, dependencies);
       return;
+    case "/bookings":
     case "Записи":
       await showBookingFilters(actor, dependencies);
       return;
+    case "/checks":
     case "Проверить чеки":
       await showChecks(actor, dependencies);
       return;

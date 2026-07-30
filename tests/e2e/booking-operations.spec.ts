@@ -19,12 +19,15 @@ test("owner creates, finds, reschedules and cancels a booking", async ({ page })
   await expect(page.getByText("Создана в кабинете")).toBeVisible();
   await expect(page.getByText("Не оплачено").first()).toBeVisible();
 
-  await page.getByLabel("Новое время").fill("2026-08-11T11:00");
+  await page.getByLabel("Новая дата").fill("2026-08-11");
+  await page.getByRole("group", { name: "Свободное время" }).getByRole("button").first().click();
   await page.getByRole("button", { name: "Перенести запись" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Перенести запись" }).click();
   await expect(page.getByText("Запись перенесена")).toBeVisible();
 
   await page.getByLabel("Причина отмены").fill("Клиент попросил отменить");
   await page.getByRole("button", { name: "Отменить запись" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Отменить запись" }).click();
   await expect(page.getByRole("status")).toHaveText("Запись отменена");
   await expect(page.getByText("Клиент попросил отменить")).toBeVisible();
 

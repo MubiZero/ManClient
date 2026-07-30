@@ -653,6 +653,9 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .payment-summary strong { grid-column: 1 / -1; font-size: 1.15rem; }
 .payment-summary span { color: var(--muted); }
 .payment-summary span:last-child { color: var(--text); font-weight: 750; }
+.payment-summary-details { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; }
+.payment-summary-details span:first-child { grid-column: 1 / -1; }
+.payment-hold { margin: 18px 0 -8px; padding: 12px 14px; border-radius: 12px; background: var(--brand-soft); color: var(--brand-strong); }
 .payment-steps { display: grid; gap: 10px; margin: 24px 0; padding-left: 24px; color: var(--muted); }
 .payment-card > .primary-link { width: 100%; min-height: 54px; justify-content: center; }
 .receipt-upload { position: relative; display: grid; gap: 3px; margin-top: 12px; padding: 16px 18px; border: 1px dashed #789888; border-radius: 14px; text-align: center; cursor: pointer; }

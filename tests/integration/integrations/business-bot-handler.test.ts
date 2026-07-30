@@ -136,6 +136,33 @@ describe("platform business bot handler", () => {
     expect(findCallback(output.at(-1), "Открыть")).toBeTruthy();
   });
 
+  it("maps every registered slash command to the matching business workspace action", async () => {
+    const owner = await createActor("OWNER");
+    const booking = await createPendingBooking(owner, "Командный клиент");
+    const payment = await prisma.payment.update({ where: { bookingId: booking.id }, data: { status: "NEEDS_ATTENTION" } });
+    await prisma.receiptSubmission.create({
+      data: {
+        businessId: owner.actor.businessId,
+        paymentId: payment.id,
+        storageKey: `receipts/${owner.actor.businessId}/${payment.id}/${randomUUID()}.jpg`,
+        contentType: "image/jpeg",
+        sizeBytes: 4,
+        status: "NEEDS_REVIEW",
+      },
+    });
+    const output: Output[] = [];
+    const dependencies = fakeDependencies(output);
+
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("/today"), dependencies);
+    expect(output.at(-1)?.text).toContain("Командный клиент");
+
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("/bookings"), dependencies);
+    expect(output.at(-1)?.text).toBe("Какие записи показать?");
+
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("/checks"), dependencies);
+    expect(output.at(-1)?.text).toContain("Чеки на проверке");
+  });
+
   it("opens the next page through an opaque Show more action", async () => {
     const owner = await createActor("OWNER");
     for (let index = 0; index < 11; index += 1) {

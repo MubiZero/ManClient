@@ -5,10 +5,9 @@ import { requireBusinessSession } from "@/core/auth/business-session";
 import { cancelBusinessBooking, confirmBusinessBooking, rescheduleBusinessBooking } from "@/core/booking-operations/booking-command-service";
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { getBusinessBooking } from "@/core/booking-operations/booking-query-service";
-import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 import { formatSomoni } from "@/core/formatting/money";
+import { BookingActionsPanel } from "@/features/dashboard/bookings/booking-actions-panel";
 import { BookingStatus, PaymentStatus } from "@/features/dashboard/bookings/booking-status";
-import { SubmitButton } from "@/features/ui/submit-button";
 
 type PageProps = { params: Promise<{ bookingId: string }>; searchParams: Promise<{ notice?: string; error?: string }> };
 
@@ -22,7 +21,7 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
 
   async function confirm() { "use server"; const current = await requireBusinessSession(); try { await confirmBusinessBooking({ businessId: current.businessId, actorUserId: current.userId, bookingId }); } catch (error) { redirect(`/dashboard/bookings/${bookingId}?error=${errorCode(error)}`); } redirect(`/dashboard/bookings/${bookingId}?notice=confirmed`); }
   async function cancel(formData: FormData) { "use server"; const current = await requireBusinessSession(); try { await cancelBusinessBooking({ businessId: current.businessId, actorUserId: current.userId, bookingId, reason: String(formData.get("reason") ?? "") }); } catch (error) { redirect(`/dashboard/bookings/${bookingId}?error=${errorCode(error)}`); } redirect(`/dashboard/bookings/${bookingId}?notice=cancelled`); }
-  async function reschedule(formData: FormData) { "use server"; const current = await requireBusinessSession(); try { const actual = await getBusinessBooking({ businessId: current.businessId, actorUserId: current.userId, bookingId }); const local = String(formData.get("startsAtLocal") ?? ""); const [date, time] = local.split("T"); await rescheduleBusinessBooking({ businessId: current.businessId, actorUserId: current.userId, bookingId, startsAt: localDateTimeToUtc(date, time, actual.branch.timeZone) }); } catch (error) { redirect(`/dashboard/bookings/${bookingId}?error=${errorCode(error)}`); } redirect(`/dashboard/bookings/${bookingId}?notice=rescheduled`); }
+  async function reschedule(formData: FormData) { "use server"; const current = await requireBusinessSession(); try { const startsAt = new Date(String(formData.get("startsAt") ?? "")); if (Number.isNaN(startsAt.getTime())) throw new BookingOperationError("INVALID_INPUT"); await rescheduleBusinessBooking({ businessId: current.businessId, actorUserId: current.userId, bookingId, startsAt }); } catch (error) { redirect(`/dashboard/bookings/${bookingId}?error=${errorCode(error)}`); } redirect(`/dashboard/bookings/${bookingId}?notice=rescheduled`); }
 
   const active = booking.status === "PENDING_PAYMENT" || booking.status === "CONFIRMED";
   return <section className="dashboard-content booking-detail-page">
@@ -33,7 +32,7 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
       <article><h2>Визит</h2><dl><dt>Дата и время</dt><dd>{formatLocal(booking.startsAt, booking.branch.timeZone)}</dd><dt>Филиал</dt><dd>{booking.branch.name}</dd><dt>Специалист</dt><dd>{booking.staff.displayName}</dd><dt>Ресурсы</dt><dd>{booking.resources.length ? booking.resources.map(({ resource }) => resource.name).join(", ") : "Не требуются"}</dd><dt>Источник</dt><dd>{sourceLabel(booking.source)}</dd></dl></article>
       <article><h2>Клиент и оплата</h2><dl><dt>Телефон</dt><dd><a href={`tel:${booking.customer.phone}`}>{booking.customer.phone}</a></dd><dt>Стоимость</dt><dd>{formatSomoni(booking.payment?.amountDiram ?? booking.service.amountDiram)}</dd><dt>Статус оплаты</dt><dd><PaymentStatus status={booking.payment?.status} /></dd>{booking.cancellationReason ? <><dt>Причина отмены</dt><dd>{booking.cancellationReason}</dd></> : null}</dl></article>
     </div>
-    {active ? <section className="booking-actions-panel"><div><h2>Действия</h2><p>Изменения сохраняются в истории записи.</p></div>{booking.status === "PENDING_PAYMENT" ? <form action={confirm}><p>Подтверждение вручную не означает, что банк проверил оплату.</p><SubmitButton idle="Подтвердить вручную" pending="Подтверждаем" /></form> : null}<form action={reschedule}><label className="ui-field"><span className="ui-field-label">Новое время</span><input className="ui-input" type="datetime-local" name="startsAtLocal" required /></label><SubmitButton variant="secondary" idle="Перенести запись" pending="Переносим" /></form><form action={cancel}><label className="ui-field"><span className="ui-field-label">Причина отмены</span><input className="ui-input" name="reason" minLength={3} maxLength={300} required placeholder="Например, клиент попросил отменить" /></label><SubmitButton variant="danger" idle="Отменить запись" pending="Отменяем" /></form></section> : null}
+    {active ? <BookingActionsPanel canConfirm={booking.status === "PENDING_PAYMENT"} branchId={booking.branchId} serviceId={booking.serviceId} staffId={booking.staffId} timeZone={booking.branch.timeZone} bookingLabel={`${booking.customer.name} · ${formatLocal(booking.startsAt, booking.branch.timeZone)}`} confirmAction={confirm} rescheduleAction={reschedule} cancelAction={cancel} /> : null}
     <section className="booking-history"><h2>История</h2>{booking.auditEvents.length ? <ol>{booking.auditEvents.map((event) => <li key={event.id}><span>{auditLabel(event.type)}</span><time>{formatLocal(event.createdAt, booking.branch.timeZone)}</time></li>)}</ol> : <p>Событий пока нет.</p>}</section>
   </section>;
 }

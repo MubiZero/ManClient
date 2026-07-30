@@ -30,6 +30,7 @@ describe("tenant Telegram booking journey", () => {
   it("books and confirms a visit entirely through the business bot", async () => {
     const fixture = await createBookingFixture();
     businessIds.push(fixture.business.id);
+    await prisma.branch.update({ where: { id: fixture.branch.id }, data: { timeZone: "Europe/Berlin" } });
     const integration = await prisma.businessTelegramIntegration.create({
       data: {
         businessId: fixture.business.id,
@@ -70,10 +71,13 @@ describe("tenant Telegram booking journey", () => {
     await callback(context, dependencies, sent, fixture.branch.name, 4);
     await callback(context, dependencies, sent, fixture.service.name, 5);
     await callback(context, dependencies, sent, fixture.staff.displayName, 6);
+    expect(sent.at(-1)?.replyMarkup?.inline_keyboard?.slice(0, 7).every(row => row.length <= 2)).toBe(true);
     await callback(context, dependencies, sent, "02.08", 7);
+    expect(sent.at(-1)?.replyMarkup?.inline_keyboard?.slice(0, 4).every(row => row.length <= 3)).toBe(true);
     await callback(context, dependencies, sent, "09:00", 8);
     await send(context, dependencies, { update_id: 9, message: { chat: { id: 701 }, text: "Мухаммад" } });
     await send(context, dependencies, { update_id: 10, message: { chat: { id: 701 }, contact: { phone_number: "+992900001122", user_id: 701 } } });
+    expect(findCallback(sent.at(-1), "Изменить время")).toBeTruthy();
     await callback(context, dependencies, sent, "Подтвердить запись", 11);
 
     expect(sent.at(-1)?.text).toContain("DushanbeCity");
@@ -100,6 +104,22 @@ describe("tenant Telegram booking journey", () => {
     expect(booking.payment?.status).toBe("RECEIPT_ACCEPTED");
     expect(sent.at(-1)?.text).toContain("подтверждена");
     expect(answered.length).toBeGreaterThan(0);
+
+    await send(context, dependencies, { update_id: 15, message: { chat: { id: 701 }, text: "/bookings" } });
+    await callback(context, dependencies, sent, "Отменить", 16);
+    expect(findCallback(sent.at(-1), "Да, отменить")).toBeTruthy();
+    expect(findCallback(sent.at(-1), "Не отменять")).toBeTruthy();
+
+    await callback(context, dependencies, sent, "Не отменять", 17);
+    expect(sent.at(-1)?.text).toContain("Подтверждена");
+
+    await callback(context, dependencies, sent, "Перенести", 18);
+    expect(sent.at(-1)?.replyMarkup?.inline_keyboard?.slice(0, 7).every(row => row.length <= 2)).toBe(true);
+    await callback(context, dependencies, sent, "02.08", 19);
+    expect(sent.at(-1)?.replyMarkup?.inline_keyboard?.slice(0, 4).every(row => row.length <= 3)).toBe(true);
+    await callback(context, dependencies, sent, "10:00", 20);
+    expect(sent.at(-2)?.text).toContain("перенесена");
+    expect(sent.at(-1)?.text).toContain("10:00");
   });
 });
 
@@ -126,6 +146,10 @@ async function callback(
 
 function findUrl(message: SentMessage | undefined, label: string) {
   return message?.replyMarkup?.inline_keyboard?.flat().find(({ text }) => text.includes(label))?.url;
+}
+
+function findCallback(message: SentMessage | undefined, label: string) {
+  return message?.replyMarkup?.inline_keyboard?.flat().find(({ text }) => text.includes(label))?.callback_data;
 }
 
 function send(

@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 export function Dialog({ open, title, description, children, onClose }: { open: boolean; title: string; description?: string; children: ReactNode; onClose?: () => void }) {
   const reference = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
   useEffect(() => {
     const dialog = reference.current;
     if (!dialog) return;
@@ -12,10 +14,10 @@ export function Dialog({ open, title, description, children, onClose }: { open: 
   }, [open]);
 
   return (
-    <dialog ref={reference} open={open || undefined} className="ui-dialog" aria-modal="true" aria-labelledby="ui-dialog-title" aria-describedby={description ? "ui-dialog-description" : undefined} onClose={onClose}>
+    <dialog ref={reference} className="ui-dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} onClose={onClose}>
       <div className="ui-dialog-content">
-        <h2 id="ui-dialog-title">{title}</h2>
-        {description ? <p id="ui-dialog-description">{description}</p> : null}
+        <h2 id={titleId}>{title}</h2>
+        {description ? <p id={descriptionId}>{description}</p> : null}
         <div className="ui-dialog-actions">{children}</div>
       </div>
     </dialog>

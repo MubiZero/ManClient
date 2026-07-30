@@ -18,8 +18,8 @@
     "telegram:register-platform-webhook": "tsx scripts/register-platform-telegram-webhook.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:integration": "vitest run tests/integration",
+    "test": "vitest run --no-file-parallelism --maxWorkers=1",
+    "test:integration": "vitest run tests/integration --no-file-parallelism --maxWorkers=1",
     "test:e2e": "playwright test"
   },
   "dependencies": {

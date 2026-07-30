@@ -11,9 +11,10 @@ import { consumeConversationAction, createConversationAction } from "@/core/conv
 import type { ConversationData, ConversationLocale, ConversationStateName } from "@/core/conversations/conversation-state";
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { prisma } from "@/core/database/prisma";
+import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 import { assertPaymentCardConfigured, getPaymentUrl } from "@/core/payments/payment-service";
 import type { ReceiptRecognizer } from "@/core/payments/receipt-recognizer";
-import { contactKeyboard, inlineButtons } from "@/integrations/telegram/conversation-renderer";
+import { contactKeyboard, inlineButtonGrid, inlineButtons } from "@/integrations/telegram/conversation-renderer";
 import type { TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 import type { BusinessTelegramContext, BusinessTelegramUpdate } from "@/integrations/telegram/business-update-dispatcher";
 import { handleTelegramUpdate } from "@/integrations/telegram/update-handler";
@@ -272,24 +273,29 @@ async function renderState(
     return;
   }
   if (session.state === "DATE") {
-    const dates = nextDates(dependencies.now(), 14);
-    await sendOptions(chatId, locale, "DATE", dates.map(date => ({ text: formatDateLabel(date), kind: "SELECT_DATE", payload: { date } })), businessId, conversationId, expiresAt, dependencies, page);
+    const branch = await prisma.branch.findFirstOrThrow({ where: { id: required(session.data.branchId), businessId }, select: { timeZone: true } });
+    const dates = nextDates(dependencies.now(), 14, branch.timeZone);
+    await sendOptions(chatId, locale, "DATE", dates.map(date => ({ text: formatDateLabel(date), kind: "SELECT_DATE", payload: { date } })), businessId, conversationId, expiresAt, dependencies, page, 2);
     return;
   }
   if (session.state === "SLOT") {
-    const service = await selectedService(businessId, session.data);
-    const rangeStartsAt = new Date(`${required(session.data.date)}T00:00:00+05:00`);
+    const [service, branch] = await Promise.all([
+      selectedService(businessId, session.data),
+      prisma.branch.findFirstOrThrow({ where: { id: required(session.data.branchId), businessId }, select: { timeZone: true } }),
+    ]);
+    const date = required(session.data.date);
+    const rangeStartsAt = localDateTimeToUtc(date, "00:00", branch.timeZone);
     const starts = await getAvailableStarts({
       branchId: required(session.data.branchId),
       serviceId: required(session.data.serviceId),
       staffId: required(session.data.staffId),
       resourceIds: service.resources.map(({ resourceId }) => resourceId),
       rangeStartsAt,
-      rangeEndsAt: new Date(rangeStartsAt.getTime() + 24 * 60 * 60_000),
+      rangeEndsAt: localDateTimeToUtc(nextDate(date), "00:00", branch.timeZone),
       durationMinutes: service.durationMinutes,
       intervalMinutes: 30,
     });
-    await sendOptions(chatId, locale, "SLOT", starts.map(startsAt => ({ text: formatVisitTime(startsAt), kind: "SELECT_SLOT", payload: { startsAt: startsAt.toISOString() } })), businessId, conversationId, expiresAt, dependencies, page);
+    await sendOptions(chatId, locale, "SLOT", starts.map(startsAt => ({ text: formatVisitTime(startsAt, branch.timeZone), kind: "SELECT_SLOT", payload: { startsAt: startsAt.toISOString() } })), businessId, conversationId, expiresAt, dependencies, page, 3);
     return;
   }
   if (session.state === "CUSTOMER_PHONE") {
@@ -298,12 +304,11 @@ async function renderState(
   }
   if (session.state === "CONFIRM") {
     const details = await bookingSummary(businessId, session.data, locale);
-    const actions = await actionButtons(businessId, conversationId, expiresAt, [{
-      text: locale === "tg" ? "Сабтро тасдиқ кунед" : "Подтвердить запись",
-      kind: "CONFIRM_BOOKING",
-      payload: {},
-    }]);
-    await dependencies.sendMessage(chatId, `${conversationMessage(locale, "CONFIRM")}\n\n${details}`, inlineButtons(actions));
+    const actions = await actionButtons(businessId, conversationId, expiresAt, [
+      { text: locale === "tg" ? "Тасдиқ" : "Подтвердить запись", kind: "CONFIRM_BOOKING", payload: {} },
+      { text: locale === "tg" ? "Тағйири вақт" : "Изменить время", kind: "CLIENT_BACK", payload: { state: "CONFIRM" } },
+    ]);
+    await dependencies.sendMessage(chatId, `${conversationMessage(locale, "CONFIRM")}\n\n${details}`, inlineButtonGrid(actions, 1));
     return;
   }
   if (session.state === "AWAITING_PAYMENT") {
@@ -332,6 +337,7 @@ async function sendOptions(
   expiresAt: Date,
   dependencies: BusinessTelegramHandlerDependencies,
   page = 0,
+  columns = 1,
 ) {
   if (options.length === 0) {
     const home = await actionButtons(businessId, conversationId, expiresAt, [{ text: locale === "tg" ? "Ба меню" : "В меню", kind: "CLIENT_HOME", payload: {} }]);
@@ -342,11 +348,22 @@ async function sendOptions(
   const lastPage = Math.max(0, Math.ceil(options.length / pageSize) - 1);
   const currentPage = Math.min(Math.max(page, 0), lastPage);
   const visible = options.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  if (currentPage > 0) visible.push({ text: locale === "tg" ? "← Қаблӣ" : "← Назад по списку", kind: "CLIENT_OPTIONS_PAGE", payload: { page: String(currentPage - 1) } });
-  if (currentPage < lastPage) visible.push({ text: locale === "tg" ? "Баъдӣ →" : "Дальше →", kind: "CLIENT_OPTIONS_PAGE", payload: { page: String(currentPage + 1) } });
-  visible.push({ text: locale === "tg" ? "‹ Ба қафо" : "‹ Назад", kind: "CLIENT_BACK", payload: { state } });
-  visible.push({ text: locale === "tg" ? "Ба меню" : "В меню", kind: "CLIENT_HOME", payload: {} });
-  await dependencies.sendMessage(chatId, conversationMessage(locale, state), inlineButtons(await actionButtons(businessId, conversationId, expiresAt, visible)));
+  const paging: ActionOption[] = [];
+  if (currentPage > 0) paging.push({ text: locale === "tg" ? "← Қаблӣ" : "← Назад по списку", kind: "CLIENT_OPTIONS_PAGE", payload: { page: String(currentPage - 1) } });
+  if (currentPage < lastPage) paging.push({ text: locale === "tg" ? "Баъдӣ →" : "Дальше →", kind: "CLIENT_OPTIONS_PAGE", payload: { page: String(currentPage + 1) } });
+  const back = { text: locale === "tg" ? "‹ Ба қафо" : "‹ Назад", kind: "CLIENT_BACK", payload: { state } };
+  const home = { text: locale === "tg" ? "Ба меню" : "В меню", kind: "CLIENT_HOME", payload: {} };
+  const [choiceButtons, pagingButtons, backButton, homeButton] = await Promise.all([
+    actionButtons(businessId, conversationId, expiresAt, visible),
+    actionButtons(businessId, conversationId, expiresAt, paging),
+    actionButtons(businessId, conversationId, expiresAt, [back]),
+    actionButtons(businessId, conversationId, expiresAt, [home]),
+  ]);
+  await dependencies.sendMessage(chatId, conversationMessage(locale, state), inlineButtonGrid(choiceButtons, columns, [
+    ...(pagingButtons.length ? [pagingButtons] : []),
+    backButton,
+    homeButton,
+  ]));
 }
 
 type ActionOption = { text: string; kind: string; payload: Record<string, string> };
@@ -465,7 +482,7 @@ async function handleCustomerAction(
     return true;
   }
   if (kind === "CLIENT_BACK") {
-    const previous = ({ BRANCH: "HOME", SERVICE: "BRANCH", STAFF: "SERVICE", DATE: "STAFF", SLOT: "DATE" } as const)[payload.state as "BRANCH" | "SERVICE" | "STAFF" | "DATE" | "SLOT"];
+    const previous = ({ BRANCH: "HOME", SERVICE: "BRANCH", STAFF: "SERVICE", DATE: "STAFF", SLOT: "DATE", CONFIRM: "SLOT" } as const)[payload.state as "BRANCH" | "SERVICE" | "STAFF" | "DATE" | "SLOT" | "CONFIRM"];
     if (!previous) throw new Error("Back target is invalid");
     await replaceConversationSession(businessId, conversationId, previous, session.data, sessionExpiry(dependencies.now()));
     await renderState(businessId, conversationId, chatId, dependencies);
@@ -494,8 +511,15 @@ async function handleCustomerAction(
   if (kind === "CLIENT_CANCEL_BEGIN") {
     const booking = await getCustomerBooking({ businessId, telegramChatId: chatId, bookingId: payload.bookingId });
     if (!booking) throw new Error("Booking is unavailable");
-    const confirm = await actionButtons(businessId, conversationId, session.expiresAt, [{ text: locale === "tg" ? "Ҳа, бекор кунед" : "Да, отменить", kind: "CLIENT_CANCEL_CONFIRM", payload: { bookingId: booking.id } }]);
-    await dependencies.sendMessage(chatId, locale === "tg" ? "Сабтро бекор мекунед?" : "Точно отменить запись?", inlineButtons(confirm));
+    const confirm = await actionButtons(businessId, conversationId, session.expiresAt, [
+      { text: locale === "tg" ? "Ҳа, бекор кунед" : "Да, отменить", kind: "CLIENT_CANCEL_CONFIRM", payload: { bookingId: booking.id } },
+      { text: locale === "tg" ? "Не, нигоҳ доред" : "Не отменять", kind: "CLIENT_CANCEL_DISMISS", payload: { bookingId: booking.id } },
+    ]);
+    await dependencies.sendMessage(chatId, locale === "tg" ? "Сабтро бекор мекунед?" : "Точно отменить запись?", inlineButtonGrid(confirm, 2));
+    return true;
+  }
+  if (kind === "CLIENT_CANCEL_DISMISS") {
+    await renderCustomerBookingCard(businessId, conversationId, chatId, payload.bookingId, dependencies);
     return true;
   }
   if (kind === "CLIENT_CANCEL_CONFIRM") {
@@ -508,20 +532,44 @@ async function handleCustomerAction(
   if (kind === "CLIENT_RESCHEDULE_BEGIN") {
     const booking = await getCustomerBooking({ businessId, telegramChatId: chatId, bookingId: payload.bookingId });
     if (!booking) throw new Error("Booking is unavailable");
-    const dates = nextDates(dependencies.now(), 14);
-    await dependencies.sendMessage(chatId, locale === "tg" ? "Рӯзи навро интихоб кунед." : "Выберите новый день.", inlineButtons(await actionButtons(businessId, conversationId, session.expiresAt, dates.map(date => ({ text: formatDateLabel(date), kind: "CLIENT_RESCHEDULE_DATE", payload: { bookingId: booking.id, date } })))));
+    const dates = nextDates(dependencies.now(), 14, booking.branch.timeZone);
+    const [dateButtons, bookingButton, homeButton] = await Promise.all([
+      actionButtons(businessId, conversationId, session.expiresAt, dates.map(date => ({ text: formatDateLabel(date), kind: "CLIENT_RESCHEDULE_DATE", payload: { bookingId: booking.id, date } }))),
+      actionButtons(businessId, conversationId, session.expiresAt, [{ text: locale === "tg" ? "‹ Ба сабт" : "‹ К записи", kind: "CLIENT_BOOKING_OPEN", payload: { bookingId: booking.id } }]),
+      actionButtons(businessId, conversationId, session.expiresAt, [{ text: locale === "tg" ? "Ба меню" : "В меню", kind: "CLIENT_HOME", payload: {} }]),
+    ]);
+    await dependencies.sendMessage(chatId, locale === "tg" ? "Рӯзи навро интихоб кунед." : "Выберите новый день.", inlineButtonGrid(dateButtons, 2, [bookingButton, homeButton]));
+    return true;
+  }
+  if (kind === "CLIENT_BOOKING_OPEN") {
+    await renderCustomerBookingCard(businessId, conversationId, chatId, payload.bookingId, dependencies);
     return true;
   }
   if (kind === "CLIENT_RESCHEDULE_DATE") {
-    const booking = await prisma.booking.findFirst({ where: { id: payload.bookingId, businessId, customer: { telegramChatId: chatId }, status: { in: ["PENDING_PAYMENT", "CONFIRMED"] } }, include: { service: true, resources: true } });
+    const booking = await prisma.booking.findFirst({ where: { id: payload.bookingId, businessId, customer: { telegramChatId: chatId }, status: { in: ["PENDING_PAYMENT", "CONFIRMED"] } }, include: { branch: { select: { timeZone: true } }, service: true, resources: true } });
     if (!booking) throw new Error("Booking is unavailable");
-    const rangeStartsAt = new Date(`${required(payload.date)}T00:00:00+05:00`);
-    const starts = await getAvailableStarts({ branchId: booking.branchId, serviceId: booking.serviceId, staffId: booking.staffId, resourceIds: booking.resources.map(item => item.resourceId), rangeStartsAt, rangeEndsAt: new Date(rangeStartsAt.getTime() + 24 * 60 * 60_000), durationMinutes: booking.service.durationMinutes, intervalMinutes: 30, excludeBookingId: booking.id });
+    const date = required(payload.date);
+    const rangeStartsAt = localDateTimeToUtc(date, "00:00", booking.branch.timeZone);
+    const starts = await getAvailableStarts({ branchId: booking.branchId, serviceId: booking.serviceId, staffId: booking.staffId, resourceIds: booking.resources.map(item => item.resourceId), rangeStartsAt, rangeEndsAt: localDateTimeToUtc(nextDate(date), "00:00", booking.branch.timeZone), durationMinutes: booking.service.durationMinutes, intervalMinutes: 30, excludeBookingId: booking.id });
     if (!starts.length) {
-      await dependencies.sendMessage(chatId, locale === "tg" ? "Дар ин рӯз вақти холӣ нест. Рӯзи дигарро интихоб кунед." : "В этот день свободного времени нет. Выберите другой день.");
+      const actions = await actionButtons(businessId, conversationId, session.expiresAt, [
+        { text: locale === "tg" ? "Интихоби рӯзи дигар" : "Выбрать другой день", kind: "CLIENT_RESCHEDULE_BEGIN", payload: { bookingId: booking.id } },
+        { text: locale === "tg" ? "‹ Ба сабт" : "‹ К записи", kind: "CLIENT_BOOKING_OPEN", payload: { bookingId: booking.id } },
+      ]);
+      await dependencies.sendMessage(chatId, locale === "tg" ? "Дар ин рӯз вақти холӣ нест. Рӯзи дигарро интихоб кунед." : "В этот день свободного времени нет. Выберите другой день.", inlineButtons(actions));
       return true;
     }
-    await dependencies.sendMessage(chatId, locale === "tg" ? "Вақти навро интихоб кунед." : "Выберите новое время.", inlineButtons(await actionButtons(businessId, conversationId, session.expiresAt, starts.slice(0, 12).map(startsAt => ({ text: formatVisitTime(startsAt), kind: "CLIENT_RESCHEDULE_SLOT", payload: { bookingId: booking.id, startsAt: startsAt.toISOString() } })))));
+    const slotOptions = starts.slice(0, 12).map(startsAt => ({
+      text: formatVisitTime(startsAt, booking.branch.timeZone),
+      kind: "CLIENT_RESCHEDULE_SLOT",
+      payload: { bookingId: booking.id, startsAt: startsAt.toISOString() },
+    }));
+    const [slotButtons, dateButton, bookingButton] = await Promise.all([
+      actionButtons(businessId, conversationId, session.expiresAt, slotOptions),
+      actionButtons(businessId, conversationId, session.expiresAt, [{ text: locale === "tg" ? "‹ Рӯзи дигар" : "‹ Другой день", kind: "CLIENT_RESCHEDULE_BEGIN", payload: { bookingId: booking.id } }]),
+      actionButtons(businessId, conversationId, session.expiresAt, [{ text: locale === "tg" ? "‹ Ба сабт" : "‹ К записи", kind: "CLIENT_BOOKING_OPEN", payload: { bookingId: booking.id } }]),
+    ]);
+    await dependencies.sendMessage(chatId, locale === "tg" ? "Вақти навро интихоб кунед." : "Выберите новое время.", inlineButtonGrid(slotButtons, 3, [dateButton, bookingButton]));
     return true;
   }
   if (kind === "CLIENT_RESCHEDULE_SLOT") {
@@ -568,10 +616,10 @@ function normalizeTajikPhone(value: string) {
   return value.trim();
 }
 
-function nextDates(now: Date, count: number) {
+function nextDates(now: Date, count: number, timeZone: string) {
   return Array.from({ length: count }, (_, index) => {
     const date = new Date(now.getTime() + index * 24 * 60 * 60_000);
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dushanbe", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
   });
 }
 
@@ -580,8 +628,14 @@ function formatDateLabel(date: string) {
   return `${day}.${month}.${year}`;
 }
 
-function formatVisitTime(value: Date) {
-  return new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Dushanbe", hour: "2-digit", minute: "2-digit" }).format(value);
+function formatVisitTime(value: Date, timeZone = "Asia/Dushanbe") {
+  return new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" }).format(value);
+}
+
+function nextDate(value: string) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }
 
 function sessionExpiry(now: Date) {
