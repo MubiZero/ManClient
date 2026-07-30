@@ -18,6 +18,7 @@ export default async function PublicBookingPage({ params }: PageProps) {
         select: {
           id: true,
           name: true,
+          timeZone: true,
           services: {
             orderBy: { name: "asc" },
             select: {
