@@ -261,7 +261,7 @@ describe("ManClient business assistant", () => {
 
   it("creates and connects a customer-owned managed bot without asking for a token", async () => {
     const fixture = await createMembership("OWNER");
-    const now = new Date("2026-07-30T08:00:00.000Z");
+    const now = new Date();
     const link = await createPlatformChatLink({
       membershipId: fixture.membership.id,
       actorUserId: fixture.user.id,
@@ -316,7 +316,7 @@ describe("ManClient business assistant", () => {
 
   it("returns a failed managed connection to pending and succeeds on retry", async () => {
     const fixture = await createMembership("OWNER");
-    const now = new Date("2026-07-30T09:00:00.000Z");
+    const now = new Date();
     const link = await createPlatformChatLink({
       membershipId: fixture.membership.id,
       actorUserId: fixture.user.id,
