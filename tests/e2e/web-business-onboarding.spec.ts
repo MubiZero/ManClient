@@ -24,6 +24,11 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await expect(page).toHaveURL(/\/dashboard\/onboarding$/);
   await expect(page.getByRole("heading", { name: "Подготовьте бизнес к записи" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Добавьте первую услугу" })).toBeVisible();
+  const firstStepMarker = await page.locator(".onboarding-progress li").first().locator("span").boundingBox();
+  const firstStepLabel = await page.locator(".onboarding-progress li").first().locator("strong").boundingBox();
+  expect(firstStepMarker).not.toBeNull();
+  expect(firstStepLabel).not.toBeNull();
+  expect(firstStepLabel!.y).toBeGreaterThanOrEqual(firstStepMarker!.y + firstStepMarker!.height);
   await page.getByLabel("Название услуги").fill("Мужская стрижка");
   await page.getByLabel("Стоимость, сомони").fill("50");
   await page.getByRole("button", { name: "Сохранить услугу" }).click();
@@ -42,7 +47,7 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
 
   await page.getByLabel("Карта DushanbeCity").fill("9762000128351953");
   await page.getByRole("button", { name: "Сохранить карту" }).click();
-  await expect(page.getByText("Бизнес готов к первым записям")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Клиенты уже могут записываться" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Создать клиентского Telegram-бота" })).toHaveAttribute("href", "/dashboard/settings/integrations");
   await expect(page.getByRole("link", { name: "Ваша ссылка для записи" })).toHaveAttribute("href", /\/b\//);
 });

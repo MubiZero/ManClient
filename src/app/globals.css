@@ -217,8 +217,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .onboarding-page .page-heading { max-width: 760px; margin-bottom: 28px; }
 .onboarding-wizard { width: min(100%, 680px); display: grid; gap: 16px; }
 .onboarding-progress { min-height: 76px; display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 0 20px; border-radius: var(--radius-md); background: #eaf0ec; list-style: none; }
-.onboarding-progress li { position: relative; display: flex; align-items: center; gap: 10px; color: #718078; font-size: .875rem; }
-.onboarding-progress li:not(:last-child)::after { content: ""; position: absolute; z-index: 0; top: 50%; right: 12px; width: calc(100% - 58px); height: 1px; background: #c8d4cd; }
+.onboarding-progress li { position: relative; display: grid; grid-template-rows: 32px auto; justify-items: center; align-content: center; gap: 5px; color: #718078; font-size: .875rem; }
+.onboarding-progress li:not(:last-child)::after { content: ""; position: absolute; z-index: 0; top: calc(50% - 11px); right: calc(-50% + 16px); left: calc(50% + 16px); height: 1px; background: #c8d4cd; }
 .onboarding-progress li > span { position: relative; z-index: 1; width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #aebdb5; border-radius: 50%; background: #f7faf8; font-variant-numeric: tabular-nums; }
 .onboarding-progress .is-current { color: var(--text); }
 .onboarding-progress .is-current > span { border-color: var(--brand); background: var(--brand); color: white; font-weight: 700; box-shadow: 0 0 0 4px rgba(23, 107, 69, .1); }
@@ -320,8 +320,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   .registration-fields { grid-template-columns: 1fr; }
   .registration-wide-field { grid-column: auto; }
   .onboarding-progress { min-height: 84px; padding: 10px 12px; }
-  .onboarding-progress li { justify-content: center; flex-direction: column; gap: 5px; font-size: .75rem; }
-  .onboarding-progress li:not(:last-child)::after { top: 26px; right: -10px; width: calc(100% - 38px); }
+  .onboarding-progress li { font-size: .75rem; }
   .onboarding-step-form, .onboarding-checklist { padding: 24px 20px; }
   .onboarding-field-row { grid-template-columns: 1fr; }
   .onboarding-form-actions { grid-template-columns: 1fr; }
