@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
-test("new owner stays on the website and reaches authenticated onboarding", async ({ page }) => {
+test("new owner stays on the website and reaches authenticated onboarding", async ({ page, context }) => {
   const suffix = randomUUID();
   const phoneSuffix = suffix.replace(/\D/g, "").padEnd(7, "1").slice(0, 7);
   await page.goto("/");
@@ -39,7 +39,7 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator(".onboarding-progress").getByText("Услуга")).toBeVisible();
   await expect(page.locator(".onboarding-progress").getByText("Оплата")).toBeVisible();
-  await expect(page.locator(".onboarding-progress").getByText("Готово")).toBeVisible();
+  await expect(page.locator(".onboarding-progress").getByText("Запуск")).toBeVisible();
   await page.getByRole("link", { name: "Назад к услуге" }).click();
   await expect(page.getByRole("heading", { name: "Проверьте первую услугу" })).toBeVisible();
   await expect(page.getByLabel("Название услуги")).toHaveValue("Мужская стрижка");
@@ -47,9 +47,29 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
 
   await page.getByLabel("Карта DushanbeCity").fill("9762000128351953");
   await page.getByRole("button", { name: "Сохранить карту" }).click();
-  await expect(page.getByRole("heading", { name: "Клиенты уже могут записываться" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Создать клиентского Telegram-бота" })).toHaveAttribute("href", "/dashboard/settings/integrations");
-  await expect(page.getByRole("link", { name: "Ваша ссылка для записи" })).toHaveAttribute("href", /\/b\//);
+  await expect(page.getByRole("heading", { name: "Страница записи работает" })).toBeVisible();
+  await expect(page.locator(".onboarding-progress").getByText("Запуск")).toBeVisible();
+  await expect(page.getByText("Ссылка для клиентов")).toBeVisible();
+  await expect(page.getByText("Отправьте её клиентам или разместите в Instagram, Telegram и на сайте.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Создать клиентского бота" })).toHaveAttribute("href", "/dashboard/settings/integrations");
+  const bookingLink = page.getByRole("link", { name: "Открыть страницу" });
+  await expect(bookingLink).toHaveAttribute("href", /\/b\//);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: "http://127.0.0.1:3000" });
+  await page.getByRole("button", { name: "Скопировать ссылку" }).click();
+  await expect(page.getByText("Ссылка скопирована")).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const actionBox = await page.locator(".onboarding-launch-actions").boundingBox();
+  expect(actionBox).not.toBeNull();
+  expect(actionBox!.x).toBeGreaterThanOrEqual(0);
+  expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(390);
+  await expect(page.getByRole("link", { name: "Открыть страницу" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Скопировать ссылку" })).toBeVisible();
+
+  await bookingLink.click();
+  await expect(page).toHaveURL(/\/b\//);
+  await expect(page.getByText(`Салон ${suffix}`, { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Запишитесь на удобное время" })).toBeVisible();
 });
 
 test("registration form fits a narrow screen", async ({ page }) => {
