@@ -27,12 +27,29 @@ describe("web business onboarding", () => {
   it("offers real next steps inside the dashboard", () => {
     const html = renderToStaticMarkup(<OnboardingChecklist businessSlug="salon-sino" />);
 
-    expect(html).toContain('href="/dashboard"');
+    expect(html).toContain("Страница записи работает");
+    expect(html).toContain("Ссылка для клиентов");
+    expect(html).toContain("Отправьте её клиентам или разместите в Instagram, Telegram и на сайте");
+    expect(html).toContain("Открыть страницу");
+    expect(html).toContain("Скопировать ссылку");
+    expect(html).toContain("Добавьте запись через Telegram");
     expect(html).toContain('href="/dashboard/settings/integrations"');
     expect(html).toContain('href="/b/salon-sino"');
-    expect(html).not.toContain('href="https://t.me/');
-    expect(html).toContain("Создать клиентского Telegram-бота");
-    expect(html).not.toContain("Подключить Telegram");
+    expect(html).toContain("Создать клиентского бота");
+    expect(html).not.toContain("Ваша ссылка для записи");
+    expect(html).not.toContain("Открыть кабинет");
+    expect(html).not.toContain("К каналам");
+    expect(html).not.toContain("readiness-list");
+  });
+
+  it("shows a compact Telegram state after the channel is connected", () => {
+    const html = renderToStaticMarkup(<OnboardingChecklist businessSlug="salon-sino" readiness={{
+      service: true, staff: true, schedule: true, payment: true, telegram: true,
+    }} />);
+
+    expect(html).toContain("Telegram подключён");
+    expect(html).toContain("Открыть интеграции");
+    expect(html).not.toContain("Создать клиентского бота");
   });
 
   it("shows one onboarding question at a time", () => {
@@ -53,7 +70,7 @@ describe("web business onboarding", () => {
 
     expect(html).toContain("Услуга");
     expect(html).toContain("Оплата");
-    expect(html).toContain("Готово");
+    expect(html).toContain("Запуск");
     expect(html).toContain('aria-current="step"');
   });
 

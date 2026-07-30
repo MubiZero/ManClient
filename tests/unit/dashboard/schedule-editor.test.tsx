@@ -21,10 +21,10 @@ describe("schedule editor", () => {
     expect(html).toContain("Вернуть график филиала");
   });
 
-  it("shows real onboarding readiness actions", () => {
-    const html = renderToStaticMarkup(<OnboardingChecklist businessSlug="salon" readiness={{ service: true, staff: true, schedule: false, payment: false, telegram: false }} />);
-    expect(html).toContain("Настроить расписание");
-    expect(html).toContain("Настроить оплату");
-    expect(html).not.toContain("Настройка завершена");
+  it("keeps an incomplete Telegram channel separate from launch readiness", () => {
+    const html = renderToStaticMarkup(<OnboardingChecklist businessSlug="salon" readiness={{ service: true, staff: true, schedule: true, payment: true, telegram: false }} />);
+    expect(html).toContain("Страница записи работает");
+    expect(html).toContain("Добавьте запись через Telegram");
+    expect(html).not.toContain("Проверка готовности");
   });
 });

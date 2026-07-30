@@ -1,4 +1,4 @@
-const steps = ["Услуга", "Оплата", "Готово"] as const;
+const steps = ["Услуга", "Оплата", "Запуск"] as const;
 
 export function OnboardingProgress({ currentStep }: { currentStep: 1 | 2 | 3 }) {
   return (

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BookingLinkActions } from "@/features/onboarding/booking-link-actions";
+
 type Readiness = { service: boolean; staff: boolean; schedule: boolean; payment: boolean; telegram: boolean };
 
 const defaultReadiness: Readiness = { service: true, staff: true, schedule: true, payment: true, telegram: false };
@@ -7,25 +9,31 @@ const defaultReadiness: Readiness = { service: true, staff: true, schedule: true
 export function OnboardingChecklist({ businessSlug, readiness = defaultReadiness }: { businessSlug: string; readiness?: Readiness }) {
   const bookingPath = `/b/${businessSlug}`;
   const readyForBooking = readiness.service && readiness.staff && readiness.schedule;
-  const items = [
-    { ready: readiness.service, label: "Опубликовать услугу", href: "/dashboard/settings/services" },
-    { ready: readiness.staff, label: "Добавить специалиста", href: "/dashboard/settings/staff" },
-    { ready: readiness.schedule, label: "Настроить расписание", href: "/dashboard/settings/schedule" },
-    { ready: readiness.payment, label: "Настроить оплату", href: "/dashboard/onboarding" },
-    { ready: readiness.telegram, label: "Создать клиентского Telegram-бота", href: "/dashboard/settings/integrations" },
-  ];
+  const requiredActions = [
+    !readiness.service ? { label: "Опубликовать услугу", href: "/dashboard/settings/services" } : null,
+    !readiness.staff ? { label: "Добавить специалиста", href: "/dashboard/settings/staff" } : null,
+    !readiness.schedule ? { label: "Настроить расписание", href: "/dashboard/settings/schedule" } : null,
+  ].filter((item): item is { label: string; href: string } => Boolean(item));
 
   return <div className="onboarding-checklist">
-    <div className="onboarding-success-mark" aria-hidden>{readyForBooking ? "✓" : items.filter((item) => item.ready).length}</div>
-    <p className="step-kicker">{readyForBooking ? "Готово для записи" : "Проверка готовности"}</p>
-    <h2>{readyForBooking ? "Клиенты уже могут записываться" : "Завершите основные настройки"}</h2>
-    <p>{readyForBooking ? "Основные данные готовы. Оплата и Telegram подключаются отдельно и не блокируют страницу записи." : "Показываем только реальные шаги. Когда услуга, специалист и расписание готовы, ссылка начнёт принимать записи."}</p>
-    <div className="readiness-list">
-      {items.map((item) => <Link key={item.label} href={item.href} className={item.ready ? "is-ready" : undefined}>
-        <span aria-hidden>{item.ready ? "✓" : "○"}</span><strong>{item.label}</strong><small>{item.ready ? "Готово" : "Перейти"}</small>
-      </Link>)}
-    </div>
-    <Link className="booking-link-preview" href={bookingPath} aria-disabled={!readyForBooking}><span>Ваша ссылка для записи</span><strong>{bookingPath}</strong></Link>
-    <div className="onboarding-ready-actions"><Link className="primary-link" href="/dashboard">Открыть кабинет</Link><Link className="secondary-link" href="/dashboard/settings/integrations">К каналам</Link></div>
+    <div className={readyForBooking ? "onboarding-success-mark" : "onboarding-pending-mark"} aria-hidden>{readyForBooking ? "✓" : requiredActions.length}</div>
+    <p className="step-kicker">{readyForBooking ? "Запись запущена" : "Осталось подготовить страницу"}</p>
+    <h2>{readyForBooking ? "Страница записи работает" : "Завершите запуск страницы"}</h2>
+    <p>{readyForBooking ? "Клиенты уже могут выбирать услугу, специалиста и свободное время." : "Выполните обязательные настройки, чтобы клиенты увидели доступное время для записи."}</p>
+    {readyForBooking ? <BookingLinkActions bookingPath={bookingPath} /> : (
+      <div className="onboarding-required-actions">
+        {requiredActions.map(item => <Link key={item.label} href={item.href}>{item.label}<span>Перейти</span></Link>)}
+      </div>
+    )}
+    <section className={`onboarding-channel-card${readiness.telegram ? " is-connected" : ""}`} aria-labelledby="telegram-channel-title">
+      <div>
+        <p className="context-label">Дополнительный канал</p>
+        <h3 id="telegram-channel-title">{readiness.telegram ? "Telegram подключён" : "Добавьте запись через Telegram"}</h3>
+        <p>{readiness.telegram ? "Клиенты могут записываться через вашего клиентского бота." : "Клиенты смогут записываться в привычном чате, а команда продолжит работать через @manclient_bot."}</p>
+      </div>
+      <Link className={readiness.telegram ? "secondary-link" : "primary-link"} href="/dashboard/settings/integrations">
+        {readiness.telegram ? "Открыть интеграции" : "Создать клиентского бота"}
+      </Link>
+    </section>
   </div>;
 }
