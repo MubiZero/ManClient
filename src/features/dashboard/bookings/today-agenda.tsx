@@ -1,11 +1,65 @@
+import { CalendarPlus } from "lucide-react";
 import Link from "next/link";
 
-import { BookingStatus } from "@/features/dashboard/bookings/booking-status";
+import { Badge } from "@/features/ui-kit/badge";
+import { ButtonLink } from "@/features/ui-kit/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui-kit/card";
+import { EmptyState } from "@/features/ui-kit/empty-state";
 
-type AgendaItem = { id: string; startsAt: Date; status: string; customer: { name: string }; service: { name: string }; staff: { displayName: string }; branch: { timeZone: string } };
+type AgendaItem = {
+  id: string;
+  startsAt: Date;
+  status: string;
+  customer: { name: string };
+  service: { name: string };
+  staff: { displayName: string };
+  branch: { timeZone: string };
+};
+
+const statusVariant = { CONFIRMED: "success", PENDING_PAYMENT: "warning", CANCELLED: "neutral", EXPIRED: "neutral" } as const;
+const statusLabel = { CONFIRMED: "Подтверждена", PENDING_PAYMENT: "Ждёт оплаты", CANCELLED: "Отменена", EXPIRED: "Истекла" } as const;
 
 export function TodayAgenda({ items }: { items: AgendaItem[] }) {
-  return <section className="today-agenda"><div className="today-agenda-heading"><div><p className="context-label">Ближайшее сегодня</p><h2>Рабочий день</h2></div><Link href="/dashboard/bookings?view=day">Все записи</Link></div>
-    {items.length ? <div>{items.map((item) => <Link href={`/dashboard/bookings/${item.id}`} key={item.id}><time>{new Intl.DateTimeFormat("ru-TJ", { timeZone: item.branch.timeZone, hour: "2-digit", minute: "2-digit" }).format(item.startsAt)}</time><span><strong>{item.customer.name}</strong><small>{item.service.name} · {item.staff.displayName}</small></span><BookingStatus status={item.status} /></Link>)}</div> : <div className="today-agenda-empty"><p>На сегодня активных записей нет.</p><Link className="ui-button ui-button-secondary" href="/dashboard/bookings/new">Создать запись</Link></div>}
-  </section>;
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between">
+        <CardTitle>Рабочий день · ближайшее сегодня</CardTitle>
+        <Link href="/dashboard/bookings?view=day" className="text-sm font-medium text-primary hover:underline">
+          Все записи
+        </Link>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <EmptyState
+            icon={CalendarPlus}
+            title="На сегодня активных записей нет"
+            action={<ButtonLink href="/dashboard/bookings/new" variant="secondary" size="sm">Создать запись</ButtonLink>}
+          />
+        ) : (
+          <div className="flex flex-col divide-y divide-border">
+            {items.map((item) => (
+              <Link
+                key={item.id}
+                href={`/dashboard/bookings/${item.id}`}
+                className="flex items-center gap-4 py-3 text-sm transition-colors hover:bg-secondary/40"
+              >
+                <time className="w-14 shrink-0 font-medium text-foreground">
+                  {new Intl.DateTimeFormat("ru-TJ", { timeZone: item.branch.timeZone, hour: "2-digit", minute: "2-digit" }).format(item.startsAt)}
+                </time>
+                <div className="flex flex-1 flex-col">
+                  <strong className="text-foreground">{item.customer.name}</strong>
+                  <span className="text-muted-foreground">
+                    {item.service.name} · {item.staff.displayName}
+                  </span>
+                </div>
+                <Badge variant={statusVariant[item.status as keyof typeof statusVariant] ?? "neutral"}>
+                  {statusLabel[item.status as keyof typeof statusLabel] ?? item.status}
+                </Badge>
+              </Link>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }

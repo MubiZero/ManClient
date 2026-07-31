@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { MoreHorizontal } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { requireBusinessAdmin } from "@/core/auth/business-session";
@@ -10,13 +10,15 @@ import {
 } from "@/core/business-settings/resource-service";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
+import { ArchiveConfirmDialog } from "@/features/dashboard/archive-confirm-dialog";
 import { EntityListPage } from "@/features/dashboard/entity-list-page";
 import { ResourceForm } from "@/features/dashboard/resource-form";
-import { LinkButton } from "@/features/ui/button";
-import { Dialog } from "@/features/ui/dialog";
-import { EmptyState } from "@/features/ui/empty-state";
-import { StatusBadge } from "@/features/ui/status-badge";
-import { SubmitButton } from "@/features/ui/submit-button";
+import { SettingsSheet } from "@/features/dashboard/settings-sheet";
+import { Badge } from "@/features/ui-kit/badge";
+import { ButtonLink } from "@/features/ui-kit/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/features/ui-kit/dropdown-menu";
+import { EmptyState } from "@/features/ui-kit/empty-state";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 
 type PageProps = {
   searchParams: Promise<{
@@ -102,78 +104,111 @@ export default async function ResourcesPage({ searchParams }: PageProps) {
     redirect("/dashboard/settings/resources?notice=restored");
   }
 
-  if (query.action === "new") {
-    return <EntityListPage title="Новый ресурс" description="Добавьте рабочее место, кабинет или оборудование, которое нельзя занять дважды.">
-      <ResourceForm action={create} branches={branches} services={services} error={errorMessage(query.error)} />
-    </EntityListPage>;
-  }
-
-  if (editing) {
-    return <EntityListPage title="Изменить ресурс" description="Обновите филиал, вместимость, доступность и связанные услуги.">
-      <ResourceForm
-        action={update}
-        branches={branches}
-        services={services}
-        resource={{
-          id: editing.id,
-          branchId: editing.branchId,
-          name: editing.name,
-          kind: editing.kind,
-          capacity: editing.capacity,
-          isAvailable: editing.isAvailable,
-          serviceIds: editing.services.map((item) => item.serviceId),
-        }}
-        error={errorMessage(query.error)}
-      />
-    </EntityListPage>;
-  }
-
-  return <EntityListPage
-    title="Ресурсы"
-    description="Рабочие места и оборудование, занятость которых ManClient учитывает при записи."
-    action={<LinkButton href="/dashboard/settings/resources?action=new">Создать ресурс</LinkButton>}
-    notice={noticeMessage(query.notice)}
-    error={errorMessage(query.error)}
-  >
-    {items.length ? <div className="entity-list">
-      {items.map((item) => <article key={item.id} className={item.archivedAt ? "is-archived" : undefined}>
-        <div className="entity-list-main">
-          <div>
-            <strong>{item.name}</strong>
-            <StatusBadge tone={item.archivedAt ? "neutral" : item.isAvailable ? "success" : "warning"}>
-              {item.archivedAt ? "В архиве" : item.isAvailable ? "Доступен" : "Недоступен"}
-            </StatusBadge>
-          </div>
-          <span>{item.branch.name} · {resourceKindLabels[item.kind]} · вместимость {item.capacity}</span>
-          <small>{item.services.length ? item.services.map(({ service }) => service.name).join(", ") : "Услуги пока не связаны"}</small>
-        </div>
-        <div className="entity-row-actions">
-          {item.archivedAt ? <form action={restore}>
-            <input type="hidden" name="resourceId" value={item.id} />
-            <SubmitButton idle="Восстановить" pending="Восстанавливаем" variant="secondary" />
-          </form> : <>
-            <Link className="ui-button ui-button-quiet" href={`/dashboard/settings/resources?edit=${item.id}`}>Изменить</Link>
-            <Link className="ui-button ui-button-quiet entity-archive-link" href={`/dashboard/settings/resources?archive=${item.id}`}>Архивировать</Link>
-          </>}
-        </div>
-      </article>)}
-    </div> : <EmptyState
-      title="Добавьте первый ресурс"
-      description="Ресурсы необязательны для специалиста, но нужны для боксов, кабинетов и оборудования."
-      action={<LinkButton href="/dashboard/settings/resources?action=new">Создать ресурс</LinkButton>}
-    />}
-    <Dialog
-      open={Boolean(archiving)}
-      title={`Архивировать ${archiving?.name ?? "ресурс"}?`}
-      description="Ресурс перестанет участвовать в новой записи, а история визитов сохранится."
+  return (
+    <EntityListPage
+      title="Ресурсы"
+      description="Рабочие места и оборудование, занятость которых ManClient учитывает при записи."
+      action={<ButtonLink href="/dashboard/settings/resources?action=new">Создать ресурс</ButtonLink>}
+      notice={noticeMessage(query.notice)}
+      error={query.edit || query.action ? undefined : errorMessage(query.error)}
     >
-      <LinkButton variant="quiet" href="/dashboard/settings/resources">Оставить ресурс</LinkButton>
-      {archiving ? <form action={archive}>
-        <input type="hidden" name="resourceId" value={archiving.id} />
-        <SubmitButton idle="Архивировать ресурс" pending="Архивируем" variant="danger" />
-      </form> : null}
-    </Dialog>
-  </EntityListPage>;
+      {items.length === 0 ? (
+        <EmptyState
+          title="Добавьте первый ресурс"
+          description="Ресурсы необязательны для специалиста, но нужны для боксов, кабинетов и оборудования."
+          action={<ButtonLink href="/dashboard/settings/resources?action=new">Создать ресурс</ButtonLink>}
+        />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Ресурс</TableHead>
+              <TableHead>Филиал и тип</TableHead>
+              <TableHead>Услуги</TableHead>
+              <TableHead>Статус</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell className="font-medium text-foreground">{item.name}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {item.branch.name} · {resourceKindLabels[item.kind]} · вместимость {item.capacity}
+                </TableCell>
+                <TableCell className="text-muted-foreground">{item.services.length ? item.services.map(({ service }) => service.name).join(", ") : "Не связаны"}</TableCell>
+                <TableCell>
+                  <Badge variant={item.archivedAt ? "neutral" : item.isAvailable ? "success" : "warning"}>
+                    {item.archivedAt ? "В архиве" : item.isAvailable ? "Доступен" : "Недоступен"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  {item.archivedAt ? (
+                    <form action={restore}>
+                      <input type="hidden" name="resourceId" value={item.id} />
+                      <button type="submit" className="text-sm font-medium text-primary hover:underline">
+                        Восстановить
+                      </button>
+                    </form>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="rounded-md p-1.5 hover:bg-secondary" aria-label="Действия">
+                        <MoreHorizontal className="size-4 text-muted-foreground" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <a href={`/dashboard/settings/resources?edit=${item.id}`}>Изменить</a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <a href={`/dashboard/settings/resources?archive=${item.id}`} className="text-destructive">
+                            Архивировать
+                          </a>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      <SettingsSheet open={query.action === "new"} closeHref="/dashboard/settings/resources" title="Новый ресурс" visuallyHiddenTitle>
+        <ResourceForm action={create} branches={branches} services={services} error={errorMessage(query.error)} />
+      </SettingsSheet>
+      <SettingsSheet open={Boolean(editing)} closeHref="/dashboard/settings/resources" title="Изменить ресурс" visuallyHiddenTitle>
+        {editing ? (
+          <ResourceForm
+            action={update}
+            branches={branches}
+            services={services}
+            resource={{
+              id: editing.id,
+              branchId: editing.branchId,
+              name: editing.name,
+              kind: editing.kind,
+              capacity: editing.capacity,
+              isAvailable: editing.isAvailable,
+              serviceIds: editing.services.map((item) => item.serviceId),
+            }}
+            error={errorMessage(query.error)}
+          />
+        ) : null}
+      </SettingsSheet>
+
+      <ArchiveConfirmDialog
+        open={Boolean(archiving)}
+        closeHref="/dashboard/settings/resources"
+        title={`Архивировать ${archiving?.name ?? "ресурс"}?`}
+        description="Ресурс перестанет участвовать в новой записи, а история визитов сохранится."
+        action={archive}
+        entityIdField="resourceId"
+        entityId={archiving?.id}
+        confirmLabel="Архивировать ресурс"
+      />
+    </EntityListPage>
+  );
 }
 
 function resourceValues(formData: FormData) {

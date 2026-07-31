@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
-import { Dialog } from "@/features/ui/dialog";
-import { SubmitButton } from "@/features/ui/submit-button";
+import { Button } from "@/features/ui-kit/button";
+import { cn } from "@/features/ui-kit/cn";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/features/ui-kit/dialog";
+import { Field, Input } from "@/features/ui-kit/field";
+import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui-kit/card";
 
 type ServerAction = (formData: FormData) => void | Promise<void>;
 
@@ -36,18 +39,45 @@ export function BookingActionsPanel({
 }) {
   const [rescheduleReady, setRescheduleReady] = useState(false);
 
-  return <section className="booking-actions-panel">
-    <div><h2>Действия</h2><p>Изменения сохраняются в истории записи.</p></div>
-    {canConfirm ? <ConfirmedBookingForm action={confirmAction} confirmation={{ title: "Подтвердить запись вручную?", description: "Подтверждение вручную не означает, что банк проверил оплату.", confirmLabel: "Подтвердить запись" }}><p>Используйте только если действительно приняли оплату вне автоматической проверки.</p><SubmitButton idle="Подтвердить вручную" pending="Подтверждаем" /></ConfirmedBookingForm> : null}
-    <ConfirmedBookingForm action={rescheduleAction} confirmation={{ title: "Перенести запись?", description: "Клиент получит новое время, а прежний слот освободится.", confirmLabel: "Перенести запись" }}>
-      <RescheduleSlotFields branchId={branchId} serviceId={serviceId} staffId={staffId} timeZone={timeZone} onSelectionChange={setRescheduleReady} />
-      <SubmitButton variant="secondary" idle="Перенести запись" pending="Переносим" disabled={!rescheduleReady} />
-    </ConfirmedBookingForm>
-    <ConfirmedBookingForm action={cancelAction} confirmation={{ title: "Отменить запись?", description: `Действие нельзя отменить. Будет отменена запись: ${bookingLabel}.`, confirmLabel: "Отменить запись" }}>
-      <label className="ui-field"><span className="ui-field-label">Причина отмены</span><input className="ui-input" name="reason" minLength={3} maxLength={300} required placeholder="Например, клиент попросил отменить" /></label>
-      <SubmitButton variant="danger" idle="Отменить запись" pending="Отменяем" />
-    </ConfirmedBookingForm>
-  </section>;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Действия</CardTitle>
+        <p className="text-sm text-muted-foreground">Изменения сохраняются в истории записи.</p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        {canConfirm ? (
+          <ConfirmedBookingForm
+            action={confirmAction}
+            confirmation={{ title: "Подтвердить запись вручную?", description: "Подтверждение вручную не означает, что банк проверил оплату.", confirmLabel: "Подтвердить запись" }}
+          >
+            <p className="text-sm text-muted-foreground">Используйте только если действительно приняли оплату вне автоматической проверки.</p>
+            <Button type="submit">Подтвердить вручную</Button>
+          </ConfirmedBookingForm>
+        ) : null}
+        <ConfirmedBookingForm
+          action={rescheduleAction}
+          confirmation={{ title: "Перенести запись?", description: "Клиент получит новое время, а прежний слот освободится.", confirmLabel: "Перенести запись" }}
+        >
+          <RescheduleSlotFields branchId={branchId} serviceId={serviceId} staffId={staffId} timeZone={timeZone} onSelectionChange={setRescheduleReady} />
+          <Button type="submit" variant="secondary" disabled={!rescheduleReady}>
+            Перенести запись
+          </Button>
+        </ConfirmedBookingForm>
+        <ConfirmedBookingForm
+          action={cancelAction}
+          confirmation={{ title: "Отменить запись?", description: `Действие нельзя отменить. Будет отменена запись: ${bookingLabel}.`, confirmLabel: "Отменить запись" }}
+        >
+          <Field label="Причина отмены">
+            <Input name="reason" minLength={3} maxLength={300} required placeholder="Например, клиент попросил отменить" />
+          </Field>
+          <Button type="submit" variant="destructive">
+            Отменить запись
+          </Button>
+        </ConfirmedBookingForm>
+      </CardContent>
+    </Card>
+  );
 }
 
 function ConfirmedBookingForm({ action, confirmation, children }: { action: ServerAction; confirmation: Confirmation; children: ReactNode }) {
@@ -69,13 +99,27 @@ function ConfirmedBookingForm({ action, confirmation, children }: { action: Serv
     formRef.current?.requestSubmit();
   }
 
-  return <form ref={formRef} action={action} onSubmit={onSubmit}>
-    {children}
-    <Dialog open={open} title={confirmation.title} description={confirmation.description} onClose={() => setOpen(false)}>
-      <button className="ui-button ui-button-quiet" type="button" onClick={() => setOpen(false)}>Не отменять</button>
-      <button className="ui-button" type="button" onClick={confirm}>{confirmation.confirmLabel}</button>
-    </Dialog>
-  </form>;
+  return (
+    <form ref={formRef} action={action} onSubmit={onSubmit} className="flex flex-col gap-3 border-t border-border pt-4 first:border-0 first:pt-0">
+      {children}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmation.title}</DialogTitle>
+            <DialogDescription>{confirmation.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="quiet" onClick={() => setOpen(false)}>
+              Не отменять
+            </Button>
+            <Button type="button" onClick={confirm}>
+              {confirmation.confirmLabel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </form>
+  );
 }
 
 function RescheduleSlotFields({ branchId, serviceId, staffId, timeZone, onSelectionChange }: { branchId: string; serviceId: string; staffId: string; timeZone: string; onSelectionChange: (ready: boolean) => void }) {
@@ -110,12 +154,42 @@ function RescheduleSlotFields({ branchId, serviceId, staffId, timeZone, onSelect
     }
   }
 
-  return <>
-    <input type="hidden" name="startsAt" value={startsAt} />
-    <label className="ui-field"><span className="ui-field-label">Новая дата</span><input className="ui-input" type="date" value={date} min={todayInTimeZone(timeZone)} required onChange={(event) => void loadSlots(event.target.value)} /></label>
-    <fieldset className="manual-slots"><legend>Свободное время</legend>{loading ? <p role="status">Ищем свободное время…</p> : starts.length ? <div>{starts.map((value) => <button key={value} type="button" aria-pressed={startsAt === value} onClick={() => { setStartsAt(value); onSelectionChange(true); }}>{formatTime(value, timeZone)}</button>)}</div> : <p>{date ? "Свободного времени пока нет." : "Выберите дату, чтобы увидеть доступные слоты."}</p>}</fieldset>
-    {error ? <p className="entity-error" role="alert">{error}</p> : null}
-  </>;
+  return (
+    <>
+      <input type="hidden" name="startsAt" value={startsAt} />
+      <Field label="Новая дата">
+        <Input type="date" value={date} min={todayInTimeZone(timeZone)} required onChange={(event) => void loadSlots(event.target.value)} />
+      </Field>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-medium text-foreground">Свободное время</legend>
+        {loading ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            Ищем свободное время…
+          </p>
+        ) : starts.length ? (
+          <div className="flex flex-wrap gap-2">
+            {starts.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={startsAt === value}
+                onClick={() => { setStartsAt(value); onSelectionChange(true); }}
+                className={cn(
+                  "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                  startsAt === value ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-secondary",
+                )}
+              >
+                {formatTime(value, timeZone)}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{date ? "Свободного времени пока нет." : "Выберите дату, чтобы увидеть доступные слоты."}</p>
+        )}
+      </fieldset>
+      {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
+    </>
+  );
 }
 
 function todayInTimeZone(timeZone: string) {

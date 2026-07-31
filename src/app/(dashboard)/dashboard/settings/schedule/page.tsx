@@ -12,7 +12,11 @@ import { prisma } from "@/core/database/prisma";
 import { localDateTimeToUtc, todayInTimeZone } from "@/core/formatting/dushanbe-date";
 import { EntityListPage } from "@/features/dashboard/entity-list-page";
 import { ScheduleEditor } from "@/features/dashboard/schedule-editor";
-import { SubmitButton } from "@/features/ui/submit-button";
+import { Button } from "@/features/ui-kit/button";
+import { Card, CardContent } from "@/features/ui-kit/card";
+import { EmptyState } from "@/features/ui-kit/empty-state";
+import { Field, Input, Select } from "@/features/ui-kit/field";
+import { SubmitButton } from "@/features/ui-kit/submit-button";
 
 type PageProps = { searchParams: Promise<{ branch?: string; staff?: string; notice?: string; error?: string }> };
 type Interval = { dayOfWeek: number; startsAt: string; endsAt: string };
@@ -98,27 +102,99 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
   const editorRules = selectedStaff && staffRules.length ? staffRules : selectedStaff ? branchRules : branchRules;
   const editorBreaks = selectedStaff && staffRules.length ? staffBreaks : selectedStaff ? branchBreaks : branchBreaks;
-  return <EntityListPage title="Расписание" description="Рабочие часы филиала, личные графики специалистов и изменения на отдельные даты." notice={noticeMessage(query.notice)} error={errorMessage(query.error)}>
-    <form className="schedule-target" method="get">
-      <label className="ui-field"><span className="ui-field-label">Филиал</span><select className="ui-input" name="branch" defaultValue={branch.id}>{branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      <label className="ui-field"><span className="ui-field-label">Чей график</span><select className="ui-input" name="staff" defaultValue={selectedStaff?.id ?? ""}><option value="">Филиал целиком</option>{staff.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label>
-      <button className="ui-button ui-button-secondary" type="submit">Показать график</button>
-    </form>
-    <div className="schedule-context"><strong>{selectedStaff ? selectedStaff.displayName : branch.name}</strong><span>Часовой пояс: {branch.timeZone}</span></div>
-    <ScheduleEditor mode={selectedStaff ? "staff" : "branch"} inherited={Boolean(selectedStaff && !staffRules.length)} rules={editorRules} breaks={editorBreaks} action={saveSchedule} restoreAction={selectedStaff ? restoreInheritance : undefined} error={errorMessage(query.error)} branchId={branch.id} staffId={selectedStaff?.id} />
-    <section className="schedule-exceptions">
-      <div><p className="step-kicker">Отдельные даты</p><h2>Выходной или особые часы</h2><p>Например, праздник, отпуск или сокращённый рабочий день.</p></div>
-      <form className="exception-form" action={saveException}>
-        <input type="hidden" name="branchId" value={branch.id} /><input type="hidden" name="staffId" value={selectedStaff?.id ?? ""} /><input type="hidden" name="timeZone" value={branch.timeZone} />
-        <label className="ui-field"><span className="ui-field-label">Дата</span><input className="ui-input" type="date" name="date" min={todayInTimeZone(branch.timeZone)} required /></label>
-        <fieldset className="entity-options"><legend>Режим</legend><label><input type="radio" name="exceptionType" value="off" defaultChecked /><span>Выходной</span></label><label><input type="radio" name="exceptionType" value="hours" /><span>Особые часы</span></label></fieldset>
-        <div className="schedule-time-range"><label><span>Начало особых часов</span><input className="ui-input" type="time" name="exceptionStartsAt" defaultValue="10:00" /></label><label><span>Конец особых часов</span><input className="ui-input" type="time" name="exceptionEndsAt" defaultValue="16:00" /></label></div>
-        <label className="ui-field"><span className="ui-field-label">Комментарий</span><input className="ui-input" name="note" maxLength={240} placeholder="Например, праздник" /></label>
-        <SubmitButton idle="Добавить изменение" pending="Добавляем" />
+  return (
+    <EntityListPage title="Расписание" description="Рабочие часы филиала, личные графики специалистов и изменения на отдельные даты." notice={noticeMessage(query.notice)} error={errorMessage(query.error)}>
+      <form className="flex flex-wrap items-end gap-3" method="get">
+        <Field label="Филиал">
+          <Select name="branch" defaultValue={branch.id} className="w-auto">
+            {branches.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Чей график">
+          <Select name="staff" defaultValue={selectedStaff?.id ?? ""} className="w-auto">
+            <option value="">Филиал целиком</option>
+            {staff.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.displayName}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Button type="submit" variant="secondary">
+          Показать график
+        </Button>
       </form>
-      {exceptions.length ? <div className="exception-list">{exceptions.map((item) => <article key={item.id}><div><strong>{formatExceptionDate(item.startsAt, branch.timeZone)}</strong><span>{item.available ? "Особые рабочие часы" : "Выходной"}{item.note ? ` · ${item.note}` : ""}</span></div><form action={removeException}><input type="hidden" name="exceptionId" value={item.id} /><input type="hidden" name="branchId" value={branch.id} /><input type="hidden" name="staffId" value={selectedStaff?.id ?? ""} /><SubmitButton variant="secondary" idle="Убрать" pending="Убираем" /></form></article>)}</div> : <p className="dashboard-empty">Изменений на будущие даты пока нет.</p>}
-    </section>
-  </EntityListPage>;
+      <p className="text-sm text-muted-foreground">
+        <strong className="text-foreground">{selectedStaff ? selectedStaff.displayName : branch.name}</strong> · Часовой пояс: {branch.timeZone}
+      </p>
+      <ScheduleEditor mode={selectedStaff ? "staff" : "branch"} inherited={Boolean(selectedStaff && !staffRules.length)} rules={editorRules} breaks={editorBreaks} action={saveSchedule} restoreAction={selectedStaff ? restoreInheritance : undefined} error={errorMessage(query.error)} branchId={branch.id} staffId={selectedStaff?.id} />
+      <section className="flex flex-col gap-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Отдельные даты</p>
+          <h2 className="text-lg font-semibold text-foreground">Выходной или особые часы</h2>
+          <p className="text-sm text-muted-foreground">Например, праздник, отпуск или сокращённый рабочий день.</p>
+        </div>
+        <Card>
+          <CardContent className="flex flex-wrap items-end gap-3 pt-5">
+            <form action={saveException} className="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="branchId" value={branch.id} />
+              <input type="hidden" name="staffId" value={selectedStaff?.id ?? ""} />
+              <input type="hidden" name="timeZone" value={branch.timeZone} />
+              <Field label="Дата">
+                <Input type="date" name="date" min={todayInTimeZone(branch.timeZone)} required />
+              </Field>
+              <fieldset className="flex items-center gap-3">
+                <legend className="sr-only">Режим</legend>
+                <label className="flex items-center gap-1.5 text-sm text-foreground">
+                  <input type="radio" name="exceptionType" value="off" defaultChecked /> Выходной
+                </label>
+                <label className="flex items-center gap-1.5 text-sm text-foreground">
+                  <input type="radio" name="exceptionType" value="hours" /> Особые часы
+                </label>
+              </fieldset>
+              <Field label="Начало особых часов">
+                <Input type="time" name="exceptionStartsAt" defaultValue="10:00" />
+              </Field>
+              <Field label="Конец особых часов">
+                <Input type="time" name="exceptionEndsAt" defaultValue="16:00" />
+              </Field>
+              <Field label="Комментарий">
+                <Input name="note" maxLength={240} placeholder="Например, праздник" />
+              </Field>
+              <SubmitButton idle="Добавить изменение" pending="Добавляем" />
+            </form>
+          </CardContent>
+        </Card>
+        {exceptions.length ? (
+          <div className="flex flex-col gap-2">
+            {exceptions.map((item) => (
+              <div key={item.id} className="flex items-center justify-between rounded-md border border-border px-4 py-3 text-sm">
+                <div className="flex flex-col">
+                  <strong className="text-foreground">{formatExceptionDate(item.startsAt, branch.timeZone)}</strong>
+                  <span className="text-muted-foreground">
+                    {item.available ? "Особые рабочие часы" : "Выходной"}
+                    {item.note ? ` · ${item.note}` : ""}
+                  </span>
+                </div>
+                <form action={removeException}>
+                  <input type="hidden" name="exceptionId" value={item.id} />
+                  <input type="hidden" name="branchId" value={branch.id} />
+                  <input type="hidden" name="staffId" value={selectedStaff?.id ?? ""} />
+                  <SubmitButton variant="secondary" idle="Убрать" pending="Убираем" />
+                </form>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="Изменений на будущие даты пока нет" />
+        )}
+      </section>
+    </EntityListPage>
+  );
 }
 
 function scheduleValues(formData: FormData): { rules: Interval[]; breaks: Interval[] } {

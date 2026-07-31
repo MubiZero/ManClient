@@ -16,7 +16,7 @@ test("staff cannot open business settings", async ({ page }) => {
   await page.goto("/dashboard/settings/services");
 
   await expect(page).toHaveURL(/\/dashboard\?notice=settings$/);
-  await expect(page.getByText("Настройки доступны владельцу и администратору")).toBeVisible();
+  await expect(page.getByText("Настройки доступны владельцу и администратору", { exact: true }).first()).toBeVisible();
 });
 
 test("owner can reach settings and sign out controls on mobile", async ({ page }) => {

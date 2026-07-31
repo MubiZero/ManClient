@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { approvePaymentReview, getPaymentForReview, listPaymentsForReview, PaymentReviewError, rejectPaymentReview } from "@/core/payments/payment-review-service";
 import { PaymentReviewQueue } from "@/features/dashboard/payments/payment-review-queue";
+import { PageHeader } from "@/features/ui-kit/page-header";
+import { ToastEmitter } from "@/features/ui-kit/toast-emitter";
 
 type PageProps = { searchParams: Promise<{ paymentId?: string; notice?: string; error?: string }> };
 
@@ -35,12 +37,13 @@ export default async function PaymentReviewPage({ searchParams }: PageProps) {
     redirect("/dashboard/payments/review?notice=rejected");
   }
 
-  return <section className="dashboard-content payment-review-page">
-    <div className="page-heading"><div><p className="context-label">Оплата</p><h1>Проверка чеков</h1><p>Сверьте спорные данные с записью и примите решение. Сначала показаны самые давние чеки.</p></div></div>
-    {noticeMessage(query.notice) ? <p className="entity-notice" role="status">{noticeMessage(query.notice)}</p> : null}
-    {errorMessage(query.error) ? <p className="entity-error" role="alert">{errorMessage(query.error)}</p> : null}
-    <PaymentReviewQueue payments={payments} selected={selected} approveAction={approve} rejectAction={reject} />
-  </section>;
+  return (
+    <>
+      <ToastEmitter notice={noticeMessage(query.notice)} error={errorMessage(query.error)} />
+      <PageHeader eyebrow="Оплата" title="Проверка чеков" description="Сверьте спорные данные с записью и примите решение. Сначала показаны самые давние чеки." />
+      <PaymentReviewQueue payments={payments} selected={selected} approveAction={approve} rejectAction={reject} />
+    </>
+  );
 }
 
 function errorCode(error: unknown) { return error instanceof PaymentReviewError ? error.code : "INVALID_INPUT"; }

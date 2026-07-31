@@ -1,9 +1,14 @@
+import { ExternalLink, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 
 import { formatSomoni } from "@/core/formatting/money";
-import { EmptyState } from "@/features/ui/empty-state";
-import { StatusBadge } from "@/features/ui/status-badge";
-import { SubmitButton } from "@/features/ui/submit-button";
+import { ReceiptLightbox } from "@/features/dashboard/payments/receipt-lightbox";
+import { Badge } from "@/features/ui-kit/badge";
+import { Button } from "@/features/ui-kit/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui-kit/card";
+import { cn } from "@/features/ui-kit/cn";
+import { EmptyState } from "@/features/ui-kit/empty-state";
+import { Field, Input } from "@/features/ui-kit/field";
 
 type ReviewPayment = {
   id: string;
@@ -38,21 +43,43 @@ export function PaymentReviewQueue({
   rejectAction: ReviewAction;
 }) {
   if (!payments.length) {
-    return <EmptyState title="Все чеки проверены" description="Новые спорные чеки появятся здесь, если данные оплаты потребуют ручной проверки." />;
+    return <EmptyState icon={ShieldAlert} title="Все чеки проверены" description="Новые спорные чеки появятся здесь, если данные оплаты потребуют ручной проверки." />;
   }
 
   return (
-    <div className="payment-review-layout">
-      <section className="payment-review-list" aria-label="Чеки, ожидающие проверки">
-        <header><strong>{payments.length} {reviewCountLabel(payments.length)}</strong><span>Сначала самые давние</span></header>
-        {payments.map(payment => {
-          const active = payment.id === selected?.id;
-          return <Link key={payment.id} href={`/dashboard/payments/review?paymentId=${encodeURIComponent(payment.id)}`} aria-current={active ? "page" : undefined}>
-            <div><strong>{payment.booking.customer.name}</strong><span>{payment.booking.service.name} · {payment.booking.branch.name}</span></div>
-            <div><StatusBadge tone="danger">{attentionReasonLabel(payment.attentionReason)}</StatusBadge><time dateTime={payment.updatedAt.toISOString()}>{formatRelativeAge(payment.updatedAt)}</time></div>
-          </Link>;
-        })}
-      </section>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr] lg:items-start">
+      <Card aria-label="Чеки, ожидающие проверки">
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>
+            {payments.length} {reviewCountLabel(payments.length)}
+          </CardTitle>
+          <span className="text-xs text-muted-foreground">Сначала давние</span>
+        </CardHeader>
+        <CardContent className="flex max-h-[70vh] flex-col divide-y divide-border overflow-y-auto p-0">
+          {payments.map((payment) => {
+            const active = payment.id === selected?.id;
+            return (
+              <Link
+                key={payment.id}
+                href={`/dashboard/payments/review?paymentId=${encodeURIComponent(payment.id)}`}
+                aria-current={active ? "page" : undefined}
+                className={cn("flex flex-col gap-1 px-5 py-3 text-sm transition-colors", active ? "bg-secondary" : "hover:bg-secondary/50")}
+              >
+                <strong className="text-foreground">{payment.booking.customer.name}</strong>
+                <span className="text-muted-foreground">
+                  {payment.booking.service.name} · {payment.booking.branch.name}
+                </span>
+                <div className="flex items-center justify-between pt-1">
+                  <Badge variant="danger">{attentionReasonLabel(payment.attentionReason)}</Badge>
+                  <time dateTime={payment.updatedAt.toISOString()} className="text-xs text-muted-foreground">
+                    {formatRelativeAge(payment.updatedAt)}
+                  </time>
+                </div>
+              </Link>
+            );
+          })}
+        </CardContent>
+      </Card>
 
       {selected ? <PaymentReviewCard payment={selected} approveAction={approveAction} rejectAction={rejectAction} /> : null}
     </div>
@@ -62,60 +89,113 @@ export function PaymentReviewQueue({
 function PaymentReviewCard({ payment, approveAction, rejectAction }: { payment: ReviewPayment; approveAction: ReviewAction; rejectAction: ReviewAction }) {
   const timeZone = payment.booking.branch.timeZone;
   const receipt = payment.submissions?.[0];
+  const receiptSrc = receipt ? `/api/dashboard/payments/submissions/${receipt.id}/receipt` : null;
+
   return (
-    <article className="payment-review-card" aria-labelledby="payment-review-title">
-      <header>
-        <div><p className="context-label">Ручная проверка</p><h2 id="payment-review-title">{payment.booking.customer.name}</h2><p>{payment.booking.service.name} · {formatDateTime(payment.booking.startsAt, timeZone)}</p></div>
-        <StatusBadge tone="danger">{attentionReasonLabel(payment.attentionReason)}</StatusBadge>
-      </header>
+    <Card>
+      <CardHeader className="flex-row items-start justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ручная проверка</p>
+          <CardTitle className="text-lg">{payment.booking.customer.name}</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            {payment.booking.service.name} · {formatDateTime(payment.booking.startsAt, timeZone)}
+          </p>
+        </div>
+        <Badge variant="danger">{attentionReasonLabel(payment.attentionReason)}</Badge>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
+          <div className="flex flex-col">
+            <span className="text-muted-foreground">Клиент</span>
+            <a href={`tel:${payment.booking.customer.phone}`} className="font-medium text-primary hover:underline">
+              {payment.booking.customer.phone}
+            </a>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-muted-foreground">Специалист</span>
+            <strong className="text-foreground">{payment.booking.staff.displayName}</strong>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-muted-foreground">Филиал</span>
+            <strong className="text-foreground">{payment.booking.branch.name}</strong>
+          </div>
+        </div>
 
-      <section className="payment-review-summary" aria-label="Данные записи">
-        <div><span>Клиент</span><strong><a href={`tel:${payment.booking.customer.phone}`}>{payment.booking.customer.phone}</a></strong></div>
-        <div><span>Специалист</span><strong>{payment.booking.staff.displayName}</strong></div>
-        <div><span>Филиал</span><strong>{payment.booking.branch.name}</strong></div>
-      </section>
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-foreground">Сверка оплаты</h3>
+          <div className="grid grid-cols-3 gap-2 rounded-md border border-border p-3 text-sm">
+            <span className="text-xs font-medium uppercase text-muted-foreground">Поле</span>
+            <span className="text-xs font-medium uppercase text-muted-foreground">Ожидалось</span>
+            <span className="text-xs font-medium uppercase text-muted-foreground">В чеке</span>
+            <ComparisonRow label="Сумма" expected={formatSomoni(payment.amountDiram)} actual={payment.receiptAmountDiram === null ? "Не распознана" : formatSomoni(payment.receiptAmountDiram)} mismatch={payment.receiptAmountDiram !== payment.amountDiram} />
+            <ComparisonRow label="Карта" expected={cardSuffix(payment.booking.branch.recipientCardLast4)} actual={cardSuffix(payment.recipientCardSuffix)} mismatch={payment.recipientCardSuffix !== payment.booking.branch.recipientCardLast4} />
+            <ComparisonRow label="Время операции" expected="До окончания брони" actual={payment.operationAt ? formatDateTime(payment.operationAt, timeZone) : "Не распознано"} mismatch={payment.attentionReason === "OPERATION_TIME_MISMATCH"} />
+          </div>
+        </div>
 
-      <section className="payment-review-comparison" aria-labelledby="comparison-title">
-        <h3 id="comparison-title">Сверка оплаты</h3>
-        <div className="payment-review-comparison-heading"><span>Поле</span><span>Ожидалось</span><span>В чеке</span></div>
-        <ComparisonRow label="Сумма" expected={formatSomoni(payment.amountDiram)} actual={payment.receiptAmountDiram === null ? "Не распознана" : formatSomoni(payment.receiptAmountDiram)} mismatch={payment.receiptAmountDiram !== payment.amountDiram} />
-        <ComparisonRow label="Карта" expected={cardSuffix(payment.booking.branch.recipientCardLast4)} actual={cardSuffix(payment.recipientCardSuffix)} mismatch={payment.recipientCardSuffix !== payment.booking.branch.recipientCardLast4} />
-        <ComparisonRow label="Время операции" expected="До окончания брони" actual={payment.operationAt ? formatDateTime(payment.operationAt, timeZone) : "Не распознано"} mismatch={payment.attentionReason === "OPERATION_TIME_MISMATCH"} />
-      </section>
+        {receiptSrc ? (
+          <div>
+            <h3 className="mb-1 text-sm font-semibold text-foreground">Изображение чека</h3>
+            <p className="mb-2 text-sm text-muted-foreground">Нажмите на изображение, чтобы увеличить и визуально сверить данные.</p>
+            <ReceiptLightbox src={receiptSrc} />
+            <a href={receiptSrc} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+              <ExternalLink className="size-3.5" /> Открыть в новой вкладке
+            </a>
+          </div>
+        ) : (
+          <p className="text-sm text-destructive" role="alert">
+            Изображение чека недоступно. Не подтверждайте оплату без сверки.
+          </p>
+        )}
 
-      {receipt ? <section className="payment-review-receipt" aria-labelledby="receipt-title">
-        <div><h3 id="receipt-title">Изображение чека</h3><p>Откройте оригинал и визуально сверьте сумму, карту, дату и статус операции.</p></div>
-        {/* eslint-disable-next-line @next/next/no-img-element -- authenticated binary endpoint is not an optimizable public asset */}
-        <img src={`/api/dashboard/payments/submissions/${receipt.id}/receipt`} alt="Чек, отправленный клиентом" />
-        <a className="ui-button secondary" href={`/api/dashboard/payments/submissions/${receipt.id}/receipt`} target="_blank" rel="noreferrer">Открыть в полном размере</a>
-      </section> : <p className="entity-error" role="alert">Изображение чека недоступно. Не подтверждайте оплату без сверки.</p>}
-
-      <section className="payment-review-actions" aria-labelledby="review-actions-title">
-        <div><h3 id="review-actions-title">Решение</h3><p>Подтверждайте оплату только после сверки данных. Действие сохранится в истории записи.</p></div>
-        <form action={approveAction}>
-          <input type="hidden" name="paymentId" value={payment.id} />
-          <label className="ui-field"><span className="ui-field-label">Комментарий к подтверждению</span><input className="ui-input" name="reason" maxLength={300} placeholder="Например, сумма подтверждена по чеку" /></label>
-          <SubmitButton idle="Подтвердить оплату" pending="Подтверждаем" />
-        </form>
-        <form action={rejectAction}>
-          <input type="hidden" name="paymentId" value={payment.id} />
-          <label className="ui-field"><span className="ui-field-label">Причина отклонения</span><input className="ui-input" name="reason" minLength={3} maxLength={300} required placeholder="Например, сумма в чеке не совпадает" /></label>
-          <SubmitButton variant="danger" idle="Отклонить чек" pending="Отклоняем" />
-        </form>
-      </section>
-    </article>
+        <div className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2">
+          <form action={approveAction} className="flex flex-col gap-2">
+            <input type="hidden" name="paymentId" value={payment.id} />
+            <Field label="Комментарий к подтверждению">
+              <Input name="reason" maxLength={300} placeholder="Например, сумма подтверждена по чеку" />
+            </Field>
+            <Button type="submit">Подтвердить оплату</Button>
+          </form>
+          <form action={rejectAction} className="flex flex-col gap-2">
+            <input type="hidden" name="paymentId" value={payment.id} />
+            <Field label="Причина отклонения">
+              <Input name="reason" minLength={3} maxLength={300} required placeholder="Например, сумма в чеке не совпадает" />
+            </Field>
+            <Button type="submit" variant="destructive">
+              Отклонить чек
+            </Button>
+          </form>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function ComparisonRow({ label, expected, actual, mismatch }: { label: string; expected: string; actual: string; mismatch: boolean }) {
-  return <div className={mismatch ? "is-mismatch" : undefined}><strong>{label}</strong><span>{expected}</span><span>{actual}</span></div>;
+  return (
+    <>
+      <strong className={cn("text-foreground", mismatch && "text-destructive")}>{label}</strong>
+      <span className={cn(mismatch && "text-destructive")}>{expected}</span>
+      <span className={cn(mismatch && "font-medium text-destructive")}>{actual}</span>
+    </>
+  );
 }
 
 function attentionReasonLabel(reason: string | null) {
   return ({ AMOUNT_MISMATCH: "Сумма не совпадает", RECIPIENT_MISMATCH: "Карта не совпадает", OPERATION_TIME_MISMATCH: "Время операции не совпадает", RECEIPT_NOT_SUCCESSFUL: "Оплата неуспешна", BOOKING_NOT_PENDING: "Статус записи изменился", OCR_FAILED: "Чек не распознан", OCR_UNRELIABLE: "Чек не распознан", RECEIPT_MISMATCH: "Данные не совпадают" } as Record<string, string>)[reason ?? ""] ?? "Нужна проверка";
 }
 
-function cardSuffix(value: string | null) { return value ? `•••• ${value}` : "Не распознана"; }
-function formatDateTime(value: Date, timeZone: string) { return new Intl.DateTimeFormat("ru-TJ", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(value); }
-function formatRelativeAge(value: Date) { return new Intl.DateTimeFormat("ru-TJ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dushanbe" }).format(value); }
-function reviewCountLabel(value: number) { const mod10 = value % 10; const mod100 = value % 100; return mod10 === 1 && mod100 !== 11 ? "чек" : mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14) ? "чека" : "чеков"; }
+function cardSuffix(value: string | null) {
+  return value ? `•••• ${value}` : "Не распознана";
+}
+function formatDateTime(value: Date, timeZone: string) {
+  return new Intl.DateTimeFormat("ru-TJ", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(value);
+}
+function formatRelativeAge(value: Date) {
+  return new Intl.DateTimeFormat("ru-TJ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dushanbe" }).format(value);
+}
+function reviewCountLabel(value: number) {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  return mod10 === 1 && mod100 !== 11 ? "чек" : mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14) ? "чека" : "чеков";
+}

@@ -42,8 +42,8 @@ test("pilot auto service confirms a resource booking after receipt", async ({ pa
   await page.getByLabel("Пароль").fill(autoOwnerPassword);
   await page.getByRole("button", { name: "Войти в кабинет" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
-  await page.goto("/dashboard/bookings");
-  const bookingRow = page.getByRole("article").filter({ hasText: customerName });
+  await page.goto("/dashboard/bookings?view=list");
+  const bookingRow = page.getByRole("row").filter({ hasText: customerName });
   await expect(bookingRow).toContainText("Подтверждена");
   await expect(bookingRow).toContainText("Подъёмник 1");
 });

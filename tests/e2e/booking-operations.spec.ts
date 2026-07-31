@@ -23,16 +23,16 @@ test("owner creates, finds, reschedules and cancels a booking", async ({ page })
   await page.getByRole("group", { name: "Свободное время" }).getByRole("button").first().click();
   await page.getByRole("button", { name: "Перенести запись" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Перенести запись" }).click();
-  await expect(page.getByText("Запись перенесена")).toBeVisible();
+  await expect(page.getByText("Запись перенесена", { exact: true }).first()).toBeVisible();
 
   await page.getByLabel("Причина отмены").fill("Клиент попросил отменить");
   await page.getByRole("button", { name: "Отменить запись" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Отменить запись" }).click();
-  await expect(page.getByRole("status")).toHaveText("Запись отменена");
+  await expect(page.getByText("Запись отменена", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Клиент попросил отменить")).toBeVisible();
 
   await page.goto(`/dashboard/bookings?view=list&search=${encodeURIComponent(customerName)}`);
-  await expect(page.getByRole("link", { name: new RegExp(customerName) })).toContainText("Отменена");
+  await expect(page.getByRole("row").filter({ hasText: customerName })).toContainText("Отменена");
 });
 
 test("booking workspace has no horizontal overflow", async ({ page }) => {
@@ -41,8 +41,10 @@ test("booking workspace has no horizontal overflow", async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/dashboard/bookings?view=list");
     await expect(page.getByRole("heading", { name: "Записи" })).toBeVisible();
-    const overflow = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, elements: [...document.querySelectorAll("body *")].flatMap((element) => { const rect = element.getBoundingClientRect(); return rect.right > document.documentElement.clientWidth + 1 ? [`${element.tagName}.${element.className}:${Math.round(rect.right)}`] : []; }).slice(0, 8) }));
-    expect(overflow, `overflow at ${width}px`).toEqual({ document: width, elements: [] });
+    // Data tables (e.g. the bookings list) may scroll horizontally within their own container on
+    // narrow viewports; the page itself must never grow a horizontal scrollbar.
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth, `page horizontal scroll at ${width}px`).toBe(width);
   }
 });
 

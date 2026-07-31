@@ -1,20 +1,27 @@
 "use client";
 
-import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { useEffect } from "react";
 
-import { Button } from "@/features/ui/button";
+import { Button, ButtonLink } from "@/features/ui-kit/button";
 
 export default function DashboardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error("Dashboard route failed", { digest: error.digest });
   }, [error.digest]);
 
-  return <section className="dashboard-content route-error" role="alert">
-    <div className="ui-empty-mark" aria-hidden>!</div>
-    <p className="context-label">Не удалось открыть раздел</p>
-    <h1>Данные временно недоступны</h1>
-    <p>Настройки не изменились. Проверьте соединение и повторите загрузку.</p>
-    <div className="route-error-actions"><Button onClick={reset}>Повторить загрузку</Button><Link className="ui-button ui-button-secondary" href="/dashboard">Вернуться в обзор</Link></div>
-  </section>;
+  return (
+    <section role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-card/50 px-6 py-16 text-center">
+      <AlertTriangle className="size-8 text-destructive" aria-hidden />
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Не удалось открыть раздел</p>
+      <h1 className="text-xl font-semibold text-foreground">Данные временно недоступны</h1>
+      <p className="max-w-sm text-sm text-muted-foreground">Настройки не изменились. Проверьте соединение и повторите загрузку.</p>
+      <div className="flex items-center gap-2">
+        <Button onClick={reset}>Повторить загрузку</Button>
+        <ButtonLink variant="secondary" href="/dashboard">
+          Вернуться в обзор
+        </ButtonLink>
+      </div>
+    </section>
+  );
 }
