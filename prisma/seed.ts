@@ -3,6 +3,7 @@ import { encryptCardNumber } from "@/core/payments/card-encryption";
 import { hashPassword } from "@/core/auth/password";
 
 async function main() {
+  await resetDatabase();
   const paymentCardEncrypted = paymentCard();
   const owner = await prisma.user.upsert({
     where: { email: "owner@demo-barber.local" },
@@ -211,6 +212,15 @@ async function seedAutoService(paymentCardEncrypted: string | undefined) {
       },
     });
   }
+}
+
+async function resetDatabase() {
+  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'
+  `;
+  if (tables.length === 0) return;
+  const quotedTables = tables.map(({ tablename }) => `"${tablename}"`).join(", ");
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${quotedTables} RESTART IDENTITY CASCADE`);
 }
 
 function paymentCard(): string | undefined {
