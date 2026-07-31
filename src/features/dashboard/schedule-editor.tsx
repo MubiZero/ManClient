@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 
-import { SubmitButton } from "@/features/ui/submit-button";
+import { Button } from "@/features/ui-kit/button";
+import { Checkbox } from "@/features/ui-kit/checkbox";
+import { Field, Input } from "@/features/ui-kit/field";
+import { SubmitButton } from "@/features/ui-kit/submit-button";
 
 type Interval = { dayOfWeek: number; startsAt: string; endsAt: string };
 type DayValue = { enabled: boolean; startsAt: string; endsAt: string; breakEnabled: boolean; breakStartsAt: string; breakEndsAt: string };
@@ -52,38 +55,66 @@ export function ScheduleEditor({ mode, inherited = false, rules, breaks, action,
     });
   }
 
-  return <div className="schedule-editor">
-    {mode === "staff" && inherited ? <div className="schedule-inherited" role="status">
-      <div><strong>Используется график филиала</strong><p>Создайте личный график только если специалист работает в другое время.</p></div>
-      {restoreAction ? <form action={restoreAction}><input type="hidden" name="branchId" value={branchId} /><input type="hidden" name="staffId" value={staffId} /><SubmitButton variant="secondary" idle="Вернуть график филиала" pending="Возвращаем" /></form> : null}
-    </div> : null}
-    <form action={action} className="entity-form schedule-form">
-      <input type="hidden" name="branchId" value={branchId} />
-      <input type="hidden" name="staffId" value={staffId} />
-      <div className="schedule-toolbar">
-        <div><h2>{mode === "branch" ? "Рабочая неделя филиала" : "График специалиста"}</h2><p>Выключенный день считается выходным. Перерыв исключается из свободного времени.</p></div>
-        <button className="ui-button ui-button-secondary" type="button" onClick={copyMondayToWeekdays}>Скопировать на будни</button>
-      </div>
-      <div className="schedule-days">
-        {days.map(({ value: day, label }) => {
-          const item = values[day];
-          return <fieldset className="schedule-day" key={day}>
-            <legend>{label}</legend>
-            <label className="schedule-enabled"><input type="checkbox" name={`enabled-${day}`} value="true" checked={item.enabled} onChange={(event) => update(day, { enabled: event.target.checked })} /><span>{item.enabled ? "Рабочий день" : "Выходной"}</span></label>
-            <div className="schedule-time-range">
-              <label><span>Начало</span><input className="ui-input" type="time" name={`startsAt-${day}`} value={item.startsAt} disabled={!item.enabled} onChange={(event) => update(day, { startsAt: event.target.value })} /></label>
-              <label><span>Конец</span><input className="ui-input" type="time" name={`endsAt-${day}`} value={item.endsAt} disabled={!item.enabled} onChange={(event) => update(day, { endsAt: event.target.value })} /></label>
-            </div>
-            <label className="schedule-enabled"><input type="checkbox" name={`breakEnabled-${day}`} value="true" checked={item.breakEnabled} disabled={!item.enabled} onChange={(event) => update(day, { breakEnabled: event.target.checked })} /><span>Перерыв</span></label>
-            {item.breakEnabled && item.enabled ? <div className="schedule-time-range">
-              <label><span>С</span><input className="ui-input" type="time" name={`breakStartsAt-${day}`} value={item.breakStartsAt} onChange={(event) => update(day, { breakStartsAt: event.target.value })} /></label>
-              <label><span>До</span><input className="ui-input" type="time" name={`breakEndsAt-${day}`} value={item.breakEndsAt} onChange={(event) => update(day, { breakEndsAt: event.target.value })} /></label>
-            </div> : null}
-          </fieldset>;
-        })}
-      </div>
-      {error ? <p className="entity-error" role="alert">{error}</p> : null}
-      <div className="entity-form-actions"><SubmitButton idle="Сохранить расписание" pending="Сохраняем расписание" /></div>
-    </form>
-  </div>;
+  return (
+    <div className="flex flex-col gap-4">
+      {mode === "staff" && inherited ? (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-secondary px-5 py-4" role="status">
+          <div>
+            <strong className="font-medium text-foreground">Используется график филиала</strong>
+            <p className="text-sm text-muted-foreground">Создайте личный график только если специалист работает в другое время.</p>
+          </div>
+          {restoreAction ? (
+            <form action={restoreAction}>
+              <input type="hidden" name="branchId" value={branchId} />
+              <input type="hidden" name="staffId" value={staffId} />
+              <SubmitButton variant="secondary" idle="Вернуть график филиала" pending="Возвращаем" />
+            </form>
+          ) : null}
+        </div>
+      ) : null}
+      <form action={action} className="flex flex-col gap-5">
+        <input type="hidden" name="branchId" value={branchId} />
+        <input type="hidden" name="staffId" value={staffId} />
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">{mode === "branch" ? "Рабочая неделя филиала" : "График специалиста"}</h2>
+            <p className="text-sm text-muted-foreground">Выключенный день считается выходным. Перерыв исключается из свободного времени.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={copyMondayToWeekdays}>Скопировать на будни</Button>
+        </div>
+        <div className="flex flex-col gap-3">
+          {days.map(({ value: day, label }) => {
+            const item = values[day];
+            return (
+              <fieldset key={day} className="flex flex-col gap-3 rounded-lg border border-border p-4">
+                <legend className="px-1 text-sm font-semibold text-foreground">{label}</legend>
+                <label className="flex min-h-9 items-center gap-2 text-sm text-foreground">
+                  <Checkbox name={`enabled-${day}`} value="true" checked={item.enabled} onChange={(event) => update(day, { enabled: event.target.checked })} />
+                  {item.enabled ? "Рабочий день" : "Выходной"}
+                </label>
+                <div className="flex flex-wrap items-end gap-4">
+                  <Field label="Начало"><Input className="w-32" type="time" name={`startsAt-${day}`} value={item.startsAt} disabled={!item.enabled} onChange={(event) => update(day, { startsAt: event.target.value })} /></Field>
+                  <Field label="Конец"><Input className="w-32" type="time" name={`endsAt-${day}`} value={item.endsAt} disabled={!item.enabled} onChange={(event) => update(day, { endsAt: event.target.value })} /></Field>
+                  <label className="flex min-h-9 items-center gap-2 text-sm text-foreground">
+                    <Checkbox name={`breakEnabled-${day}`} value="true" checked={item.breakEnabled} disabled={!item.enabled} onChange={(event) => update(day, { breakEnabled: event.target.checked })} />
+                    Перерыв
+                  </label>
+                  {item.breakEnabled && item.enabled ? (
+                    <>
+                      <Field label="С"><Input className="w-32" type="time" name={`breakStartsAt-${day}`} value={item.breakStartsAt} onChange={(event) => update(day, { breakStartsAt: event.target.value })} /></Field>
+                      <Field label="До"><Input className="w-32" type="time" name={`breakEndsAt-${day}`} value={item.breakEndsAt} onChange={(event) => update(day, { breakEndsAt: event.target.value })} /></Field>
+                    </>
+                  ) : null}
+                </div>
+              </fieldset>
+            );
+          })}
+        </div>
+        {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
+        <div className="flex justify-end">
+          <SubmitButton idle="Сохранить расписание" pending="Сохраняем расписание" />
+        </div>
+      </form>
+    </div>
+  );
 }

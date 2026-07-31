@@ -1,5 +1,5 @@
 import { formatSomoni } from "@/core/formatting/money";
-import type { TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
+import { escapeTelegramHtml, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 
 export type BusinessBotRole = "OWNER" | "ADMIN" | "STAFF";
 
@@ -11,6 +11,7 @@ export type BusinessBotAction = {
 export type BusinessBotView = {
   text: string;
   replyMarkup?: TelegramReplyMarkup;
+  parseMode?: "HTML";
 };
 
 type Confirmation = {
@@ -83,12 +84,12 @@ export function bookingListView(input: BookingListViewModel): BusinessBotView {
 
 export function bookingCardView(input: BookingCardViewModel): BusinessBotView {
   const details = [
-    `Запись: ${input.customerName}`,
-    `${input.serviceName} · ${input.staffName}`,
-    `${input.branchName} · ${formatDateTime(input.startsAt, input.timeZone)}`,
-    `Телефон: ${input.customerPhone}`,
-    `Статус: ${bookingStatusLabel(input.bookingStatus)}`,
-    `Оплата: ${paymentStatusLabel(input.paymentStatus)} · ${formatSomoni(input.amountDiram)}`,
+    `Запись: <b>${escapeTelegramHtml(input.customerName)}</b>`,
+    `${escapeTelegramHtml(input.serviceName)} · ${escapeTelegramHtml(input.staffName)}`,
+    `${escapeTelegramHtml(input.branchName)} · ${formatDateTime(input.startsAt, input.timeZone)}`,
+    `Телефон: ${escapeTelegramHtml(input.customerPhone)}`,
+    `Статус: <b>${bookingStatusLabel(input.bookingStatus)}</b>`,
+    `Оплата: ${paymentStatusLabel(input.paymentStatus)} · <b>${formatSomoni(input.amountDiram)}</b>`,
   ];
   if (input.confirmation) {
     return confirmationView(details, input.confirmation);
@@ -96,25 +97,35 @@ export function bookingCardView(input: BookingCardViewModel): BusinessBotView {
   const actions = input.actions ?? (input.openPaymentAction ? [input.openPaymentAction] : []);
   return {
     text: details.join("\n"),
+    parseMode: "HTML",
     ...(actions.length ? { replyMarkup: inlineButtons([actions]) } : {}),
   };
 }
 
 export function paymentReviewView(input: PaymentReviewViewModel): BusinessBotView {
   const details = [
-    `Проверка оплаты: ${input.customerName}`,
-    `${input.serviceName} · ${formatDateTime(input.startsAt, input.timeZone)}`,
-    `Сумма: ${formatSomoni(input.amountDiram)}`,
-    ...(input.recipientCardLast4 ? [`Карта получателя: •••• ${input.recipientCardLast4.slice(-4)}`] : []),
-    ...(input.attentionReason ? [`Причина проверки: ${input.attentionReason}`] : []),
+    `Проверка оплаты: <b>${escapeTelegramHtml(input.customerName)}</b>`,
+    `${escapeTelegramHtml(input.serviceName)} · ${formatDateTime(input.startsAt, input.timeZone)}`,
+    `Сумма: <b>${formatSomoni(input.amountDiram)}</b>`,
+    ...(input.recipientCardLast4 ? [`Карта получателя: <b>•••• ${input.recipientCardLast4.slice(-4)}</b>`] : []),
+    ...(input.attentionReason ? [`Причина проверки: ${escapeTelegramHtml(input.attentionReason)}`] : []),
   ];
   if (input.confirmation) {
     return confirmationView(details, input.confirmation);
   }
   return {
     text: details.join("\n"),
+    parseMode: "HTML",
     ...(input.openReceiptAction ? { replyMarkup: inlineButtons([[input.openReceiptAction]]) } : {}),
   };
+}
+
+export function accessDeniedText(subject: string): string {
+  return `У вас нет доступа к ${subject}.`;
+}
+
+export function notFoundText(subject: string, feminine: boolean): string {
+  return `${subject} не найден${feminine ? "а" : ""} или у вас нет доступа к ${feminine ? "ней" : "нему"}.`;
 }
 
 export function staleActionView(input: { menuAction: BusinessBotAction }): BusinessBotView {
@@ -127,6 +138,7 @@ export function staleActionView(input: { menuAction: BusinessBotAction }): Busin
 function confirmationView(details: string[], confirmation: Confirmation): BusinessBotView {
   return {
     text: [...details, "", confirmation.text].join("\n"),
+    parseMode: "HTML",
     replyMarkup: inlineButtons([[confirmation.confirmAction, confirmation.dismissAction]]),
   };
 }

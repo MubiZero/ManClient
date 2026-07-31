@@ -15,7 +15,7 @@ import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 import { assertPaymentCardConfigured, getPaymentUrl } from "@/core/payments/payment-service";
 import type { ReceiptRecognizer } from "@/core/payments/receipt-recognizer";
 import { contactKeyboard, inlineButtonGrid, inlineButtons } from "@/integrations/telegram/conversation-renderer";
-import type { TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
+import { escapeTelegramHtml, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 import type { BusinessTelegramContext, BusinessTelegramUpdate } from "@/integrations/telegram/business-update-dispatcher";
 import { handleTelegramUpdate } from "@/integrations/telegram/update-handler";
 import { verifyBookingActionToken } from "@/core/bookings/booking-action-token";
@@ -25,7 +25,7 @@ import { rescheduleBooking } from "@/core/bookings/reschedule-booking";
 
 export type BusinessTelegramHandlerDependencies = {
   now: () => Date;
-  sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup) => Promise<void>;
+  sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup, parseMode?: "HTML") => Promise<void>;
   answerCallbackQuery?: (callbackQueryId: string, text?: string) => Promise<void>;
   downloadPhoto: (fileId: string) => Promise<Uint8Array>;
   storeReceipt: (input: { storageKey: string; contentType: string; body: Uint8Array }) => Promise<string>;
@@ -308,7 +308,7 @@ async function renderState(
       { text: locale === "tg" ? "Тасдиқ" : "Подтвердить запись", kind: "CONFIRM_BOOKING", payload: {} },
       { text: locale === "tg" ? "Тағйири вақт" : "Изменить время", kind: "CLIENT_BACK", payload: { state: "CONFIRM" } },
     ]);
-    await dependencies.sendMessage(chatId, `${conversationMessage(locale, "CONFIRM")}\n\n${details}`, inlineButtonGrid(actions, 1));
+    await dependencies.sendMessage(chatId, `${conversationMessage(locale, "CONFIRM")}\n\n${details}`, inlineButtonGrid(actions, 1), "HTML");
     return;
   }
   if (session.state === "AWAITING_PAYMENT") {
@@ -454,7 +454,12 @@ async function renderCustomerBookingCard(
     options.unshift({ text: locale === "tg" ? "Пардохт" : "Оплатить", kind: "CLIENT_PAYMENT", payload: { bookingId, paymentId: booking.payment.id } });
   }
   const status = ({ PENDING_PAYMENT: locale === "tg" ? "Интизори пардохт" : "Ожидает оплаты", CONFIRMED: locale === "tg" ? "Тасдиқ шуд" : "Подтверждена", CANCELLED: locale === "tg" ? "Бекор шуд" : "Отменена", EXPIRED: locale === "tg" ? "Муҳлат гузашт" : "Истекла" } as Record<string, string>)[booking.status] ?? booking.status;
-  await dependencies.sendMessage(chatId, `${status}\n${visit}\n${booking.service.name} · ${booking.staff.displayName}\n${booking.branch.name}`, options.length ? inlineButtons(await actionButtons(businessId, conversationId, session.expiresAt, options)) : undefined);
+  await dependencies.sendMessage(
+    chatId,
+    `<b>${escapeTelegramHtml(status)}</b>\n${visit}\n${escapeTelegramHtml(booking.service.name)} · ${escapeTelegramHtml(booking.staff.displayName)}\n${escapeTelegramHtml(booking.branch.name)}`,
+    options.length ? inlineButtons(await actionButtons(businessId, conversationId, session.expiresAt, options)) : undefined,
+    "HTML",
+  );
 }
 
 async function handleCustomerAction(
@@ -597,7 +602,7 @@ async function bookingSummary(businessId: string, data: ConversationData, locale
     prisma.staffMember.findFirstOrThrow({ where: { id: required(data.staffId), businessId }, select: { displayName: true } }),
   ]);
   const visit = new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone: "Asia/Dushanbe", dateStyle: "medium", timeStyle: "short" }).format(new Date(required(data.startsAt)));
-  return `${branch.name}\n${service.name} · ${staff.displayName}\n${visit}\n${required(data.name)} · ${required(data.phone)}\n${(service.amountDiram / 100).toFixed(2)} TJS`;
+  return `${escapeTelegramHtml(branch.name)}\n${escapeTelegramHtml(service.name)} · ${escapeTelegramHtml(staff.displayName)}\n${visit}\n<b>${escapeTelegramHtml(required(data.name))}</b> · ${escapeTelegramHtml(required(data.phone))}\n<b>${(service.amountDiram / 100).toFixed(2)} TJS</b>`;
 }
 
 function localeOf(data: ConversationData): ConversationLocale {

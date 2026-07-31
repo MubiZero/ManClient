@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createTelegramApi } from "@/integrations/telegram/telegram-api";
+import { createTelegramApi, escapeTelegramHtml } from "@/integrations/telegram/telegram-api";
 
 type RecordedCall = { method: string; body: unknown };
 
@@ -175,5 +175,35 @@ describe("Telegram API", () => {
       method: "setMyCommands",
       body: { commands: [{ command: "menu", description: "Главное меню" }] },
     });
+  });
+
+  it("sends HTML-formatted messages and edits only when parse_mode is requested", async () => {
+    const calls: RecordedCall[] = [];
+    const api = createTelegramApi("123:secret", recordingFetcher(calls));
+
+    await api.sendMessage("-10088", "<b>Иван</b> записан", undefined, "HTML");
+    await api.editMessageText({ chatId: "-10088", messageId: 17 }, "<b>Готово</b>", undefined, "HTML");
+
+    expect(calls).toContainEqual({
+      method: "sendMessage",
+      body: { chat_id: "-10088", text: "<b>Иван</b> записан", parse_mode: "HTML" },
+    });
+    expect(calls).toContainEqual({
+      method: "editMessageText",
+      body: { chat_id: "-10088", message_id: 17, text: "<b>Готово</b>", parse_mode: "HTML" },
+    });
+  });
+
+  it("omits parse_mode when not requested", async () => {
+    const calls: RecordedCall[] = [];
+    const api = createTelegramApi("123:secret", recordingFetcher(calls));
+
+    await api.sendMessage("-10088", "Обычный текст");
+
+    expect(calls).toContainEqual({ method: "sendMessage", body: { chat_id: "-10088", text: "Обычный текст" } });
+  });
+
+  it("escapes HTML-significant characters for safe interpolation", () => {
+    expect(escapeTelegramHtml("Tom & Jerry <script>")).toBe("Tom &amp; Jerry &lt;script&gt;");
   });
 });

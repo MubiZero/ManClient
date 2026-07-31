@@ -35,7 +35,7 @@ export type PlatformTelegramUpdate = {
 
 type PlatformHandlerDependencies = {
   now: () => Date;
-  sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup) => Promise<void>;
+  sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup, parseMode?: "HTML") => Promise<void>;
   deleteMessage: (chatId: string, messageId: number) => Promise<void>;
   connectBot: (input: {
     businessId: string;
@@ -78,8 +78,8 @@ export async function handlePlatformTelegramUpdate(
       now: dependencies.now,
       sendMessage: dependencies.sendMessage,
       answerCallbackQuery: async () => {},
-      editMessageText: dependencies.editMessageText ?? (async (message, text, replyMarkup) => {
-        await dependencies.sendMessage(message.chatId, text, replyMarkup);
+      editMessageText: dependencies.editMessageText ?? (async (message, text, replyMarkup, parseMode) => {
+        await dependencies.sendMessage(message.chatId, text, replyMarkup, parseMode);
         return message;
       }),
       sendPhoto: dependencies.sendPhoto,
@@ -133,8 +133,8 @@ export async function handlePlatformTelegramUpdate(
       now: dependencies.now,
       sendMessage: dependencies.sendMessage,
       answerCallbackQuery: dependencies.answerCallbackQuery ?? (async () => {}),
-      editMessageText: dependencies.editMessageText ?? (async (messageRef, messageText, replyMarkup) => {
-        await dependencies.sendMessage(messageRef.chatId, messageText, replyMarkup);
+      editMessageText: dependencies.editMessageText ?? (async (messageRef, messageText, replyMarkup, parseMode) => {
+        await dependencies.sendMessage(messageRef.chatId, messageText, replyMarkup, parseMode);
         return messageRef;
       }),
       sendPhoto: dependencies.sendPhoto,

@@ -1,3 +1,7 @@
+export function escapeTelegramHtml(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
 export type TelegramIdentity = {
   id: number;
   isBot: true;
@@ -114,8 +118,8 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
       await call<boolean>("deleteWebhook", {});
     },
 
-    async sendMessage(chatId: string, text: string, replyMarkup?: TelegramReplyMarkup): Promise<void> {
-      await call("sendMessage", { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+    async sendMessage(chatId: string, text: string, replyMarkup?: TelegramReplyMarkup, parseMode?: "HTML"): Promise<void> {
+      await call("sendMessage", { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}), ...(parseMode ? { parse_mode: parseMode } : {}) });
     },
 
     async deleteMessage(chatId: string, messageId: number): Promise<void> {
@@ -126,12 +130,13 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
       await call("answerCallbackQuery", { callback_query_id: callbackQueryId, ...(text ? { text } : {}) });
     },
 
-    async editMessageText(message: TelegramMessageRef, text: string, replyMarkup?: TelegramReplyMarkup): Promise<TelegramMessageRef> {
+    async editMessageText(message: TelegramMessageRef, text: string, replyMarkup?: TelegramReplyMarkup, parseMode?: "HTML"): Promise<TelegramMessageRef> {
       return messageRef(message.chatId, "editMessageText", {
         chat_id: message.chatId,
         message_id: message.messageId,
         text,
         ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        ...(parseMode ? { parse_mode: parseMode } : {}),
       });
     },
 
@@ -143,13 +148,14 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
       });
     },
 
-    async sendPhoto(chatId: string, photo: Uint8Array | string, caption?: string, replyMarkup?: TelegramReplyMarkup): Promise<TelegramMessageRef> {
+    async sendPhoto(chatId: string, photo: Uint8Array | string, caption?: string, replyMarkup?: TelegramReplyMarkup, parseMode?: "HTML"): Promise<TelegramMessageRef> {
       if (typeof photo === "string") {
         return messageRef(chatId, "sendPhoto", {
           chat_id: chatId,
           photo,
           ...(caption ? { caption } : {}),
           ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+          ...(parseMode ? { parse_mode: parseMode } : {}),
         });
       }
 
@@ -160,6 +166,7 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
       form.append("photo", new Blob([photoBytes.buffer]), "photo.jpg");
       if (caption) form.append("caption", caption);
       if (replyMarkup) form.append("reply_markup", JSON.stringify(replyMarkup));
+      if (parseMode) form.append("parse_mode", parseMode);
       return multipartMessageRef(chatId, "sendPhoto", form);
     },
 

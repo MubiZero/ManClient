@@ -32,9 +32,11 @@ import {
   rejectPaymentReview,
 } from "@/core/payments/payment-review-service";
 import {
+  accessDeniedText,
   bookingCardView,
   bookingListView,
   mainMenuView,
+  notFoundText,
   paymentReviewView,
   type BusinessBotAction,
   type BusinessBotView,
@@ -65,9 +67,9 @@ export type BusinessBotUpdate = {
 
 export type BusinessBotHandlerDependencies = {
   now: () => Date;
-  sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup) => Promise<void>;
+  sendMessage: (chatId: string, text: string, replyMarkup?: TelegramReplyMarkup, parseMode?: "HTML") => Promise<void>;
   answerCallbackQuery: (callbackQueryId: string, text?: string) => Promise<void>;
-  editMessageText: (message: TelegramMessageRef, text: string, replyMarkup?: TelegramReplyMarkup) => Promise<TelegramMessageRef>;
+  editMessageText: (message: TelegramMessageRef, text: string, replyMarkup?: TelegramReplyMarkup, parseMode?: "HTML") => Promise<TelegramMessageRef>;
   sendPhoto?: (chatId: string, photo: Uint8Array, caption?: string, replyMarkup?: TelegramReplyMarkup) => Promise<TelegramMessageRef>;
   loadPaymentReceipt?: typeof getPaymentReceiptForReview;
 };
@@ -541,8 +543,8 @@ async function showBookingOperationError(
   const refresh = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Обновить", dependencies.now());
   const menu = await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now());
   const text = {
-    FORBIDDEN: "У вас нет доступа к этой записи.",
-    NOT_FOUND: "Запись не найдена или у вас нет доступа к ней.",
+    FORBIDDEN: accessDeniedText("этой записи"),
+    NOT_FOUND: notFoundText("Запись", true),
     INVALID_STATUS: "Действие недоступно в текущем состоянии записи. Обновите карточку.",
     SLOT_UNAVAILABLE: "Это время уже занято. Старое время записи сохранено. Выберите другой слот.",
     INVALID_INPUT: "Данные действия устарели или заполнены неверно. Обновите карточку.",
@@ -780,8 +782,8 @@ async function showPaymentReviewError(
     await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
   ];
   const text = {
-    FORBIDDEN: "У вас нет доступа к проверке чеков.",
-    NOT_FOUND: "Чек не найден или у вас нет доступа к нему.",
+    FORBIDDEN: accessDeniedText("проверке чеков"),
+    NOT_FOUND: notFoundText("Чек", false),
     INVALID_STATUS: "Чек уже обработан. Обновите карточку, чтобы увидеть текущее состояние.",
     INVALID_INPUT: "Причина должна содержать от 3 до 300 символов.",
   }[error.code];
@@ -920,13 +922,14 @@ async function deliver(
         { chatId: String(message.chat.id), messageId: message.message_id },
         view.text,
         view.replyMarkup,
+        view.parseMode,
       );
       return;
     } catch {
       // Telegram can reject edits for old or unchanged messages; sending keeps navigation usable.
     }
   }
-  await dependencies.sendMessage(actor.destination.chatId, view.text, view.replyMarkup);
+  await dependencies.sendMessage(actor.destination.chatId, view.text, view.replyMarkup, view.parseMode);
 }
 
 function viewWithActions(view: BusinessBotView, actions: BusinessBotAction[]): BusinessBotView {
