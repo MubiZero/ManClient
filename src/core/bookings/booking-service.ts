@@ -36,6 +36,7 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
     where: { slug: validatedInput.businessSlug },
     select: {
       id: true,
+      status: true,
       branches: {
         where: { id: validatedInput.branchId },
         select: {
@@ -58,6 +59,9 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
   const service = configuration?.branches[0]?.services[0];
   if (!configuration || !service || service.staffMembers.length !== 1) {
     throw new BookingValidationError("Service, branch, or staff assignment is invalid");
+  }
+  if (configuration.status === "SUSPENDED") {
+    throw new BookingValidationError("Business is suspended");
   }
 
   const requiredResourceIds = service.resources.map(({ resourceId }) => resourceId).sort();

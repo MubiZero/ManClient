@@ -52,6 +52,7 @@ test("visitor sees slot time in the selected branch timezone", async ({
       FROM "Branch" AS branch
       JOIN "Business" AS business ON business.id = branch."businessId"
       WHERE business.slug = 'demo-barber'
+      ORDER BY branch."createdAt" ASC
       LIMIT 1
     `);
     branch = result.rows[0];
@@ -109,8 +110,27 @@ test("visitor keeps slots from the most recent availability request", async ({
   await expect(page.getByRole("button", { name: "12:00" })).not.toBeVisible();
 });
 
+test("visitor sees a suspended-business message instead of the booking form", async ({ page }) => {
+  const database = new Client({ connectionString: process.env.DATABASE_URL });
+  await database.connect();
+  try {
+    await database.query(`UPDATE "Business" SET status = 'SUSPENDED' WHERE slug = 'demo-barber'`);
+    await page.goto("/b/demo-barber");
+    await expect(page.getByText("Запись временно недоступна")).toBeVisible();
+    await expect(
+      page.getByText("Онлайн-запись для этого бизнеса приостановлена. Свяжитесь с бизнесом напрямую, чтобы записаться."),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Мужская стрижка/ })).not.toBeVisible();
+  } finally {
+    await database.query(`UPDATE "Business" SET status = 'ACTIVE' WHERE slug = 'demo-barber'`);
+    await database.end();
+  }
+});
+
 async function reachTimeStep(page: import("@playwright/test").Page) {
   await page.goto("/b/demo-barber");
+  const branchButton = page.getByRole("button", { name: "Душанбе, центр" });
+  if (await branchButton.isVisible().catch(() => false)) await branchButton.click();
   await page.getByRole("button", { name: /Мужская стрижка/ }).click();
   await page.getByRole("button", { name: /Алишер/ }).click();
 }

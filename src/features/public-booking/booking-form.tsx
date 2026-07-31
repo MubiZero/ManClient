@@ -9,6 +9,12 @@ import {
   formatTajikPhoneInput,
   normalizeTajikPhone,
 } from "@/core/formatting/tajik-phone";
+import { Button } from "@/features/ui-kit/button";
+import { Card, CardContent } from "@/features/ui-kit/card";
+import { cn } from "@/features/ui-kit/cn";
+import { Field, Input, Label } from "@/features/ui-kit/field";
+import { SelectableCard } from "@/features/ui-kit/selectable-card";
+import { StepProgress } from "@/features/ui-kit/step-progress";
 
 type Staff = { id: string; displayName: string };
 type Service = {
@@ -233,27 +239,10 @@ export function BookingForm({
   }
 
   return (
-    <form className="booking-form" onSubmit={submit} noValidate>
-      <ol className="booking-progress" aria-label="Шаги записи">
-        {steps.map((step, index) => (
-          <li
-            key={step.id}
-            className={
-              step.id === currentStep
-                ? "is-current"
-                : steps.findIndex((item) => item.id === currentStep) > index
-                  ? "is-complete"
-                  : ""
-            }
-            aria-current={step.id === currentStep ? "step" : undefined}
-          >
-            <span>{index + 1}</span>
-            {step.label}
-          </li>
-        ))}
-      </ol>
+    <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+      <StepProgress steps={steps} currentId={currentStep} />
       {branch && currentStep !== "branch" ? (
-        <p className="booking-selection">
+        <p className="text-sm text-muted-foreground">
           {branch.name}
           {service ? ` · ${service.name}` : ""}
           {staffId
@@ -262,188 +251,183 @@ export function BookingForm({
         </p>
       ) : null}
 
-      {currentStep === "branch" ? (
-        <section className="form-section">
-          <StepHeading number={1} title="Выберите филиал" />
-          <div className="choice-grid">
-            {branches.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="choice"
-                aria-pressed={branchId === item.id}
-                onClick={() => chooseBranch(item.id)}
-              >
-                {item.name}
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {currentStep === "service" && branch ? (
-        <section className="form-section">
-          <StepHeading
-            number={branches.length > 1 ? 2 : 1}
-            title="Выберите услугу"
-            onBack={branches.length > 1 ? goBack : undefined}
-            backLabel="Назад к выбору филиала"
-          />
-          <div className="choice-grid services">
-            {branch.services.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="choice service-choice"
-                aria-pressed={serviceId === item.id}
-                onClick={() => chooseService(item.id)}
-              >
-                <strong>{item.name}</strong>
-                <small>
-                  {item.durationMinutes} мин · {formatSomoni(item.amountDiram)}
-                </small>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {currentStep === "staff" && service ? (
-        <section className="form-section">
-          <StepHeading
-            number={branches.length > 1 ? 3 : 2}
-            title="Выберите специалиста"
-            onBack={goBack}
-            backLabel="Назад к выбору услуги"
-          />
-          <div className="choice-grid">
-            {service.staffMembers.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="choice staff-choice"
-                aria-pressed={staffId === item.id}
-                onClick={() => chooseStaff(item.id)}
-              >
-                <span className="avatar" aria-hidden>
-                  {item.displayName.slice(0, 1)}
-                </span>
-                {item.displayName}
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {currentStep === "time" && branch && service ? (
-        <section className="form-section">
-          <StepHeading
-            number={branches.length > 1 ? 4 : 3}
-            title="Выберите время"
-            onBack={goBack}
-            backLabel="Назад к выбору специалиста"
-          />
-          <label className="field-label" htmlFor="booking-date">
-            Дата записи
-          </label>
-          <input
-            id="booking-date"
-            className="text-input date-input"
-            type="date"
-            min={minDate}
-            value={date}
-            onChange={(event) => void loadSlots(event.target.value)}
-          />
-          {isLoadingSlots ? (
-            <p className="status-text" aria-live="polite">
-              Ищем свободное время…
-            </p>
-          ) : date && starts.length === 0 && !error ? (
-            <p className="status-text">
-              На эту дату свободного времени нет. Выберите другой день.
-            </p>
+      <Card>
+        <CardContent className="flex flex-col gap-5 p-6">
+          {currentStep === "branch" ? (
+            <>
+              <StepHeading number={1} title="Выберите филиал" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {branches.map((item) => (
+                  <SelectableCard
+                    key={item.id}
+                    title={item.name}
+                    selected={branchId === item.id}
+                    onClick={() => chooseBranch(item.id)}
+                  />
+                ))}
+              </div>
+            </>
           ) : null}
-          {starts.length ? (
-            <div className="slot-grid" aria-label="Свободное время">
-              {starts.map((value) => (
-                <button
-                  data-slot
-                  key={value}
-                  type="button"
-                  aria-pressed={startsAt === value}
-                  onClick={() => setStartsAt(value)}
-                >
-                  {formatBookingTime(value, branch.timeZone)}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-      {currentStep === "contact" && branch && service ? (
-        <section className="form-section contact-section">
-          <StepHeading
-            number={branches.length > 1 ? 5 : 4}
-            title="Оставьте контакты"
-            onBack={goBack}
-            backLabel="Назад к выбору времени"
-          />
-          <p className="booking-summary">
-            {formatBookingTime(startsAt, branch.timeZone)} · {service.name} ·{" "}
-            {formatSomoni(service.amountDiram)}
-          </p>
-          <div className="field-grid">
-            <label className="field-label">
-              Имя
-              <input
-                className="text-input"
-                name="name"
-                autoComplete="name"
-                required
-                maxLength={120}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
+          {currentStep === "service" && branch ? (
+            <>
+              <StepHeading
+                number={branches.length > 1 ? 2 : 1}
+                title="Выберите услугу"
+                onBack={branches.length > 1 ? goBack : undefined}
+                backLabel="Назад к выбору филиала"
               />
-            </label>
-            <label className="field-label">
-              Телефон
-              <input
-                className="text-input"
-                name="phone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                placeholder="+992 90 000 00 00"
-                value={phone}
-                aria-invalid={phoneError ? true : undefined}
-                aria-describedby={
-                  phoneError ? "booking-phone-error" : undefined
-                }
-                onChange={(event) => {
-                  setPhone(formatTajikPhoneInput(event.target.value));
-                  setPhoneError(null);
-                }}
-                onBlur={onPhoneBlur}
-              />
-            </label>
-          </div>
-          {phoneError ? (
-            <p id="booking-phone-error" className="field-error" role="alert">
-              {phoneError}
-            </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {branch.services.map((item) => (
+                  <SelectableCard
+                    key={item.id}
+                    title={item.name}
+                    subtitle={`${item.durationMinutes} мин · ${formatSomoni(item.amountDiram)}`}
+                    selected={serviceId === item.id}
+                    onClick={() => chooseService(item.id)}
+                  />
+                ))}
+              </div>
+            </>
           ) : null}
-          <p className="payment-note">
-            После записи слот будет удерживаться 15 минут для оплаты. Деньги
-            поступят напрямую бизнесу.
-          </p>
-          <button
-            className="primary-button"
-            type="submit"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? "Создаём запись…" : "Перейти к оплате"}
-          </button>
-        </section>
-      ) : null}
+          {currentStep === "staff" && service ? (
+            <>
+              <StepHeading
+                number={branches.length > 1 ? 3 : 2}
+                title="Выберите специалиста"
+                onBack={goBack}
+                backLabel="Назад к выбору услуги"
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {service.staffMembers.map((item) => (
+                  <SelectableCard
+                    key={item.id}
+                    title={item.displayName}
+                    selected={staffId === item.id}
+                    onClick={() => chooseStaff(item.id)}
+                    icon={
+                      <span
+                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 dark:bg-brand-900 dark:text-brand-300"
+                        aria-hidden
+                      >
+                        {item.displayName.slice(0, 1)}
+                      </span>
+                    }
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+          {currentStep === "time" && branch && service ? (
+            <>
+              <StepHeading
+                number={branches.length > 1 ? 4 : 3}
+                title="Выберите время"
+                onBack={goBack}
+                backLabel="Назад к выбору специалиста"
+              />
+              <Field label="Дата записи" htmlFor="booking-date">
+                <Input
+                  id="booking-date"
+                  type="date"
+                  min={minDate}
+                  value={date}
+                  onChange={(event) => void loadSlots(event.target.value)}
+                  className="max-w-xs"
+                />
+              </Field>
+              {isLoadingSlots ? (
+                <p className="text-sm text-muted-foreground" aria-live="polite">
+                  Ищем свободное время…
+                </p>
+              ) : date && starts.length === 0 && !error ? (
+                <p className="text-sm text-muted-foreground">
+                  На эту дату свободного времени нет. Выберите другой день.
+                </p>
+              ) : null}
+              {starts.length ? (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label="Свободное время">
+                  {starts.map((value) => (
+                    <button
+                      data-slot
+                      key={value}
+                      type="button"
+                      aria-pressed={startsAt === value}
+                      onClick={() => setStartsAt(value)}
+                      className={cn(
+                        "rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/50 hover:bg-secondary",
+                        "aria-[pressed=true]:border-primary aria-[pressed=true]:bg-primary aria-[pressed=true]:text-primary-foreground",
+                      )}
+                    >
+                      {formatBookingTime(value, branch.timeZone)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+          {currentStep === "contact" && branch && service ? (
+            <>
+              <StepHeading
+                number={branches.length > 1 ? 5 : 4}
+                title="Оставьте контакты"
+                onBack={goBack}
+                backLabel="Назад к выбору времени"
+              />
+              <p className="text-sm font-medium text-foreground">
+                {formatBookingTime(startsAt, branch.timeZone)} · {service.name} ·{" "}
+                {formatSomoni(service.amountDiram)}
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Имя">
+                  <Input
+                    name="name"
+                    autoComplete="name"
+                    required
+                    maxLength={120}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </Field>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="booking-phone">Телефон</Label>
+                  <Input
+                    id="booking-phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+992 90 000 00 00"
+                    value={phone}
+                    aria-invalid={phoneError ? true : undefined}
+                    aria-describedby={
+                      phoneError ? "booking-phone-error" : undefined
+                    }
+                    onChange={(event) => {
+                      setPhone(formatTajikPhoneInput(event.target.value));
+                      setPhoneError(null);
+                    }}
+                    onBlur={onPhoneBlur}
+                  />
+                  {phoneError ? (
+                    <p id="booking-phone-error" className="text-[13px] text-destructive" role="alert">
+                      {phoneError}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                После записи слот будет удерживаться 15 минут для оплаты. Деньги
+                поступят напрямую бизнесу.
+              </p>
+              <Button type="submit" size="lg" disabled={isSubmitting} loading={isSubmitting}>
+                {isSubmitting ? "Создаём запись…" : "Перейти к оплате"}
+              </Button>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
       {error ? (
-        <p className="form-error" role="alert">
+        <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       ) : null}
@@ -463,14 +447,20 @@ function StepHeading({
   backLabel?: string;
 }) {
   return (
-    <div className="booking-step-heading">
-      <h2>
-        <span>{number}</span> {title}
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+        <span
+          className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+          aria-hidden
+        >
+          {number}
+        </span>
+        {title}
       </h2>
       {onBack ? (
-        <button className="quiet-action" type="button" onClick={onBack}>
+        <Button type="button" variant="quiet" size="sm" onClick={onBack}>
           {backLabel}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

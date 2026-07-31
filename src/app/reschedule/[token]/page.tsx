@@ -10,25 +10,31 @@ export default async function ReschedulePage({ params }: { params: Promise<{ tok
   if (!booking) notFound();
 
   return (
-    <main className="booking-page">
-      <header className="public-header">
-        <span className="brand">MC</span>
-        <span>Перенос записи</span>
+    <main className="min-h-screen bg-secondary/30">
+      <header className="border-b border-border bg-background">
+        <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4">
+          <span className="flex size-8 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground" aria-hidden>
+            MC
+          </span>
+          <span className="text-sm font-medium text-muted-foreground">Перенос записи</span>
+        </div>
       </header>
-      <section className="booking-hero">
-        <p className="context-label">{booking.business.name}</p>
-        <h1>Выберите новое время</h1>
-        <p>
+      <section className="mx-auto max-w-md px-4 pb-4 pt-8">
+        <p className="text-sm font-medium text-primary">{booking.business.name}</p>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">Выберите новое время</h1>
+        <p className="mt-2 text-muted-foreground">
           {booking.service.name}, специалист {booking.staff.displayName}. Старая запись сохранится,
           пока новое время не будет подтверждено.
         </p>
       </section>
-      <RescheduleForm
-        token={token}
-        branchId={booking.branchId}
-        serviceId={booking.serviceId}
-        staffId={booking.staffId}
-      />
+      <div className="mx-auto max-w-md px-4 pb-16">
+        <RescheduleForm
+          token={token}
+          branchId={booking.branchId}
+          serviceId={booking.serviceId}
+          staffId={booking.staffId}
+        />
+      </div>
     </main>
   );
 }
