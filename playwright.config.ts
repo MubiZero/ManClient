@@ -4,6 +4,10 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   workers: 1,
+  // The first test in the suite touches several routes Next dev hasn't
+  // compiled yet; each JIT compile adds up across a multi-step test and can
+  // exceed the 30s default well before any single assertion times out.
+  timeout: 60_000,
   webServer: {
     command: "pnpm db:seed && pnpm dev",
     url: "http://127.0.0.1:3000",
