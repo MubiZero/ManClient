@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 import { decryptSecret, encryptSecret } from "@/core/security/secret-encryption";
 import { createTelegramApi, TelegramApiError, type TelegramIdentity } from "@/integrations/telegram/telegram-api";
@@ -149,8 +150,15 @@ export async function rotateBusinessTelegramBot(
   if (previousToken && current.botId !== String(identity.id)) {
     try {
       await (currentTelegram ?? createTelegramApi(previousToken)).deleteWebhook();
-    } catch {
+    } catch (error) {
       // The old public route no longer resolves; cleanup can be retried operationally.
+      await writeAuditEvent({
+        businessId: input.businessId,
+        type: "telegram.integration.old_webhook_cleanup_failed",
+        actorType: "user",
+        actorId: input.actorUserId,
+        metadata: { integrationId: current.id, previousBotId: current.botId, error: error instanceof Error ? error.message : String(error) },
+      });
     }
   }
   return rotated;
@@ -195,6 +203,45 @@ export async function disconnectBusinessTelegramBot(
       },
     });
     return disconnected;
+  });
+}
+
+export async function retryBusinessTelegramWebhook(
+  input: { integrationId: string; actorUserId: string },
+  telegramFactory: (token: string) => BusinessTelegramApi = createTelegramApi,
+) {
+  const encryptionKey = requiredEncryptionKey();
+  const integration = await prisma.businessTelegramIntegration.findUnique({ where: { id: input.integrationId } });
+  if (!integration || integration.status === "DISCONNECTED" || !integration.botTokenEncrypted || !integration.webhookSecretEncrypted) {
+    throw new BusinessTelegramIntegrationError("NOT_CONNECTED");
+  }
+
+  const token = decryptSecret(integration.botTokenEncrypted, encryptionKey);
+  const webhookSecret = decryptSecret(integration.webhookSecretEncrypted, encryptionKey);
+  const telegram = telegramFactory(token);
+  try {
+    await telegram.setMyCommands(clientCommands);
+    await telegram.setWebhook(webhookUrl(integration.publicId), webhookSecret);
+  } catch {
+    throw new BusinessTelegramIntegrationError("TELEGRAM_UNAVAILABLE");
+  }
+
+  return prisma.$transaction(async (transaction) => {
+    const retried = await transaction.businessTelegramIntegration.update({
+      where: { id: integration.id },
+      data: { status: "ACTIVE", lastWebhookError: null },
+      select: { id: true, status: true, botUsername: true },
+    });
+    await transaction.auditEvent.create({
+      data: {
+        businessId: integration.businessId,
+        type: "telegram.integration.retried",
+        actorType: "platform_admin",
+        actorId: input.actorUserId,
+        metadata: { integrationId: retried.id, botUsername: retried.botUsername },
+      },
+    });
+    return retried;
   });
 }
 

@@ -23,6 +23,13 @@ const phoneSchema = z.preprocess(
 
 export const brandColorSchema = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "INVALID_COLOR");
 
+export const whatsappSettingsSchema = z.object({
+  phoneNumberId: optionalText(64),
+  templateName: optionalText(512),
+  confirmationTemplateName: optionalText(512),
+  languageCode: z.enum(["ru", "tg"]).default("ru"),
+}).strict();
+
 export const branchInputSchema = z.object({
   name: nameSchema,
   address: optionalText(240),

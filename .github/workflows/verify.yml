@@ -54,3 +54,14 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm playwright test
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Trigger Coolify deployment
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" \
+            "https://cool.mubi.dev/api/v1/deploy?uuid=u1j3srpnv5rjvsaxnabu1liu&force=false"

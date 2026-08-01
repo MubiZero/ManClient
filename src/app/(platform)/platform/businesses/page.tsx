@@ -8,13 +8,13 @@ import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 
-export default async function PlatformBusinessesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams;
-  const businesses = await listBusinesses(q);
+export default async function PlatformBusinessesPage({ searchParams }: { searchParams: Promise<{ q?: string; cursor?: string }> }) {
+  const { q, cursor } = await searchParams;
+  const { items: businesses, nextCursor } = await listBusinesses(q, { cursor });
 
   return (
     <>
-      <PageHeader eyebrow="Платформа" title="Бизнесы" description={`Всего ${businesses.length}`} />
+      <PageHeader eyebrow="Платформа" title="Бизнесы" description={cursor ? "Следующая страница" : `Показаны первые ${businesses.length}`} />
 
       <form className="max-w-sm">
         <div className="relative">
@@ -71,6 +71,15 @@ export default async function PlatformBusinessesPage({ searchParams }: { searchP
           </TableBody>
         </Table>
       )}
+
+      {nextCursor ? (
+        <Link
+          href={`/platform/businesses?${new URLSearchParams({ ...(q ? { q } : {}), cursor: nextCursor }).toString()}`}
+          className="text-sm font-medium text-foreground hover:underline"
+        >
+          Следующая страница →
+        </Link>
+      ) : null}
     </>
   );
 }

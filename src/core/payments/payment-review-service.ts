@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
+import { cardLast4 } from "@/core/formatting/card-number";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
@@ -157,18 +158,75 @@ export async function rejectPaymentReview(input: ActorInput & { paymentId: strin
   });
 }
 
+export async function approvePaymentAsPlatformAdmin(input: { paymentId: string; actorUserId: string; reason?: string }, now = new Date()) {
+  return prisma.$transaction(async (transaction) => {
+    const payment = await transaction.payment.findUnique({ where: { id: input.paymentId }, include: { booking: true, submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } });
+    if (!payment) throw new PaymentReviewError("NOT_FOUND");
+    if (payment.status === "RECEIPT_ACCEPTED") return { bookingId: payment.bookingId, changed: false };
+    if (payment.status !== "NEEDS_ATTENTION" || payment.booking.status !== "PENDING_PAYMENT") throw new PaymentReviewError("INVALID_STATUS");
+    const reason = input.reason?.trim().slice(0, 300) || "Подтверждено платформенным администратором";
+    const submission = payment.submissions[0];
+    if (!submission) throw new PaymentReviewError("INVALID_STATUS");
+    const claimed = await transaction.payment.updateMany({
+      where: { id: payment.id, status: "NEEDS_ATTENTION" },
+      data: { status: "RECEIPT_ACCEPTED", receiptAcceptedAt: now, reviewedAt: now, reviewedBy: `platform_admin:${input.actorUserId}`, reviewReason: reason, isBankVerified: false },
+    });
+    if (claimed.count !== 1) {
+      const current = await transaction.payment.findUnique({ where: { id: payment.id }, select: { status: true } });
+      if (current?.status === "RECEIPT_ACCEPTED") return { bookingId: payment.bookingId, changed: false };
+      throw new PaymentReviewError("INVALID_STATUS");
+    }
+    await transaction.receiptSubmission.update({ where: { id: submission.id }, data: { status: "ACCEPTED", reviewedAt: now, reviewedBy: `platform_admin:${input.actorUserId}`, reviewNote: reason } });
+    await transaction.booking.update({ where: { id: payment.bookingId }, data: { status: "CONFIRMED", confirmedAt: now, confirmedBy: `platform_admin:${input.actorUserId}`, expiresAt: null } });
+    await writeAuditEvent({ businessId: payment.businessId, bookingId: payment.bookingId, type: "payment.review_approved", actorType: "platform_admin", actorId: input.actorUserId, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
+    await scheduleBookingReminders(payment.bookingId, transaction);
+    await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
+    await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: now }, transaction);
+    await scheduleUpcomingBusinessVisit({ businessId: payment.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
+    await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now }, transaction);
+    return { bookingId: payment.bookingId, changed: true };
+  });
+}
+
+export async function rejectPaymentAsPlatformAdmin(input: { paymentId: string; actorUserId: string; reason: string }, now = new Date()) {
+  const reason = input.reason.trim();
+  if (reason.length < 3 || reason.length > 300) throw new PaymentReviewError("INVALID_INPUT");
+  return prisma.$transaction(async (transaction) => {
+    const payment = await transaction.payment.findUnique({ where: { id: input.paymentId }, include: { booking: true, submissions: { where: { status: "NEEDS_REVIEW" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } });
+    if (!payment) throw new PaymentReviewError("NOT_FOUND");
+    if (payment.status === "REJECTED") return { bookingId: payment.bookingId, changed: false };
+    if (payment.status !== "NEEDS_ATTENTION" || payment.booking.status !== "PENDING_PAYMENT") throw new PaymentReviewError("INVALID_STATUS");
+    const submission = payment.submissions[0];
+    if (!submission) throw new PaymentReviewError("INVALID_STATUS");
+    const claimed = await transaction.payment.updateMany({
+      where: { id: payment.id, status: "NEEDS_ATTENTION" },
+      data: { status: "REJECTED", reviewedAt: now, reviewedBy: `platform_admin:${input.actorUserId}`, reviewReason: reason },
+    });
+    if (claimed.count !== 1) {
+      const current = await transaction.payment.findUnique({ where: { id: payment.id }, select: { status: true } });
+      if (current?.status === "REJECTED") return { bookingId: payment.bookingId, changed: false };
+      throw new PaymentReviewError("INVALID_STATUS");
+    }
+    await transaction.receiptSubmission.update({ where: { id: submission.id }, data: { status: "REJECTED", reviewedAt: now, reviewedBy: `platform_admin:${input.actorUserId}`, reviewNote: reason } });
+    await writeAuditEvent({ businessId: payment.businessId, bookingId: payment.bookingId, type: "payment.review_rejected", actorType: "platform_admin", actorId: input.actorUserId, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
+    await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", deduplicationKey: `payment:${payment.id}:rejected`, scheduledAt: now }, transaction);
+    await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
+    return { bookingId: payment.bookingId, changed: true };
+  });
+}
+
 function safeReviewPayment<T extends {
   recipientCardSuffix: string | null;
   booking: { branch: { recipientCardLast4: string | null } };
 }>(payment: T) {
   return {
     ...payment,
-    recipientCardSuffix: payment.recipientCardSuffix?.slice(-4) ?? null,
+    recipientCardSuffix: cardLast4(payment.recipientCardSuffix),
     booking: {
       ...payment.booking,
       branch: {
         ...payment.booking.branch,
-        recipientCardLast4: payment.booking.branch.recipientCardLast4?.slice(-4) ?? null,
+        recipientCardLast4: cardLast4(payment.booking.branch.recipientCardLast4),
       },
     },
   };

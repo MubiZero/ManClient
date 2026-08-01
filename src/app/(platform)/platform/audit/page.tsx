@@ -1,17 +1,23 @@
+import Link from "next/link";
+
 import { listAuditEventTypes, listAuditEvents } from "@/core/platform/audit-log";
-import { listBusinesses } from "@/core/platform/business-directory";
+import { listBusinessOptions } from "@/core/platform/business-directory";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { Select } from "@/features/ui-kit/field";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 
-export default async function PlatformAuditPage({ searchParams }: { searchParams: Promise<{ businessId?: string; type?: string }> }) {
-  const { businessId, type } = await searchParams;
-  const [events, businesses, types] = await Promise.all([listAuditEvents({ businessId, type }), listBusinesses(), listAuditEventTypes()]);
+export default async function PlatformAuditPage({ searchParams }: { searchParams: Promise<{ businessId?: string; type?: string; cursor?: string }> }) {
+  const { businessId, type, cursor } = await searchParams;
+  const [{ items: events, nextCursor }, businesses, types] = await Promise.all([
+    listAuditEvents({ businessId, type }, { cursor }),
+    listBusinessOptions(),
+    listAuditEventTypes(),
+  ]);
 
   return (
     <>
-      <PageHeader eyebrow="Платформа" title="Журнал событий" description="Последние 200 событий по всем бизнесам." />
+      <PageHeader eyebrow="Платформа" title="Журнал событий" description="По 50 событий на страницу, отфильтруйте по бизнесу или типу." />
 
       <form className="flex flex-wrap gap-3">
         <Select name="businessId" defaultValue={businessId ?? ""} className="w-auto">
@@ -59,6 +65,19 @@ export default async function PlatformAuditPage({ searchParams }: { searchParams
           </TableBody>
         </Table>
       )}
+
+      {nextCursor ? (
+        <Link
+          href={`/platform/audit?${new URLSearchParams({
+            ...(businessId ? { businessId } : {}),
+            ...(type ? { type } : {}),
+            cursor: nextCursor,
+          }).toString()}`}
+          className="text-sm font-medium text-foreground hover:underline"
+        >
+          Следующая страница →
+        </Link>
+      ) : null}
     </>
   );
 }

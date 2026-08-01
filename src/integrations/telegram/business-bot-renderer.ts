@@ -1,3 +1,4 @@
+import { cardLast4 } from "@/core/formatting/card-number";
 import { formatSomoni } from "@/core/formatting/money";
 import { escapeTelegramHtml, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 
@@ -107,7 +108,7 @@ export function paymentReviewView(input: PaymentReviewViewModel): BusinessBotVie
     `Проверка оплаты: <b>${escapeTelegramHtml(input.customerName)}</b>`,
     `${escapeTelegramHtml(input.serviceName)} · ${formatDateTime(input.startsAt, input.timeZone)}`,
     `Сумма: <b>${formatSomoni(input.amountDiram)}</b>`,
-    ...(input.recipientCardLast4 ? [`Карта получателя: <b>•••• ${input.recipientCardLast4.slice(-4)}</b>`] : []),
+    ...(input.recipientCardLast4 ? [`Карта получателя: <b>•••• ${cardLast4(input.recipientCardLast4)}</b>`] : []),
     ...(input.attentionReason ? [`Причина проверки: ${escapeTelegramHtml(input.attentionReason)}`] : []),
   ];
   if (input.confirmation) {

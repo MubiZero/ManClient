@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { bookingScopeWhere, requireBookingAccess } from "@/core/booking-operations/booking-access";
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { prisma } from "@/core/database/prisma";
+import { cardLast4 } from "@/core/formatting/card-number";
 import { localDateTimeToUtc, todayInTimeZone } from "@/core/formatting/dushanbe-date";
 import { getPaymentForReview, listPaymentsForReview } from "@/core/payments/payment-review-service";
 
@@ -153,8 +154,8 @@ function safePaymentReview(payment: Awaited<ReturnType<typeof getPaymentForRevie
     status: payment.status,
     amountDiram: payment.amountDiram,
     receiptAmountDiram: payment.receiptAmountDiram,
-    recipientCardLast4: payment.recipientCardSuffix?.slice(-4) ?? null,
-    expectedCardLast4: payment.booking.branch.recipientCardLast4?.slice(-4) ?? null,
+    recipientCardLast4: cardLast4(payment.recipientCardSuffix),
+    expectedCardLast4: cardLast4(payment.booking.branch.recipientCardLast4),
     attentionReason: payment.attentionReason,
     reviewReason: payment.reviewReason,
     reviewedAt: payment.reviewedAt,

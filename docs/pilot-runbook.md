@@ -121,13 +121,17 @@ Webhook URL: `https://<host>/api/webhooks/whatsapp`. GET challenge провер�
 
 ## 7. Jobs
 
-Запускайте каждую минуту, с запретом параллельного overlap на уровне scheduler:
+В Docker-образе планировщик (`src/jobs/scheduler.ts`) запускается автоматически вместе с сервером (см. `CMD` в `Dockerfile`) и раз в минуту вызывает expiry, reminders, receipt-processing и business-notifications напрямую в процессе, с защитой от параллельного перекрытия одной и той же задачи. Отдельный cron не нужен.
+
+Для локального запуска или ручной диагностики отдельные задачи по-прежнему доступны так:
 
 ```bash
 pnpm jobs:expire
 pnpm jobs:reminders
 pnpm jobs:receipts
 pnpm jobs:business-notifications
+# или все сразу в непрерывном режиме, как в контейнере:
+pnpm jobs:scheduler
 ```
 
 Delivery имеет claim state, максимум три попытки и safe error в Message. Метрики для pilot: `FAILED` messages, `NEEDS_ATTENTION` payments, просроченные `PROCESSING` messages и глубина `SCHEDULED` queue.

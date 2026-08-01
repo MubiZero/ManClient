@@ -6,7 +6,7 @@ import {
 import { cancelBooking } from "@/core/bookings/cancel-booking";
 import { prisma } from "@/core/database/prisma";
 import { recognizeDushanbeCityReceipt } from "@/core/payments/dushanbe-city-receipt-recognizer";
-import { submitReceiptImage } from "@/core/payments/receipt-submission-service";
+import { ReceiptSubmissionError, submitReceiptImage } from "@/core/payments/receipt-submission-service";
 import { storeReceipt } from "@/core/payments/receipt-storage";
 import { downloadTelegramPhoto, sendTelegramMessage, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-client";
 
@@ -107,7 +107,11 @@ export async function handleTelegramUpdate(businessId: string, update: TelegramU
       store: dependencies.storeReceipt,
       recognize: dependencies.recognizeReceipt,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof ReceiptSubmissionError && error.code === "RATE_LIMITED") {
+      await dependencies.sendMessage(chatId, "Вы уже отправили несколько чеков подряд. Подождите немного и отправьте фото ещё раз.");
+      return;
+    }
     await dependencies.sendMessage(chatId, "Не удалось сохранить или прочитать изображение. Проверьте, что это чек JPG, PNG или WEBP, и отправьте его ещё раз.");
     return;
   }

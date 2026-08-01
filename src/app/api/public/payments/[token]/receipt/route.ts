@@ -21,7 +21,7 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ status: submission.status }, { status: 201 });
   } catch (error) {
     if (error instanceof ReceiptSubmissionError) {
-      const status = error.code === "PAYMENT_UNAVAILABLE" || error.code === "ALREADY_PAID" ? 409 : 400;
+      const status = error.code === "PAYMENT_UNAVAILABLE" || error.code === "ALREADY_PAID" ? 409 : error.code === "RATE_LIMITED" ? 429 : 400;
       return Response.json({ error: error.code }, { status });
     }
     return Response.json({ error: "PROCESSING_FAILED" }, { status: 500 });

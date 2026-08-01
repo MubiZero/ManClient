@@ -13,9 +13,11 @@ import { scheduleCustomerTelegramNotification } from "@/core/notifications/custo
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 const MAX_RECEIPT_PIXELS = 24_000_000;
 const REVIEW_WINDOW_MS = 24 * 60 * 60_000;
+const SUBMISSION_COOLDOWN_MS = 15_000;
+const MAX_SUBMISSIONS_PER_PAYMENT = 5;
 
 export class ReceiptSubmissionError extends Error {
-  constructor(public readonly code: "INVALID_IMAGE" | "PAYMENT_UNAVAILABLE" | "ALREADY_PAID") {
+  constructor(public readonly code: "INVALID_IMAGE" | "PAYMENT_UNAVAILABLE" | "ALREADY_PAID" | "RATE_LIMITED") {
     super(code);
     this.name = "ReceiptSubmissionError";
   }
@@ -59,6 +61,7 @@ export async function submitReceiptImage(
   });
   if (!payment || payment.booking.status !== "PENDING_PAYMENT") throw new ReceiptSubmissionError("PAYMENT_UNAVAILABLE");
   if (payment.status === "RECEIPT_ACCEPTED") throw new ReceiptSubmissionError("ALREADY_PAID");
+  await assertSubmissionRateLimit(payment.id, now);
 
   const normalized = await normalizeReceiptImage(new File([new Uint8Array(input.bytes)], "receipt", { type: input.contentType }));
   const storageKey = `receipts/${payment.businessId}/${payment.id}/${randomUUID()}.jpg`;
@@ -66,7 +69,7 @@ export async function submitReceiptImage(
   const reviewDeadline = new Date(Math.min(payment.booking.startsAt.getTime(), now.getTime() + REVIEW_WINDOW_MS));
   const submission = await prisma.$transaction(async (transaction) => {
     const created = await transaction.receiptSubmission.create({
-      data: { businessId: payment.businessId, paymentId: payment.id, storageKey, contentType: normalized.contentType, sizeBytes: normalized.body.byteLength },
+      data: { businessId: payment.businessId, paymentId: payment.id, storageKey, contentType: normalized.contentType, sizeBytes: normalized.body.byteLength, createdAt: now },
     });
     await transaction.payment.update({ where: { id: payment.id }, data: { status: "RECEIPT_PROCESSING", reviewDeadline } });
     await writeAuditEvent({ businessId: payment.businessId, bookingId: payment.bookingId, type: "receipt.submitted", actorType: "customer", actorId: payment.booking.customerId, metadata: { submissionId: created.id, channel: input.channel } }, transaction);
@@ -75,6 +78,17 @@ export async function submitReceiptImage(
   });
 
   return processReceiptSubmission(submission.id, normalized.body, now, dependencies.recognize);
+}
+
+async function assertSubmissionRateLimit(paymentId: string, now: Date) {
+  const [totalSubmissions, latestSubmission] = await Promise.all([
+    prisma.receiptSubmission.count({ where: { paymentId } }),
+    prisma.receiptSubmission.findFirst({ where: { paymentId }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+  ]);
+  if (totalSubmissions >= MAX_SUBMISSIONS_PER_PAYMENT) throw new ReceiptSubmissionError("RATE_LIMITED");
+  if (latestSubmission && now.getTime() - latestSubmission.createdAt.getTime() < SUBMISSION_COOLDOWN_MS) {
+    throw new ReceiptSubmissionError("RATE_LIMITED");
+  }
 }
 
 export async function processReceiptSubmission(submissionId: string, image: Uint8Array, now = new Date(), recognize = recognizeDushanbeCityReceipt) {

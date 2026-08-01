@@ -16,6 +16,7 @@
     "jobs:reminders": "tsx src/jobs/run-reminders.ts",
     "jobs:receipts": "tsx src/jobs/run-receipt-processing.ts",
     "jobs:business-notifications": "tsx src/jobs/run-business-notifications.ts",
+    "jobs:scheduler": "tsx src/jobs/scheduler.ts",
     "telegram:register-platform-webhook": "tsx scripts/register-platform-telegram-webhook.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

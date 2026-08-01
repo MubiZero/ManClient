@@ -38,7 +38,7 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=production-dependencies --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=build --chown=nextjs:nodejs /app/package.json /app/pnpm-lock.yaml ./
-COPY --from=build --chown=nextjs:nodejs /app/next.config.ts /app/prisma.config.ts ./
+COPY --from=build --chown=nextjs:nodejs /app/next.config.ts /app/prisma.config.ts /app/tsconfig.json ./
 COPY --from=build --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=build --chown=nextjs:nodejs /app/src ./src
 COPY --from=build --chown=nextjs:nodejs /app/scripts ./scripts
@@ -49,4 +49,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && exec node node_modules/next/dist/bin/next start"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && (node_modules/.bin/tsx src/jobs/scheduler.ts &) && exec node node_modules/next/dist/bin/next start"]
