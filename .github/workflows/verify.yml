@@ -46,6 +46,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
       - run: pnpm prisma migrate deploy
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm prisma validate
