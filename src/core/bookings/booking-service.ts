@@ -101,6 +101,7 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
     startsAt: validatedInput.startsAt,
     durationMinutes: service.durationMinutes,
     expiresAt,
+    createdAt: now,
     amountDiram: service.amountDiram,
     source: validatedInput.source,
     actor: { type: "customer", id: customer.id },

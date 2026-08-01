@@ -34,7 +34,7 @@ export async function createManualBooking(input: ActorInput & z.input<typeof man
   await assertAvailable({ branchId: value.branchId, serviceId: value.serviceId, staffId: value.staffId, resourceIds, startsAt: value.startsAt, durationMinutes: service.durationMinutes });
   const customer = await prisma.customer.upsert({ where: { businessId_phone: { businessId: input.businessId, phone } }, create: { businessId: input.businessId, name: value.customer.name, phone }, update: { name: value.customer.name } });
   try {
-    const booking = await reserveAllocation({ branchId: value.branchId, serviceId: value.serviceId, staffId: value.staffId, customerId: customer.id, resourceIds, startsAt: value.startsAt, durationMinutes: service.durationMinutes, expiresAt: null, amountDiram: service.amountDiram, status: "CONFIRMED", source: "DASHBOARD", actor: { type: "membership", id: scope.id }, confirmedAt: now, confirmedBy: `membership:${scope.id}` });
+    const booking = await reserveAllocation({ branchId: value.branchId, serviceId: value.serviceId, staffId: value.staffId, customerId: customer.id, resourceIds, startsAt: value.startsAt, durationMinutes: service.durationMinutes, expiresAt: null, createdAt: now, amountDiram: service.amountDiram, status: "CONFIRMED", source: "DASHBOARD", actor: { type: "membership", id: scope.id }, confirmedAt: now, confirmedBy: `membership:${scope.id}` });
     await scheduleBookingReminders(booking.id);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CONFIRMED", deduplicationKey: `booking:${booking.id}:confirmed`, scheduledAt: now });
     await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id, startsAt: value.startsAt });

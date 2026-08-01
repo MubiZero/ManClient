@@ -7,6 +7,7 @@ export type ReserveAllocationInput = {
   startsAt: Date;
   durationMinutes: number;
   expiresAt: Date | null;
+  createdAt: Date;
   amountDiram: number;
   status?: "PENDING_PAYMENT" | "CONFIRMED";
   source?: "WEB" | "TELEGRAM" | "DASHBOARD";

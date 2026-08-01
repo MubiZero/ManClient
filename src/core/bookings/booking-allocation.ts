@@ -69,6 +69,7 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
         startsAt: input.startsAt,
         endsAt,
         expiresAt: input.expiresAt,
+        createdAt: input.createdAt,
         status: input.status,
         source: input.source ?? "WEB",
         confirmedAt: input.confirmedAt,
