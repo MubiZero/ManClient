@@ -1,21 +1,25 @@
 import { notFound } from "next/navigation";
+import type { CSSProperties } from "react";
 
 import { verifyCustomerBookingToken } from "@/core/bookings/booking-action-token";
 import { prisma } from "@/core/database/prisma";
 import { RescheduleForm } from "@/features/public-booking/reschedule-form";
+import { PublicBrandMark } from "@/features/public-booking/public-brand-mark";
 
 export default async function ReschedulePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const booking = await getBooking(token);
   if (!booking) notFound();
 
+  const brandStyle = booking.business.brandColor
+    ? ({ "--color-primary": booking.business.brandColor, "--color-ring": booking.business.brandColor } as CSSProperties)
+    : undefined;
+
   return (
-    <main className="min-h-screen bg-secondary/30">
+    <main className="min-h-screen bg-secondary/30" style={brandStyle}>
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4">
-          <span className="flex size-8 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground" aria-hidden>
-            MC
-          </span>
+          <PublicBrandMark slug={booking.business.slug} name={booking.business.name} hasLogo={Boolean(booking.business.logoStorageKey)} />
           <span className="text-sm font-medium text-muted-foreground">Перенос записи</span>
         </div>
       </header>

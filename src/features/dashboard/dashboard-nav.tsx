@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Calendar, LayoutDashboard, Menu, Package, Plug, Receipt, Settings, Users } from "lucide-react";
+import { Building2, Calendar, LayoutDashboard, Menu, Package, Palette, Plug, Receipt, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -23,6 +23,7 @@ const allItems: NavigationItem[] = [
   { href: "/dashboard/settings/resources", label: "Ресурсы", group: "settings", icon: Package, mobile: "more" },
   { href: "/dashboard/settings/schedule", label: "Расписание", group: "settings", icon: Calendar, mobile: "more" },
   { href: "/dashboard/settings/integrations", label: "Интеграции", group: "settings", icon: Plug, mobile: "more" },
+  { href: "/dashboard/settings/branding", label: "Брендинг", group: "settings", icon: Palette, mobile: "more" },
 ];
 
 export function dashboardNavigationForRole(role: DashboardRole): NavigationItem[] {

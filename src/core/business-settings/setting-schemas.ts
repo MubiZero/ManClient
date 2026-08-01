@@ -21,6 +21,8 @@ const phoneSchema = z.preprocess(
   }).optional(),
 );
 
+export const brandColorSchema = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "INVALID_COLOR");
+
 export const branchInputSchema = z.object({
   name: nameSchema,
   address: optionalText(240),

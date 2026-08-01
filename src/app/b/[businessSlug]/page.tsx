@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import { prisma } from "@/core/database/prisma";
 import { BookingForm } from "@/features/public-booking/booking-form";
+import { PublicBrandMark } from "@/features/public-booking/public-brand-mark";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 
 type PageProps = { params: Promise<{ businessSlug: string }> };
@@ -15,6 +16,8 @@ export default async function PublicBookingPage({ params }: PageProps) {
       name: true,
       slug: true,
       status: true,
+      logoStorageKey: true,
+      brandColor: true,
       branches: {
         orderBy: { name: "asc" },
         select: {
@@ -41,17 +44,15 @@ export default async function PublicBookingPage({ params }: PageProps) {
     notFound();
   }
 
+  const brandStyle = business.brandColor
+    ? ({ "--color-primary": business.brandColor, "--color-ring": business.brandColor } as CSSProperties)
+    : undefined;
+
   return (
-    <main className="min-h-screen bg-secondary/30">
+    <main className="min-h-screen bg-secondary/30" style={brandStyle}>
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 sm:px-6">
-          <Link
-            href="/"
-            aria-label="ManClient, главная"
-            className="flex size-8 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
-          >
-            MC
-          </Link>
+          <PublicBrandMark slug={business.slug} name={business.name} hasLogo={Boolean(business.logoStorageKey)} href="/" />
           <span className="text-sm font-medium text-muted-foreground">Онлайн-запись</span>
         </div>
       </header>

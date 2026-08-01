@@ -1,13 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { formatSomoni } from "@/core/formatting/money";
 import { ButtonLink } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { cn } from "@/features/ui-kit/cn";
+import { PublicBrandMark } from "@/features/public-booking/public-brand-mark";
 
 type PaymentView = {
   amountDiram: number;
@@ -15,6 +15,7 @@ type PaymentView = {
   reviewDeadline: Date | string | null;
   booking: { status: string; expiresAt: Date | string | null; startsAt: Date | string; customer: { name: string }; service: { name: string }; staff: { displayName: string }; branch: { name: string; timeZone: string } };
   submissions: Array<{ status: string; createdAt: Date | string }>;
+  business: { name: string; slug: string; logoStorageKey: string | null; brandColor: string | null };
 };
 
 export function PaymentPage({ token, initialPayment, paymentUrl }: { token: string; initialPayment: PaymentView; paymentUrl: string }) {
@@ -69,13 +70,15 @@ export function PaymentPage({ token, initialPayment, paymentUrl }: { token: stri
           ? "Чек отклонён"
           : "Завершите оплату";
 
+  const brandStyle = payment.business.brandColor
+    ? ({ "--color-primary": payment.business.brandColor, "--color-ring": payment.business.brandColor } as CSSProperties)
+    : undefined;
+
   return (
-    <main className="flex min-h-screen flex-col bg-secondary/30">
+    <main className="flex min-h-screen flex-col bg-secondary/30" style={brandStyle}>
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4">
-          <Link href="/" aria-label="ManClient, главная" className="flex size-8 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
-            MC
-          </Link>
+          <PublicBrandMark slug={payment.business.slug} name={payment.business.name} hasLogo={Boolean(payment.business.logoStorageKey)} href="/" />
           <span className="text-sm font-medium text-muted-foreground">Безопасная оплата записи</span>
         </div>
       </header>

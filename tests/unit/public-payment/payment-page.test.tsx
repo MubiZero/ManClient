@@ -17,6 +17,7 @@ const payment = {
     branch: { name: "Центр", timeZone: "Asia/Dushanbe" },
   },
   submissions: [],
+  business: { name: "Сартарош", slug: "demo-barber", logoStorageKey: null, brandColor: null },
 };
 
 describe("PaymentPage", () => {
