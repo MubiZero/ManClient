@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { LogoMark } from "@/features/ui-kit/logo-mark";
+
 export function PublicBrandMark({
   slug,
   name,
@@ -11,11 +13,11 @@ export function PublicBrandMark({
   hasLogo: boolean;
   href?: string;
 }) {
-  const className = "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-primary text-xs font-bold text-primary-foreground";
+  const className = "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white text-brand-600 ring-1 ring-border";
   const inner = hasLogo ? (
     <img src={`/api/public/businesses/${slug}/logo`} alt={name} className="size-full object-cover" />
   ) : (
-    "MC"
+    <LogoMark className="size-full" />
   );
 
   if (href) {

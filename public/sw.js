@@ -2,8 +2,10 @@
 // Intentionally does NOT precache Next.js build output (hashed chunk
 // filenames make a hand-written precache list infeasible and fragile).
 
-const STATIC_CACHE = "manclient-static-v1";
-const PRECACHE_URLS = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+// Bump the cache name whenever a precached asset changes: `activate` deletes every other cache,
+// so installed clients pick up the new files instead of serving the old ones forever.
+const STATIC_CACHE = "manclient-static-v3";
+const PRECACHE_URLS = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/maskable-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

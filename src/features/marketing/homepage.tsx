@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from "react";
 
 import { ButtonLink } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
+import { LogoMark } from "@/features/ui-kit/logo-mark";
 
 const bookingJourney = [
   ["01", "Клиент выбирает услугу", "Открывает ссылку бизнеса, выбирает мастера или бокс и удобное время."],
@@ -163,8 +164,8 @@ export function MarketingHomePage(): ReactElement {
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 py-10 text-center sm:flex-row sm:justify-between sm:px-6 sm:text-left">
           <Link href="/" className="flex items-center gap-2 font-semibold text-foreground" aria-label="ManClient, на главную">
-            <span className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground" aria-hidden>
-              MC
+            <span className="flex size-7 items-center justify-center rounded-md bg-white text-brand-600 ring-1 ring-border" aria-hidden>
+              <LogoMark className="size-full" />
             </span>
             ManClient
           </Link>
@@ -183,8 +184,8 @@ function MarketingHeader(): ReactElement {
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold text-foreground" aria-label="ManClient, на главную">
-          <span className="flex size-8 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground" aria-hidden>
-            MC
+          <span className="flex size-8 items-center justify-center rounded-md bg-white text-brand-600 ring-1 ring-border" aria-hidden>
+            <LogoMark className="size-full" />
           </span>
           ManClient
         </Link>
