@@ -37,6 +37,9 @@ RUN addgroup --system --gid 1001 nodejs \
 
 COPY --from=production-dependencies --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nextjs:nodejs /app/.next ./.next
+# `next start` serves static assets straight from ./public. Without this the PWA
+# manifest, the icons and the service worker are 404 in production.
+COPY --from=build --chown=nextjs:nodejs /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=build --chown=nextjs:nodejs /app/next.config.ts /app/prisma.config.ts /app/tsconfig.json ./
 COPY --from=build --chown=nextjs:nodejs /app/prisma ./prisma
