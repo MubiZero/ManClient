@@ -211,6 +211,8 @@ model Branch {
   scheduleBreaks         ScheduleBreak[]
   scheduleExceptions     ScheduleException[]
   bookings               Booking[]
+  bookingSeries          BookingSeries[]
+  waitlistEntries        WaitlistEntry[]
   archivedAt             DateTime?
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
@@ -416,6 +418,7 @@ model StaffMember {
   commissionPercent  Int?
   commissionEntries  CommissionEntry[]
   bookingSeries      BookingSeries[]
+  waitlistEntries    WaitlistEntry[]
   archivedAt         DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -447,6 +450,8 @@ model Service {
   staffMembers    StaffMember[]
   resources       ServiceResource[]
   bookings        Booking[]
+  bookingSeries   BookingSeries[]
+  waitlistEntries WaitlistEntry[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -526,11 +531,13 @@ model BookingSeries {
   status           BookingSeriesStatus @default(ACTIVE)
   createdBy        String
   business         Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch           Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  service          Service             @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff            StaffMember         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  customer         Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
   bookings         Booking[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
-  staffMember      StaffMember?        @relation(fields: [staffMemberId], references: [id])
-  staffMemberId    String?
 
   @@index([businessId, status])
 }
@@ -548,6 +555,10 @@ model WaitlistEntry {
   notifiedAt         DateTime?
   convertedBookingId String?        @unique
   business           Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch             Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  service            Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff              StaffMember?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  customer           Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
   convertedBooking   Booking?       @relation(fields: [convertedBookingId], references: [id], onDelete: SetNull)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -581,6 +592,7 @@ model Review {
   isHidden   Boolean  @default(false)
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
 
   @@index([businessId, isHidden, createdAt])
@@ -698,8 +710,11 @@ model Customer {
   phone          String
   telegramChatId String?
   telegramLocale String    @default("ru")
-  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  bookings       Booking[]
+  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bookings        Booking[]
+  bookingSeries   BookingSeries[]
+  waitlistEntries WaitlistEntry[]
+  reviews         Review[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

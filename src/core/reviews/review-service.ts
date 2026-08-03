@@ -17,9 +17,11 @@ export async function submitReview(input: { bookingId: string; customerId: strin
   const comment = input.comment?.trim().slice(0, 1000) || null;
   const booking = await prisma.booking.findUnique({
     where: { id: input.bookingId },
-    select: { id: true, businessId: true, customerId: true },
+    select: { id: true, businessId: true, customerId: true, business: { select: { subscriptionPlan: true } } },
   });
   if (!booking || booking.customerId !== input.customerId) throw new ReviewError("NOT_FOUND");
+  // Invitation links stay valid after a downgrade, so the plan is re-checked at submission time.
+  if (!businessHasFeature(booking.business.subscriptionPlan, "REVIEWS")) throw new ReviewError("PLAN_REQUIRED");
 
   try {
     return await prisma.review.create({

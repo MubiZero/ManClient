@@ -94,5 +94,6 @@ function errorMessage(code?: string): string | undefined {
     INVALID_INPUT: "Укажите оценку от 1 до 5.",
     ALREADY_SUBMITTED: "Вы уже оставили отзыв об этой записи.",
     NOT_FOUND: "Запись не найдена.",
+    PLAN_REQUIRED: "Этот бизнес больше не собирает отзывы.",
   } as Record<string, string>)[code ?? ""];
 }
