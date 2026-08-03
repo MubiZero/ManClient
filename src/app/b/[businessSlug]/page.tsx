@@ -18,6 +18,7 @@ export default async function PublicBookingPage({ params }: PageProps) {
       status: true,
       logoStorageKey: true,
       brandColor: true,
+      cancellationPolicy: true,
       branches: {
         orderBy: { name: "asc" },
         select: {
@@ -75,7 +76,15 @@ export default async function PublicBookingPage({ params }: PageProps) {
             description="Бизнес ещё добавляет услуги. Попробуйте вернуться позже."
           />
         ) : (
-          <BookingForm businessSlug={business.slug} branches={business.branches} />
+          <>
+            <BookingForm businessSlug={business.slug} branches={business.branches} />
+            {business.cancellationPolicy ? (
+              <p className="mt-6 rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                <strong className="font-medium text-foreground">Политика отмены. </strong>
+                {business.cancellationPolicy}
+              </p>
+            ) : null}
+          </>
         )}
       </div>
       <footer className="border-t border-border py-6 text-center text-sm text-muted-foreground">

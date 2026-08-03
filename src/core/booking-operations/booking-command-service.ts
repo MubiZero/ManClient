@@ -9,7 +9,7 @@ import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
 import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
-import { scheduleBookingReminders } from "@/core/notifications/notification-service";
+import { scheduleBookingReminders, scheduleWhatsAppCancellation } from "@/core/notifications/notification-service";
 import {
   scheduleBusinessNotification,
   scheduleUpcomingBusinessVisit,
@@ -106,6 +106,7 @@ export async function cancelBusinessBooking(input: ActorInput & { bookingId: str
     await transaction.message.updateMany({ where: { bookingId: booking.id, status: "SCHEDULED" }, data: { status: "SKIPPED", lastError: "BOOKING_CANCELLED" } });
     await skipUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id }, transaction);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CANCELLED", deduplicationKey: `booking:${booking.id}:cancelled`, scheduledAt: now }, transaction);
+    await scheduleWhatsAppCancellation(booking.id, transaction);
     await writeAuditEvent({ businessId: input.businessId, bookingId: booking.id, type: "booking.cancelled", actorType: "membership", actorId: scope.id, metadata: { cancelledAt: now.toISOString(), reason } }, transaction);
     return { bookingId: booking.id };
   });

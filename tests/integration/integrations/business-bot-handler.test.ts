@@ -136,6 +136,30 @@ describe("platform business bot handler", () => {
     expect(findCallback(output.at(-1), "Открыть")).toBeTruthy();
   });
 
+  it("switches the bot language and persists the choice on the membership", async () => {
+    const owner = await createActor("OWNER");
+    const output: Output[] = [];
+    const dependencies = fakeDependencies(output);
+
+    await handleBusinessBotUpdate(owner.actor, messageUpdate("/language"), dependencies);
+    expect(output.at(-1)?.text).toContain("Выберите язык бота.");
+    const tgAction = findCallback(output.at(-1), "Тоҷикӣ");
+    expect(tgAction).toBeTruthy();
+
+    output.length = 0;
+    await handleBusinessBotUpdate(owner.actor, callbackUpdate("set-language", tgAction!), dependencies);
+    expect(output[0]).toMatchObject({ kind: "answer", callbackId: "set-language" });
+    expect(output.at(-1)?.text).toContain("Мунтазири пардохт");
+
+    await expect(prisma.membership.findUniqueOrThrow({ where: { id: owner.actor.membershipId } }))
+      .resolves.toMatchObject({ languageCode: "tg" });
+
+    output.length = 0;
+    const tgActor: BusinessBotPlatformActor = { ...owner.actor, languageCode: "tg" };
+    await handleBusinessBotUpdate(tgActor, messageUpdate("/help"), dependencies);
+    expect(output.at(-1)?.text).toContain("Барои сабтҳо ва рӯзи корӣ менюро истифода баред");
+  });
+
   it("maps every registered slash command to the matching business workspace action", async () => {
     const owner = await createActor("OWNER");
     const booking = await createPendingBooking(owner, "Командный клиент");
@@ -193,12 +217,12 @@ describe("platform business bot handler", () => {
       const fixtureMembership = await prisma.membership.findUniqueOrThrow({ where: { id: fixture.staff.membershipId! } });
       userIds.push(fixtureMembership.userId);
       if (role === "STAFF") {
-        return actorResult(fixture.business, fixture.branch.id, fixture.service.id, fixture.staff.id, fixtureMembership.userId, role);
+        return actorResult(fixture.business, fixture.branch.id, fixture.service.id, fixture.staff.id, fixtureMembership.id, fixtureMembership.userId, role);
       }
       const owner = await prisma.user.create({ data: { email: `handler-owner-${randomUUID()}@example.test`, displayName: "Owner" } });
       userIds.push(owner.id);
-      await prisma.membership.create({ data: { businessId: fixture.business.id, userId: owner.id, role } });
-      return actorResult(fixture.business, fixture.branch.id, fixture.service.id, fixture.staff.id, owner.id, role);
+      const ownerMembership = await prisma.membership.create({ data: { businessId: fixture.business.id, userId: owner.id, role } });
+      return actorResult(fixture.business, fixture.branch.id, fixture.service.id, fixture.staff.id, ownerMembership.id, owner.id, role);
     }
 
     const user = await prisma.user.create({ data: { email: `handler-staff-${randomUUID()}@example.test`, displayName: "Staff" } });
@@ -207,7 +231,7 @@ describe("platform business bot handler", () => {
     const staff = await prisma.staffMember.create({
       data: { businessId: workspace.actor.businessId, membershipId: membership.id, displayName: "Staff" },
     });
-    return actorResult(workspace.business, workspace.branchId, workspace.serviceId, staff.id, user.id, role, "9002");
+    return actorResult(workspace.business, workspace.branchId, workspace.serviceId, staff.id, membership.id, user.id, role, "9002");
   }
 
   function actorResult(
@@ -215,11 +239,13 @@ describe("platform business bot handler", () => {
     branchId: string,
     serviceId: string,
     staffId: string,
+    membershipId: string,
     userId: string,
     role: "OWNER" | "STAFF",
     telegramUserId = "9001",
   ) {
     const actor: BusinessBotPlatformActor = {
+      membershipId,
       businessId: business.id,
       userId,
       role,

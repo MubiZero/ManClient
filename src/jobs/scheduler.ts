@@ -2,6 +2,7 @@ import { expirePendingBookings } from "@/jobs/expire-pending-bookings";
 import { sendDueBookingReminders } from "@/jobs/send-booking-reminder";
 import { sendDueBusinessTelegramNotifications } from "@/jobs/send-business-telegram-notifications";
 import { retryReceiptSubmissions } from "@/core/payments/receipt-submission-service";
+import { checkIntegrationHealthAlerts } from "@/core/platform/integration-alerts";
 
 const TICK_INTERVAL_MS = 60_000;
 
@@ -10,6 +11,7 @@ const jobs: Array<{ name: string; run: () => Promise<number> }> = [
   { name: "booking-reminders", run: sendDueBookingReminders },
   { name: "business-notifications", run: sendDueBusinessTelegramNotifications },
   { name: "receipt-processing", run: () => retryReceiptSubmissions() },
+  { name: "integration-health-alerts", run: () => checkIntegrationHealthAlerts() },
 ];
 
 const running = new Set<string>();

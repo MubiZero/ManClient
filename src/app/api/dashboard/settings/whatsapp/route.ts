@@ -8,6 +8,7 @@ export async function POST(request: Request) {
     phoneNumberId?: string;
     templateName?: string;
     confirmationTemplateName?: string;
+    cancellationTemplateName?: string;
     languageCode?: string;
   };
 
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
       phoneNumberId: body.phoneNumberId,
       templateName: body.templateName,
       confirmationTemplateName: body.confirmationTemplateName,
+      cancellationTemplateName: body.cancellationTemplateName,
       languageCode: body.languageCode,
     });
     return Response.json(updated);

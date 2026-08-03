@@ -237,6 +237,7 @@ describe("business bot booking mutations", () => {
     suffix: string,
   ): BusinessBotPlatformActor {
     return {
+      membershipId: `membership-${suffix}-${fixture.business.id}`,
       businessId: fixture.business.id,
       userId,
       role,

@@ -47,8 +47,8 @@ describe("business notification outbox", () => {
       scheduledAt: secondAt,
     });
 
-    expect(second.id).toBe(first.id);
-    expect(second.scheduledAt).toEqual(secondAt);
+    expect(second!.id).toBe(first!.id);
+    expect(second!.scheduledAt).toEqual(secondAt);
     await expect(prisma.businessNotification.count({ where: { businessId: fixture.business.id, deduplicationKey: `booking:${booking.bookingId}:confirmed` } })).resolves.toBe(1);
   });
 

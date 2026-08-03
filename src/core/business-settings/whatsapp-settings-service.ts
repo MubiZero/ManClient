@@ -11,6 +11,7 @@ export async function getWhatsAppSettings(businessId: string) {
       whatsappPhoneNumberId: true,
       whatsappTemplateName: true,
       whatsappConfirmationTemplateName: true,
+      whatsappCancellationTemplateName: true,
       whatsappLanguageCode: true,
     },
   });
@@ -22,12 +23,14 @@ export async function updateWhatsAppSettings(input: {
   phoneNumberId?: string;
   templateName?: string;
   confirmationTemplateName?: string;
+  cancellationTemplateName?: string;
   languageCode?: string;
 }) {
   const parsed = whatsappSettingsSchema.safeParse({
     phoneNumberId: input.phoneNumberId,
     templateName: input.templateName,
     confirmationTemplateName: input.confirmationTemplateName,
+    cancellationTemplateName: input.cancellationTemplateName,
     languageCode: input.languageCode,
   });
   if (!parsed.success) throw new SettingsError("INVALID_INPUT");
@@ -40,12 +43,14 @@ export async function updateWhatsAppSettings(input: {
         whatsappPhoneNumberId: parsed.data.phoneNumberId ?? null,
         whatsappTemplateName: parsed.data.templateName ?? null,
         whatsappConfirmationTemplateName: parsed.data.confirmationTemplateName ?? null,
+        whatsappCancellationTemplateName: parsed.data.cancellationTemplateName ?? null,
         whatsappLanguageCode: parsed.data.languageCode,
       },
       select: {
         whatsappPhoneNumberId: true,
         whatsappTemplateName: true,
         whatsappConfirmationTemplateName: true,
+        whatsappCancellationTemplateName: true,
         whatsappLanguageCode: true,
       },
     });

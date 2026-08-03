@@ -426,11 +426,13 @@ describe("business bot payment review", () => {
     const fixtureMembership = await prisma.membership.findUniqueOrThrow({ where: { id: fixture.staff.membershipId! } });
     userIds.push(fixtureMembership.userId);
     let userId = fixtureMembership.userId;
+    let membershipId = fixtureMembership.id;
     if (role !== "STAFF") {
       const user = await prisma.user.create({ data: { email: `payment-review-${randomUUID()}@example.test`, displayName: role } });
       userIds.push(user.id);
       userId = user.id;
-      await prisma.membership.create({ data: { businessId: fixture.business.id, userId, role } });
+      const membership = await prisma.membership.create({ data: { businessId: fixture.business.id, userId, role } });
+      membershipId = membership.id;
     }
     if (options.customerNotifications) {
       await prisma.business.update({
@@ -446,6 +448,7 @@ describe("business bot payment review", () => {
       ...fixture,
       staffUserId: fixtureMembership.userId,
       actor: {
+        membershipId,
         businessId: fixture.business.id,
         userId,
         role,

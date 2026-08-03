@@ -57,7 +57,7 @@ describe("business Telegram notification worker", () => {
     const failing = { sendMessage: async () => { throw new Error("token-secret network error"); } };
 
     await sendDueBusinessTelegramNotifications(now, failing);
-    let delivery = await prisma.businessNotificationDelivery.findFirstOrThrow({ where: { notificationId: notification.id } });
+    let delivery = await prisma.businessNotificationDelivery.findFirstOrThrow({ where: { notificationId: notification!.id } });
     expect(delivery).toMatchObject({ status: "SCHEDULED", attempts: 1, lastError: "Telegram delivery failed" });
     expect(delivery.scheduledAt).toEqual(new Date(now.getTime() + 5 * 60_000));
 

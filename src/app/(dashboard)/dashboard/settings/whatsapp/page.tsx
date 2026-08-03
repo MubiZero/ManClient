@@ -19,6 +19,7 @@ export default async function WhatsAppSettingsPage() {
           phoneNumberId: settings.whatsappPhoneNumberId,
           templateName: settings.whatsappTemplateName,
           confirmationTemplateName: settings.whatsappConfirmationTemplateName,
+          cancellationTemplateName: settings.whatsappCancellationTemplateName,
           languageCode: settings.whatsappLanguageCode,
         }}
       />

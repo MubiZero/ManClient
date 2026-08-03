@@ -259,6 +259,33 @@ describe("ManClient business assistant", () => {
     }]);
   });
 
+  it("greets a linked membership in Tajik once its language preference is set", async () => {
+    const fixture = await createMembership("OWNER");
+    await prisma.membership.update({ where: { id: fixture.membership.id }, data: { languageCode: "tg" } });
+    const now = new Date();
+    const link = await createPlatformChatLink({
+      membershipId: fixture.membership.id,
+      actorUserId: fixture.user.id,
+      expiresAt: new Date(now.getTime() + 15 * 60_000),
+    });
+    const messages: Array<{ text: string; url?: string }> = [];
+    const deps = dependencies({ messages, now: () => now });
+
+    await handlePlatformTelegramUpdate({
+      update_id: 90,
+      message: { message_id: 90, from: { id: 9090 }, chat: { id: 9090, type: "private" }, text: `/start b_${link}` },
+    }, deps);
+
+    expect(messages.at(-1)?.text).toContain("пайваст шуд");
+
+    await handlePlatformTelegramUpdate({
+      update_id: 91,
+      message: { message_id: 91, from: { id: 9090 }, chat: { id: 9090, type: "private" }, text: "Сохтани боти муштарӣ" },
+    }, deps);
+
+    expect(messages.at(-1)?.text).toContain("боти муштариро нишон медиҳад");
+  });
+
   it("creates and connects a customer-owned managed bot without asking for a token", async () => {
     const fixture = await createMembership("OWNER");
     const now = new Date();

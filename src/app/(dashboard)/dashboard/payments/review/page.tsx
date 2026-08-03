@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { approvePaymentReview, getPaymentForReview, listPaymentsForReview, PaymentReviewError, rejectPaymentReview } from "@/core/payments/payment-review-service";
 import { PaymentReviewQueue } from "@/features/dashboard/payments/payment-review-queue";
+import { ButtonLink } from "@/features/ui-kit/button";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { ToastEmitter } from "@/features/ui-kit/toast-emitter";
 
@@ -40,7 +41,16 @@ export default async function PaymentReviewPage({ searchParams }: PageProps) {
   return (
     <>
       <ToastEmitter notice={noticeMessage(query.notice)} error={errorMessage(query.error)} />
-      <PageHeader eyebrow="Оплата" title="Проверка чеков" description="Сверьте спорные данные с записью и примите решение. Сначала показаны самые давние чеки." />
+      <PageHeader
+        eyebrow="Оплата"
+        title="Проверка чеков"
+        description="Сверьте спорные данные с записью и примите решение. Сначала показаны самые давние чеки."
+        action={
+          <ButtonLink href="/api/dashboard/export/payments" variant="secondary">
+            Экспорт CSV
+          </ButtonLink>
+        }
+      />
       <PaymentReviewQueue payments={payments} selected={selected} approveAction={approve} rejectAction={reject} />
     </>
   );

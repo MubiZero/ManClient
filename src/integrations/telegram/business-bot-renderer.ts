@@ -1,5 +1,6 @@
 import { cardLast4 } from "@/core/formatting/card-number";
 import { formatSomoni } from "@/core/formatting/money";
+import { botMessage, type BotLocale } from "@/integrations/telegram/bot-messages";
 import { escapeTelegramHtml, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 
 export type BusinessBotRole = "OWNER" | "ADMIN" | "STAFF";
@@ -23,6 +24,7 @@ type Confirmation = {
 
 export type BookingListViewModel = {
   title: string;
+  locale?: BotLocale;
   items: Array<{
     customerName: string;
     serviceName: string;
@@ -34,6 +36,7 @@ export type BookingListViewModel = {
 };
 
 export type BookingCardViewModel = {
+  locale?: BotLocale;
   customerName: string;
   customerPhone: string;
   serviceName: string;
@@ -50,6 +53,7 @@ export type BookingCardViewModel = {
 };
 
 export type PaymentReviewViewModel = {
+  locale?: BotLocale;
   customerName: string;
   serviceName: string;
   startsAt: Date;
@@ -61,36 +65,46 @@ export type PaymentReviewViewModel = {
   confirmation?: Confirmation;
 };
 
-export function mainMenuView(input: { role: BusinessBotRole }): BusinessBotView {
+export function mainMenuView(input: { role: BusinessBotRole; locale?: BotLocale }): BusinessBotView {
+  const locale = input.locale ?? "ru";
   const menu = [
-    [{ text: "Сегодня" }, { text: "Записи" }],
-    ...(input.role === "STAFF" ? [] : [[{ text: "Проверить чеки" }, { text: "Настройки" }]]),
+    [{ text: botMessage(locale, "buttonToday") }, { text: botMessage(locale, "buttonBookings") }],
+    ...(input.role === "STAFF" ? [] : [[{ text: botMessage(locale, "keyboardCheckReceipts") }, { text: botMessage(locale, "keyboardSettings") }]]),
   ];
-  return { text: "Главное меню", replyMarkup: { keyboard: menu, resize_keyboard: true } };
+  return { text: locale === "tg" ? "Менюи асосӣ" : "Главное меню", replyMarkup: { keyboard: menu, resize_keyboard: true } };
 }
 
 export function bookingListView(input: BookingListViewModel): BusinessBotView {
+  const locale = input.locale ?? "ru";
   if (!input.items.length) {
-    return { text: `${input.title}\n\nЗаписей нет.` };
+    return { text: `${input.title}\n\n${locale === "tg" ? "Сабтҳо нестанд." : "Записей нет."}` };
   }
 
   return {
     text: [input.title, "", ...input.items.map((item) => [
-      `${formatDateTime(item.startsAt, item.timeZone)} · ${item.customerName}`,
-      `${item.serviceName} · ${paymentStatusLabel(item.paymentStatus)}`,
+      `${formatDateTime(item.startsAt, item.timeZone, locale)} · ${item.customerName}`,
+      `${item.serviceName} · ${paymentStatusLabel(item.paymentStatus, locale)}`,
     ].join("\n"))].join("\n\n"),
     replyMarkup: inlineButtons(input.items.map((item) => [item.openAction])),
   };
 }
 
 export function bookingCardView(input: BookingCardViewModel): BusinessBotView {
-  const details = [
+  const locale = input.locale ?? "ru";
+  const details = locale === "tg" ? [
+    `Сабт: <b>${escapeTelegramHtml(input.customerName)}</b>`,
+    `${escapeTelegramHtml(input.serviceName)} · ${escapeTelegramHtml(input.staffName)}`,
+    `${escapeTelegramHtml(input.branchName)} · ${formatDateTime(input.startsAt, input.timeZone, locale)}`,
+    `Телефон: ${escapeTelegramHtml(input.customerPhone)}`,
+    `Статус: <b>${bookingStatusLabel(input.bookingStatus, locale)}</b>`,
+    `Пардохт: ${paymentStatusLabel(input.paymentStatus, locale)} · <b>${formatSomoni(input.amountDiram, "tg-TJ")}</b>`,
+  ] : [
     `Запись: <b>${escapeTelegramHtml(input.customerName)}</b>`,
     `${escapeTelegramHtml(input.serviceName)} · ${escapeTelegramHtml(input.staffName)}`,
-    `${escapeTelegramHtml(input.branchName)} · ${formatDateTime(input.startsAt, input.timeZone)}`,
+    `${escapeTelegramHtml(input.branchName)} · ${formatDateTime(input.startsAt, input.timeZone, locale)}`,
     `Телефон: ${escapeTelegramHtml(input.customerPhone)}`,
-    `Статус: <b>${bookingStatusLabel(input.bookingStatus)}</b>`,
-    `Оплата: ${paymentStatusLabel(input.paymentStatus)} · <b>${formatSomoni(input.amountDiram)}</b>`,
+    `Статус: <b>${bookingStatusLabel(input.bookingStatus, locale)}</b>`,
+    `Оплата: ${paymentStatusLabel(input.paymentStatus, locale)} · <b>${formatSomoni(input.amountDiram, "ru-TJ")}</b>`,
   ];
   if (input.confirmation) {
     return confirmationView(details, input.confirmation);
@@ -104,10 +118,18 @@ export function bookingCardView(input: BookingCardViewModel): BusinessBotView {
 }
 
 export function paymentReviewView(input: PaymentReviewViewModel): BusinessBotView {
-  const details = [
+  const locale = input.locale ?? "ru";
+  const amount = formatSomoni(input.amountDiram, locale === "tg" ? "tg-TJ" : "ru-TJ");
+  const details = locale === "tg" ? [
+    `Санҷиши пардохт: <b>${escapeTelegramHtml(input.customerName)}</b>`,
+    `${escapeTelegramHtml(input.serviceName)} · ${formatDateTime(input.startsAt, input.timeZone, locale)}`,
+    `Маблағ: <b>${amount}</b>`,
+    ...(input.recipientCardLast4 ? [`Корти гиранда: <b>•••• ${cardLast4(input.recipientCardLast4)}</b>`] : []),
+    ...(input.attentionReason ? [`Сабаби санҷиш: ${escapeTelegramHtml(input.attentionReason)}`] : []),
+  ] : [
     `Проверка оплаты: <b>${escapeTelegramHtml(input.customerName)}</b>`,
-    `${escapeTelegramHtml(input.serviceName)} · ${formatDateTime(input.startsAt, input.timeZone)}`,
-    `Сумма: <b>${formatSomoni(input.amountDiram)}</b>`,
+    `${escapeTelegramHtml(input.serviceName)} · ${formatDateTime(input.startsAt, input.timeZone, locale)}`,
+    `Сумма: <b>${amount}</b>`,
     ...(input.recipientCardLast4 ? [`Карта получателя: <b>•••• ${cardLast4(input.recipientCardLast4)}</b>`] : []),
     ...(input.attentionReason ? [`Причина проверки: ${escapeTelegramHtml(input.attentionReason)}`] : []),
   ];
@@ -121,17 +143,19 @@ export function paymentReviewView(input: PaymentReviewViewModel): BusinessBotVie
   };
 }
 
-export function accessDeniedText(subject: string): string {
-  return `У вас нет доступа к ${subject}.`;
+export function accessDeniedText(subject: string, locale: BotLocale = "ru"): string {
+  return locale === "tg" ? `Шумо ба ${subject} дастрасӣ надоред.` : `У вас нет доступа к ${subject}.`;
 }
 
-export function notFoundText(subject: string, feminine: boolean): string {
+export function notFoundText(subject: string, feminine: boolean, locale: BotLocale = "ru"): string {
+  if (locale === "tg") return `${subject} ёфт нашуд ё шумо ба он дастрасӣ надоред.`;
   return `${subject} не найден${feminine ? "а" : ""} или у вас нет доступа к ${feminine ? "ней" : "нему"}.`;
 }
 
-export function staleActionView(input: { menuAction: BusinessBotAction }): BusinessBotView {
+export function staleActionView(input: { menuAction: BusinessBotAction; locale?: BotLocale }): BusinessBotView {
+  const locale = input.locale ?? "ru";
   return {
-    text: "Это действие уже недействительно. Откройте актуальное меню.",
+    text: botMessage(locale, "staleActionSimpleText"),
     replyMarkup: inlineButtons([[input.menuAction]]),
   };
 }
@@ -153,11 +177,19 @@ function inlineButtons(rows: BusinessBotAction[][]): TelegramReplyMarkup {
   };
 }
 
-function formatDateTime(value: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("ru-TJ", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(value);
+function formatDateTime(value: Date, timeZone: string, locale: BotLocale = "ru"): string {
+  return new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-TJ", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(value);
 }
 
-function bookingStatusLabel(status: string): string {
+export function bookingStatusLabel(status: string, locale: BotLocale = "ru"): string {
+  if (locale === "tg") {
+    return ({
+      CONFIRMED: "Тасдиқшуда",
+      PENDING_PAYMENT: "Мунтазири пардохт",
+      CANCELLED: "Бекоршуда",
+      EXPIRED: "Мӯҳлаташ гузашта",
+    } as Record<string, string>)[status] ?? "Актуалӣ";
+  }
   return ({
     CONFIRMED: "Подтверждена",
     PENDING_PAYMENT: "Ждёт оплаты",
@@ -166,7 +198,16 @@ function bookingStatusLabel(status: string): string {
   } as Record<string, string>)[status] ?? "Актуальная";
 }
 
-function paymentStatusLabel(status: string): string {
+export function paymentStatusLabel(status: string, locale: BotLocale = "ru"): string {
+  if (locale === "tg") {
+    return ({
+      PENDING: "Пардохт нашуда",
+      RECEIPT_PROCESSING: "Чек коркард мешавад",
+      NEEDS_ATTENTION: "Санҷиши чек лозим",
+      RECEIPT_ACCEPTED: "Тасдиқшуда",
+      REJECTED: "Радшуда",
+    } as Record<string, string>)[status] ?? "Бе пардохт";
+  }
   return ({
     PENDING: "Не оплачено",
     RECEIPT_PROCESSING: "Чек обрабатывается",

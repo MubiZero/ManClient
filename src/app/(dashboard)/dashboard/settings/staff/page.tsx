@@ -38,7 +38,14 @@ export default async function StaffPage({ searchParams }: PageProps) {
     <EntityListPage
       title="Команда"
       description="Специалисты, филиалы и услуги, по которым они принимают клиентов."
-      action={<ButtonLink href="/dashboard/settings/staff?action=new">Создать специалиста</ButtonLink>}
+      action={
+        <div className="flex gap-2">
+          <ButtonLink href="/api/dashboard/export/staff" variant="secondary">
+            Экспорт CSV
+          </ButtonLink>
+          <ButtonLink href="/dashboard/settings/staff?action=new">Создать специалиста</ButtonLink>
+        </div>
+      }
       notice={noticeMessage(query.notice)}
       error={query.edit || query.action ? undefined : errorMessage(query.error)}
     >

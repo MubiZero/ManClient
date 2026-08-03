@@ -76,13 +76,13 @@ export async function claimManagedBotIntent(
         expiresAt: { gt: now },
         membership: { role: { in: ["OWNER", "ADMIN"] } },
       },
-      include: { membership: { select: { userId: true } } },
+      include: { membership: { select: { userId: true, languageCode: true } } },
       orderBy: { createdAt: "desc" },
     });
     if (!intent) {
       const completed = await transaction.managedBotConnectionIntent.findFirst({
         where: { telegramUserId: input.telegramUserId, botId: input.botId, status: "COMPLETED" },
-        include: { membership: { select: { userId: true } } },
+        include: { membership: { select: { userId: true, languageCode: true } } },
         orderBy: { completedAt: "desc" },
       });
       if (completed) return completed;
@@ -94,7 +94,7 @@ export async function claimManagedBotIntent(
           expiresAt: { gt: now },
           membership: { role: { in: ["OWNER", "ADMIN"] } },
         },
-        include: { membership: { select: { userId: true } } },
+        include: { membership: { select: { userId: true, languageCode: true } } },
         orderBy: { updatedAt: "desc" },
       });
       if (processing) {

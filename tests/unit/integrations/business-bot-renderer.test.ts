@@ -32,6 +32,19 @@ describe("business bot renderer", () => {
     expectNoMoreThanTwoButtonsPerRow(staff);
   });
 
+  it("renders the main menu in Tajik when the actor's locale is tg", () => {
+    const owner = mainMenuView({ role: "OWNER", locale: "tg" });
+    const staff = mainMenuView({ role: "STAFF", locale: "tg" });
+
+    expect(owner.text).toBe("Менюи асосӣ");
+    expect(buttons(owner).flat().map((button) => button.text)).toEqual([
+      "Имрӯз", "Сабтҳо", "Санҷиши чек", "Танзимот",
+    ]);
+    expect(buttons(staff).flat().map((button) => button.text)).toEqual(["Имрӯз", "Сабтҳо"]);
+    expectNoMoreThanTwoButtonsPerRow(owner);
+    expectNoMoreThanTwoButtonsPerRow(staff);
+  });
+
   it("renders booking list rows with useful local visit and payment context", () => {
     const view = bookingListView({
       title: "Записи на сегодня",

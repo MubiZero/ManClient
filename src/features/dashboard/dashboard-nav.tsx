@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Calendar, LayoutDashboard, Menu, MessageCircle, Package, Palette, Plug, Receipt, Settings, Users } from "lucide-react";
+import { BarChart3, Bell, Building2, Calendar, Contact, LayoutDashboard, Menu, MessageCircle, Package, Palette, Plug, Receipt, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -17,6 +17,8 @@ const allItems: NavigationItem[] = [
   { href: "/dashboard", label: "Обзор", group: "work", icon: LayoutDashboard, mobile: "primary" },
   { href: "/dashboard/bookings", label: "Записи", group: "work", icon: Calendar, mobile: "primary" },
   { href: "/dashboard/payments/review", label: "Проверка чеков", group: "work", icon: Receipt, mobile: "more", adminOnly: true },
+  { href: "/dashboard/analytics", label: "Аналитика", group: "work", icon: BarChart3, mobile: "more", adminOnly: true },
+  { href: "/dashboard/customers", label: "Клиенты", group: "work", icon: Contact, mobile: "more", adminOnly: true },
   { href: "/dashboard/settings/branches", label: "Филиалы", group: "settings", icon: Building2, mobile: "more" },
   { href: "/dashboard/settings/services", label: "Услуги", group: "settings", icon: Package, mobile: "more" },
   { href: "/dashboard/settings/staff", label: "Команда", group: "settings", icon: Users, mobile: "more" },
@@ -24,6 +26,7 @@ const allItems: NavigationItem[] = [
   { href: "/dashboard/settings/schedule", label: "Расписание", group: "settings", icon: Calendar, mobile: "more" },
   { href: "/dashboard/settings/integrations", label: "Интеграции", group: "settings", icon: Plug, mobile: "more" },
   { href: "/dashboard/settings/whatsapp", label: "WhatsApp", group: "settings", icon: MessageCircle, mobile: "more" },
+  { href: "/dashboard/settings/notifications", label: "Уведомления", group: "settings", icon: Bell, mobile: "more" },
   { href: "/dashboard/settings/branding", label: "Брендинг", group: "settings", icon: Palette, mobile: "more" },
 ];
 

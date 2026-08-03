@@ -30,7 +30,14 @@ export default async function BookingsPage({ searchParams }: PageProps) {
         eyebrow="Рабочий календарь"
         title="Записи"
         description={result.items.length ? `${result.items.length} записей в выборке` : "Управляйте визитами клиентов и загрузкой команды."}
-        action={<ButtonLink href="/dashboard/bookings/new">Создать запись</ButtonLink>}
+        action={
+          <div className="flex gap-2">
+            <ButtonLink href="/api/dashboard/export/bookings" variant="secondary">
+              Экспорт CSV
+            </ButtonLink>
+            <ButtonLink href="/dashboard/bookings/new">Создать запись</ButtonLink>
+          </div>
+        }
       />
       <BookingFilters
         date={filters.date}

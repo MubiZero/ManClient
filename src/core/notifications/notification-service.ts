@@ -35,3 +35,29 @@ export async function scheduleWhatsAppConfirmation(bookingId: string, database: 
     update: {},
   });
 }
+
+export async function scheduleWhatsAppCancellation(bookingId: string, database: NotificationDatabase = prisma) {
+  const booking = await database.booking.findUnique({
+    where: { id: bookingId },
+    include: { business: true },
+  });
+  if (!booking || booking.status !== "CANCELLED" || !booking.business.whatsappPhoneNumberId || !booking.business.whatsappCancellationTemplateName) return null;
+  return database.message.upsert({
+    where: { bookingId_channel_kind: { bookingId, channel: "WHATSAPP", kind: "BOOKING_CANCELLED" } },
+    create: { businessId: booking.businessId, bookingId, channel: "WHATSAPP", kind: "BOOKING_CANCELLED", scheduledAt: new Date() },
+    update: {},
+  });
+}
+
+export async function scheduleWhatsAppPaymentRejected(bookingId: string, database: NotificationDatabase = prisma) {
+  const booking = await database.booking.findUnique({
+    where: { id: bookingId },
+    include: { business: true },
+  });
+  if (!booking || booking.status !== "PENDING_PAYMENT" || !booking.business.whatsappPhoneNumberId || !booking.business.whatsappTemplateName) return null;
+  return database.message.upsert({
+    where: { bookingId_channel_kind: { bookingId, channel: "WHATSAPP", kind: "PAYMENT_REJECTED" } },
+    create: { businessId: booking.businessId, bookingId, channel: "WHATSAPP", kind: "PAYMENT_REJECTED", scheduledAt: new Date() },
+    update: {},
+  });
+}

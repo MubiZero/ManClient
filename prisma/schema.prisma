@@ -141,9 +141,14 @@ model Business {
   whatsappPhoneNumberId            String?
   whatsappTemplateName             String?
   whatsappConfirmationTemplateName String?
+  whatsappCancellationTemplateName String?
   whatsappLanguageCode             String                        @default("ru")
   logoStorageKey                   String?
   brandColor                       String?
+  notifyOnNewBooking               Boolean                       @default(true)
+  notifyOnPaymentNeedsReview       Boolean                       @default(true)
+  notifyOnCancellation             Boolean                       @default(true)
+  cancellationPolicy               String?
   createdAt                        DateTime                      @default(now())
   updatedAt                        DateTime                      @updatedAt
 }
@@ -180,6 +185,7 @@ model Membership {
   businessId        String
   userId            String
   role              BusinessRole
+  languageCode      String?
   business          Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   staff             StaffMember?

@@ -70,7 +70,9 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
         if (!business.whatsappPhoneNumberId) throw new Error("WhatsApp business settings are unavailable");
         const templateName = message.kind === "BOOKING_CONFIRMATION"
           ? business.whatsappConfirmationTemplateName
-          : business.whatsappTemplateName;
+          : message.kind === "BOOKING_CANCELLED"
+            ? business.whatsappCancellationTemplateName
+            : business.whatsappTemplateName;
         if (!templateName) throw new Error("WhatsApp template is unavailable");
         externalId = (await dependencies.sendWhatsApp({
           phoneNumberId: business.whatsappPhoneNumberId,

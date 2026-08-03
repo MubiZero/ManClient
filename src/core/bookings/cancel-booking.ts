@@ -1,6 +1,7 @@
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
+import { scheduleWhatsAppCancellation } from "@/core/notifications/notification-service";
 
 export type BookingActor =
   | { type: "customer"; customerId: string }
@@ -36,6 +37,7 @@ export async function cancelBooking(input: { bookingId: string; actor: BookingAc
       metadata: { cancelledAt: now.toISOString() },
     }, transaction);
     await scheduleCustomerTelegramNotification({ bookingId: booking.id, kind: "BOOKING_CANCELLED", scheduledAt: now }, transaction);
+    await scheduleWhatsAppCancellation(booking.id, transaction);
     return booking;
   });
 }

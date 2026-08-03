@@ -19,7 +19,7 @@ export default async function PlatformAuditPage({ searchParams }: { searchParams
     <>
       <PageHeader eyebrow="Платформа" title="Журнал событий" description="По 50 событий на страницу, отфильтруйте по бизнесу или типу." />
 
-      <form className="flex flex-wrap gap-3">
+      <form className="flex flex-wrap items-center gap-3">
         <Select name="businessId" defaultValue={businessId ?? ""} className="w-auto">
           <option value="">Все бизнесы</option>
           {businesses.map((business) => (
@@ -39,6 +39,12 @@ export default async function PlatformAuditPage({ searchParams }: { searchParams
         <button type="submit" className="rounded-md border border-border px-3 text-sm font-medium text-foreground hover:bg-secondary">
           Применить
         </button>
+        <a
+          href={`/api/platform/audit/export?${new URLSearchParams({ ...(businessId ? { businessId } : {}), ...(type ? { type } : {}) }).toString()}`}
+          className="ml-auto rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+        >
+          Экспорт CSV
+        </a>
       </form>
 
       {events.length === 0 ? (

@@ -39,6 +39,7 @@ describe("business WhatsApp settings", () => {
       phoneNumberId: "1234567890",
       templateName: "booking_reminder",
       confirmationTemplateName: "booking_confirmed",
+      cancellationTemplateName: "booking_cancelled",
       languageCode: "tg",
     });
 
@@ -46,6 +47,7 @@ describe("business WhatsApp settings", () => {
       whatsappPhoneNumberId: "1234567890",
       whatsappTemplateName: "booking_reminder",
       whatsappConfirmationTemplateName: "booking_confirmed",
+      whatsappCancellationTemplateName: "booking_cancelled",
       whatsappLanguageCode: "tg",
     });
 

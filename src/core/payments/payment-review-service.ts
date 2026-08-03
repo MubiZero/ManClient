@@ -5,7 +5,7 @@ import { cardLast4 } from "@/core/formatting/card-number";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
-import { scheduleBookingReminders, scheduleWhatsAppConfirmation } from "@/core/notifications/notification-service";
+import { scheduleBookingReminders, scheduleWhatsAppConfirmation, scheduleWhatsAppPaymentRejected } from "@/core/notifications/notification-service";
 import { getReceipt, type ReceiptObject } from "@/core/payments/receipt-storage";
 import { scheduleBusinessNotification, scheduleUpcomingBusinessVisit } from "@/core/notifications/business-notification-service";
 import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
@@ -154,6 +154,7 @@ export async function rejectPaymentReview(input: ActorInput & { paymentId: strin
     await writeAuditEvent({ businessId: input.businessId, bookingId: payment.bookingId, type: "payment.review_rejected", actorType: "membership", actorId: actor.id, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", deduplicationKey: `payment:${payment.id}:rejected`, scheduledAt: now }, transaction);
     await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
+    await scheduleWhatsAppPaymentRejected(payment.bookingId, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
 }
@@ -211,8 +212,39 @@ export async function rejectPaymentAsPlatformAdmin(input: { paymentId: string; a
     await writeAuditEvent({ businessId: payment.businessId, bookingId: payment.bookingId, type: "payment.review_rejected", actorType: "platform_admin", actorId: input.actorUserId, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
     await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", deduplicationKey: `payment:${payment.id}:rejected`, scheduledAt: now }, transaction);
     await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
+    await scheduleWhatsAppPaymentRejected(payment.bookingId, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
+}
+
+export async function bulkApprovePaymentsAsPlatformAdmin(input: { paymentIds: string[]; actorUserId: string }, now = new Date()) {
+  let approved = 0;
+  let skipped = 0;
+  for (const paymentId of input.paymentIds) {
+    try {
+      const result = await approvePaymentAsPlatformAdmin({ paymentId, actorUserId: input.actorUserId }, now);
+      if (result.changed) approved += 1;
+      else skipped += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+  return { approved, skipped };
+}
+
+export async function bulkRejectPaymentsAsPlatformAdmin(input: { paymentIds: string[]; actorUserId: string; reason: string }, now = new Date()) {
+  let rejected = 0;
+  let skipped = 0;
+  for (const paymentId of input.paymentIds) {
+    try {
+      const result = await rejectPaymentAsPlatformAdmin({ paymentId, actorUserId: input.actorUserId, reason: input.reason }, now);
+      if (result.changed) rejected += 1;
+      else skipped += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+  return { rejected, skipped };
 }
 
 function safeReviewPayment<T extends {

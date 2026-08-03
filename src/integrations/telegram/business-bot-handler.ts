@@ -25,12 +25,26 @@ import {
 import { formatTajikPhoneInput } from "@/core/formatting/tajik-phone";
 import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
 import { formatSomoni } from "@/core/formatting/money";
+import { prisma } from "@/core/database/prisma";
 import {
   approvePaymentReview,
   getPaymentReceiptForReview,
   PaymentReviewError,
   rejectPaymentReview,
 } from "@/core/payments/payment-review-service";
+import {
+  botMessage,
+  currentStateBookingNotice,
+  currentStateNoReceiptNotice,
+  currentStatePaymentNotice,
+  customerBotStatusLabel,
+  mainMenuSummaryText,
+  openPaymentButtonText,
+  paymentRejectedNoticeText,
+  paymentsQueueListText,
+  resolveBotLocale,
+  type BotLocale,
+} from "@/integrations/telegram/bot-messages";
 import {
   accessDeniedText,
   bookingCardView,
@@ -42,9 +56,12 @@ import {
   type BusinessBotView,
 } from "@/integrations/telegram/business-bot-renderer";
 import type { TelegramMessageRef, TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
+import { z } from "zod";
 
 export type BusinessBotPlatformActor = BusinessBotActionActor & {
+  membershipId: string;
   role: BusinessRole;
+  languageCode?: string | null;
   business: { id: string; name: string; slug?: string };
   destination: { chatId: string; chatType: string };
 };
@@ -76,6 +93,8 @@ export type BusinessBotHandlerDependencies = {
 
 const actionLifetimeMs = 15 * 60_000;
 
+const setLanguagePayloadSchema = z.object({ locale: z.enum(["ru", "tg"]) });
+
 export async function handleBusinessBotUpdate(
   actor: BusinessBotPlatformActor,
   update: BusinessBotUpdate,
@@ -91,30 +110,34 @@ export async function handleBusinessBotUpdate(
 
   const text = update.message?.text?.trim();
   if (!text) return;
+  const locale = resolveBotLocale(actor);
   switch (text) {
     case "/start":
     case "/menu":
-    case "Главное меню":
+    case botMessage(locale, "keyboardMainMenu"):
       await showMainMenu(actor, dependencies);
       return;
     case "/today":
-    case "Сегодня":
+    case botMessage(locale, "buttonToday"):
       await showBookingList(actor, { kind: "today" }, null, dependencies);
       return;
     case "/bookings":
-    case "Записи":
+    case botMessage(locale, "buttonBookings"):
       await showBookingFilters(actor, dependencies);
       return;
     case "/checks":
-    case "Проверить чеки":
+    case botMessage(locale, "keyboardCheckReceipts"):
       await showChecks(actor, dependencies);
       return;
-    case "Ссылка для клиентов":
+    case botMessage(locale, "keyboardCustomerLink"):
       await showCustomerLink(actor, dependencies);
       return;
+    case "/language":
+      await showLanguagePicker(actor, dependencies);
+      return;
     case "/help":
-    case "Ещё":
-    case "Помощь":
+    case botMessage(locale, "keyboardMore"):
+    case botMessage(locale, "keyboardHelp"):
       await showHelp(actor, dependencies);
       return;
     default:
@@ -185,6 +208,7 @@ async function handleCallback(
       const paymentId = stringValue(action.payload.paymentId);
       const submissionId = stringValue(action.payload.submissionId);
       if (!paymentId || !submissionId) return showStaleAction(actor, callback.message, dependencies);
+      const locale = resolveBotLocale(actor);
       try {
         const result = await approvePaymentReview({ businessId: actor.businessId, actorUserId: actor.userId, paymentId, submissionId }, dependencies.now());
         await showPaymentReviewCard(
@@ -192,7 +216,7 @@ async function handleCallback(
           paymentId,
           dependencies,
           callback.message,
-          result.changed ? "Оплата подтверждена. Запись подтверждена." : "Оплата уже подтверждена. Показано текущее состояние.",
+          result.changed ? botMessage(locale, "paymentApproved") : botMessage(locale, "paymentAlreadyApproved"),
         );
       } catch (error) {
         await showPaymentReviewError(actor, paymentId, error, callback.message, dependencies);
@@ -211,6 +235,7 @@ async function handleCallback(
       const submissionId = stringValue(action.payload.submissionId);
       const reason = stringValue(action.payload.reason);
       if (!paymentId || !submissionId || !reason) return showStaleAction(actor, callback.message, dependencies);
+      const locale = resolveBotLocale(actor);
       try {
         const result = await rejectPaymentReview({ businessId: actor.businessId, actorUserId: actor.userId, paymentId, submissionId, reason }, dependencies.now());
         await showPaymentReviewCard(
@@ -218,7 +243,7 @@ async function handleCallback(
           paymentId,
           dependencies,
           callback.message,
-          result.changed ? "Чек отклонён. Причина сохранена." : "Чек уже отклонён. Показано текущее состояние.",
+          result.changed ? botMessage(locale, "paymentRejected") : botMessage(locale, "paymentAlreadyRejected"),
         );
       } catch (error) {
         await showPaymentReviewError(actor, paymentId, error, callback.message, dependencies);
@@ -236,7 +261,7 @@ async function handleCallback(
       if (!bookingId) return showStaleAction(actor, callback.message, dependencies);
       try {
         await confirmBusinessBooking({ businessId: actor.businessId, actorUserId: actor.userId, bookingId }, dependencies.now());
-        await showBookingCard(actor, bookingId, dependencies, callback.message, "Запись подтверждена вручную. Банковская проверка оплаты не выполнялась.");
+        await showBookingCard(actor, bookingId, dependencies, callback.message, botMessage(resolveBotLocale(actor), "bookingConfirmedManual"));
       } catch (error) {
         await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
       }
@@ -245,6 +270,7 @@ async function handleCallback(
     case "BOOKING_REMIND_PAYMENT": {
       const bookingId = stringValue(action.payload.bookingId);
       if (!bookingId) return showStaleAction(actor, callback.message, dependencies);
+      const locale = resolveBotLocale(actor);
       try {
         const result = await remindBusinessBookingPayment({ businessId: actor.businessId, actorUserId: actor.userId, bookingId }, dependencies.now());
         await showBookingCard(
@@ -252,7 +278,7 @@ async function handleCallback(
           bookingId,
           dependencies,
           callback.message,
-          result.scheduled ? "Напоминание об оплате запланировано." : "Напоминание об оплате уже запланировано.",
+          result.scheduled ? botMessage(locale, "reminderScheduled") : botMessage(locale, "reminderAlreadyScheduled"),
         );
       } catch (error) {
         await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
@@ -275,7 +301,7 @@ async function handleCallback(
         if (Number.isNaN(value.getTime())) return showStaleAction(actor, callback.message, dependencies);
         try {
           await rescheduleBusinessBooking({ businessId: actor.businessId, actorUserId: actor.userId, bookingId, startsAt: value }, dependencies.now());
-          await showBookingCard(actor, bookingId, dependencies, callback.message, "Запись перенесена.");
+          await showBookingCard(actor, bookingId, dependencies, callback.message, botMessage(resolveBotLocale(actor), "bookingRescheduled"));
         } catch (error) {
           await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
         }
@@ -296,10 +322,18 @@ async function handleCallback(
       if (!bookingId || !reason) return showStaleAction(actor, callback.message, dependencies);
       try {
         await cancelBusinessBooking({ businessId: actor.businessId, actorUserId: actor.userId, bookingId, reason }, dependencies.now());
-        await showBookingCard(actor, bookingId, dependencies, callback.message, "Запись отменена. Причина сохранена.");
+        await showBookingCard(actor, bookingId, dependencies, callback.message, botMessage(resolveBotLocale(actor), "bookingCancelled"));
       } catch (error) {
         await showBookingOperationError(actor, bookingId, error, callback.message, dependencies);
       }
+      return;
+    }
+    case "SET_LANGUAGE": {
+      const parsed = setLanguagePayloadSchema.safeParse(action.payload);
+      if (!parsed.success) return showStaleAction(actor, callback.message, dependencies);
+      await prisma.membership.update({ where: { id: actor.membershipId }, data: { languageCode: parsed.data.locale } });
+      const nextActor: BusinessBotPlatformActor = { ...actor, languageCode: parsed.data.locale };
+      await showMainMenu(nextActor, dependencies, callback.message);
       return;
     }
     default:
@@ -307,44 +341,66 @@ async function handleCallback(
   }
 }
 
-async function showMainMenu(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
+async function showMainMenu(
+  actor: BusinessBotPlatformActor,
+  dependencies: BusinessBotHandlerDependencies,
+  message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+) {
+  const locale = resolveBotLocale(actor);
   const summary = await getBusinessBotSummary(actor, dependencies.now());
-  const base = mainMenuView({ role: actor.role });
+  const base = mainMenuView({ role: actor.role, locale });
   const keyboard = base.replyMarkup && "keyboard" in base.replyMarkup
     ? base.replyMarkup.keyboard
-      .map(row => row.filter(button => button.text !== "Настройки"))
+      .map(row => row.filter(button => button.text !== botMessage(locale, "keyboardSettings")))
       .filter(row => row.length > 0)
     : [];
-  const customerBot = summary.customerBotStatus === "ACTIVE"
-    ? `подключён${summary.customerBotUsername ? ` (@${summary.customerBotUsername})` : ""}`
-    : "не подключён";
-  const text = [
-    `ManClient · ${actor.business.name}`,
-    `Сегодня: ${summary.todayCount}`,
-    `Ожидают оплату: ${summary.pendingPaymentCount}`,
-    ...(actor.role === "STAFF" ? [] : [`Чеки на проверке: ${summary.needsAttentionCount}`]),
-    `Клиентский бот: ${customerBot}`,
-  ].join("\n");
-  await dependencies.sendMessage(actor.destination.chatId, text, {
+  const customerBotLabel = customerBotStatusLabel(locale, summary.customerBotStatus === "ACTIVE" ? "ACTIVE" : "INACTIVE", summary.customerBotUsername);
+  const text = mainMenuSummaryText(locale, {
+    businessName: actor.business.name,
+    todayCount: summary.todayCount,
+    pendingPaymentCount: summary.pendingPaymentCount,
+    needsAttentionCount: actor.role === "STAFF" ? null : summary.needsAttentionCount,
+    customerBotLabel,
+  });
+  const replyMarkup: TelegramReplyMarkup = {
     keyboard: [
       ...keyboard,
       ...(actor.role !== "STAFF" && actor.destination.chatType === "private" && summary.customerBotStatus !== "ACTIVE"
-        ? [[{ text: "Создать клиентского бота" }]]
+        ? [[{ text: botMessage(locale, "keyboardCreateCustomerBot") }]]
         : []),
-      [{ text: "Ссылка для клиентов" }, { text: "Ещё" }],
+      [{ text: botMessage(locale, "keyboardCustomerLink") }, { text: botMessage(locale, "keyboardMore") }],
     ],
     resize_keyboard: true,
-  });
+  };
+  if (message) {
+    try {
+      await dependencies.editMessageText({ chatId: String(message.chat.id), messageId: message.message_id }, text, replyMarkup);
+      return;
+    } catch {
+      // fall through to a fresh message
+    }
+  }
+  await dependencies.sendMessage(actor.destination.chatId, text, replyMarkup);
+}
+
+async function showLanguagePicker(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
+  const locale = resolveBotLocale(actor);
+  const [ruAction, tgAction] = await Promise.all([
+    mutationAction(actor, "SET_LANGUAGE", { locale: "ru" }, botMessage(locale, "languageButtonRu"), dependencies.now()),
+    mutationAction(actor, "SET_LANGUAGE", { locale: "tg" }, botMessage(locale, "languageButtonTg"), dependencies.now()),
+  ]);
+  await dependencies.sendMessage(actor.destination.chatId, botMessage(locale, "languagePrompt"), inlineView([[ruAction, tgAction]]));
 }
 
 async function showBookingFilters(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
+  const locale = resolveBotLocale(actor);
   const [today, upcoming, pending, menu] = await Promise.all([
-    navigationAction(actor, "bookings.list", { filter: "today" }, "Сегодня", dependencies.now()),
-    navigationAction(actor, "bookings.list", { filter: "upcoming" }, "Ближайшие", dependencies.now()),
-    navigationAction(actor, "bookings.list", { filter: "pending" }, "Ожидают оплату", dependencies.now()),
-    navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+    navigationAction(actor, "bookings.list", { filter: "today" }, botMessage(locale, "buttonToday"), dependencies.now()),
+    navigationAction(actor, "bookings.list", { filter: "upcoming" }, botMessage(locale, "buttonUpcoming"), dependencies.now()),
+    navigationAction(actor, "bookings.list", { filter: "pending" }, botMessage(locale, "buttonPending"), dependencies.now()),
+    navigationAction(actor, "menu.open", {}, botMessage(locale, "keyboardMainMenu"), dependencies.now()),
   ]);
-  await dependencies.sendMessage(actor.destination.chatId, "Какие записи показать?", inlineView([[today, upcoming], [pending], [menu]]));
+  await dependencies.sendMessage(actor.destination.chatId, botMessage(locale, "bookingsFilterPrompt"), inlineView([[today, upcoming], [pending], [menu]]));
 }
 
 async function showBookingList(
@@ -354,16 +410,18 @@ async function showBookingList(
   dependencies: BusinessBotHandlerDependencies,
   message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
 ) {
+  const locale = resolveBotLocale(actor);
   const result = await listBusinessBotBookings(actor, filter, cursor, dependencies.now());
   const actions = await Promise.all(result.items.map((booking) => navigationAction(
     actor,
     "booking.open",
     { bookingId: booking.id },
-    "Открыть",
+    botMessage(locale, "buttonOpen"),
     dependencies.now(),
   )));
   const view = bookingListView({
-    title: titleForFilter(filter.kind),
+    title: titleForFilter(filter.kind, locale),
+    locale,
     items: result.items.map((booking, index) => ({
       customerName: booking.customer.name,
       serviceName: booking.service.name,
@@ -379,13 +437,13 @@ async function showBookingList(
       actor,
       "bookings.list",
       { filter: filter.kind, cursor: result.nextCursor },
-      "Показать ещё",
+      botMessage(locale, "buttonShowMore"),
       dependencies.now(),
     ));
   }
   navigation.push(
-    await navigationAction(actor, "bookings.list", { filter: filter.kind }, "Обновить", dependencies.now()),
-    await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+    await navigationAction(actor, "bookings.list", { filter: filter.kind }, botMessage(locale, "buttonRefresh"), dependencies.now()),
+    await navigationAction(actor, "menu.open", {}, botMessage(locale, "keyboardMainMenu"), dependencies.now()),
   );
   await deliver(viewWithActions(view, navigation), actor, dependencies, message);
 }
@@ -397,23 +455,25 @@ async function showBookingCard(
   message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
   notice?: string,
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     const booking = await getBusinessBotBooking(actor, bookingId);
     const actions = await Promise.all([
       ...(booking.status === "PENDING_PAYMENT" ? [
-        mutationAction(actor, "BOOKING_CONFIRM", { bookingId }, "Подтвердить запись", dependencies.now()),
+        mutationAction(actor, "BOOKING_CONFIRM", { bookingId }, botMessage(locale, "buttonConfirmBooking"), dependencies.now()),
       ] : []),
       ...(booking.status === "PENDING_PAYMENT" && booking.payment?.status === "PENDING" && booking.customer.telegramChatId ? [
-        mutationAction(actor, "BOOKING_REMIND_PAYMENT", { bookingId }, "Напомнить об оплате", dependencies.now()),
+        mutationAction(actor, "BOOKING_REMIND_PAYMENT", { bookingId }, botMessage(locale, "buttonRemindPayment"), dependencies.now()),
       ] : []),
       ...(["PENDING_PAYMENT", "CONFIRMED"].includes(booking.status) ? [
-        navigationAction(actor, "BOOKING_RESCHEDULE_DATE", { bookingId }, "Перенести", dependencies.now()),
-        navigationAction(actor, "BOOKING_CANCEL_BEGIN", { bookingId }, "Отменить запись", dependencies.now()),
+        navigationAction(actor, "BOOKING_RESCHEDULE_DATE", { bookingId }, botMessage(locale, "buttonReschedule"), dependencies.now()),
+        navigationAction(actor, "BOOKING_CANCEL_BEGIN", { bookingId }, botMessage(locale, "buttonCancelBooking"), dependencies.now()),
       ] : []),
-      navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Обновить", dependencies.now()),
-      navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+      navigationAction(actor, "BOOKING_REFRESH", { bookingId }, botMessage(locale, "buttonRefresh"), dependencies.now()),
+      navigationAction(actor, "menu.open", {}, botMessage(locale, "keyboardMainMenu"), dependencies.now()),
     ]);
     const view = bookingCardView({
+      locale,
       customerName: booking.customer.name,
       customerPhone: formatTajikPhoneInput(booking.customer.phone),
       serviceName: booking.service.name,
@@ -438,6 +498,7 @@ async function showRescheduleDates(
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
   dependencies: BusinessBotHandlerDependencies,
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     const booking = await getBusinessBotBooking(actor, bookingId);
     const firstDate = todayInTimeZone(booking.branch.timeZone, dependencies.now());
@@ -455,14 +516,14 @@ async function showRescheduleDates(
       actor,
       "BOOKING_RESCHEDULE_SLOT",
       { bookingId, date: item.date },
-      formatDate(item.date, booking.branch.timeZone),
+      formatDate(item.date, booking.branch.timeZone, locale),
       dependencies.now(),
     )));
-    const back = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Назад", dependencies.now());
+    const back = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, botMessage(locale, "buttonBack"), dependencies.now());
     await deliver({
       text: actions.length
-        ? "Выберите новую дату. Старое время сохранится до успешного переноса."
-        : "На ближайшие 7 дней свободных дат нет. Старое время записи сохранено.",
+        ? botMessage(locale, "rescheduleDatesPrompt")
+        : botMessage(locale, "rescheduleDatesEmpty"),
       replyMarkup: inlineView(actions.length ? [...pairRows(actions), [back]] : [[back]]),
     }, actor, dependencies, message);
   } catch (error) {
@@ -477,6 +538,7 @@ async function showRescheduleSlots(
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
   dependencies: BusinessBotHandlerDependencies,
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     const options = await getBusinessBookingAvailableStarts({
       businessId: actor.businessId,
@@ -488,14 +550,14 @@ async function showRescheduleSlots(
       actor,
       "BOOKING_RESCHEDULE_SLOT",
       { bookingId, startsAt: startsAt.toISOString() },
-      formatTime(startsAt, options.timeZone),
+      formatTime(startsAt, options.timeZone, locale),
       dependencies.now(),
     )));
-    const back = await navigationAction(actor, "BOOKING_RESCHEDULE_DATE", { bookingId }, "К датам", dependencies.now());
+    const back = await navigationAction(actor, "BOOKING_RESCHEDULE_DATE", { bookingId }, botMessage(locale, "buttonBackToDates"), dependencies.now());
     await deliver({
       text: actions.length
-        ? "Выберите новое время. Доступность будет проверена ещё раз перед переносом."
-        : "На эту дату свободного времени уже нет. Выберите другую дату.",
+        ? botMessage(locale, "rescheduleSlotsPrompt")
+        : botMessage(locale, "rescheduleSlotsEmpty"),
       replyMarkup: inlineView(actions.length ? [...pairRows(actions), [back]] : [[back]]),
     }, actor, dependencies, message);
   } catch (error) {
@@ -509,9 +571,10 @@ async function showCancellationConfirmation(
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
   dependencies: BusinessBotHandlerDependencies,
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     await getBusinessBotBooking(actor, bookingId);
-    const reasons = ["Клиент попросил отменить", "Не удалось связаться с клиентом"];
+    const reasons = [botMessage(locale, "cancellationReasonCustomer"), botMessage(locale, "cancellationReasonUnreachable")];
     const actions = await Promise.all(reasons.map(reason => mutationAction(
       actor,
       "BOOKING_CANCEL_REASON",
@@ -519,9 +582,9 @@ async function showCancellationConfirmation(
       reason,
       dependencies.now(),
     )));
-    const back = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Назад", dependencies.now());
+    const back = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, botMessage(locale, "buttonBack"), dependencies.now());
     await deliver({
-      text: "Отменить запись? Выберите причину для подтверждения отмены.",
+      text: botMessage(locale, "cancellationConfirmPrompt"),
       replyMarkup: inlineView(actions.map(action => [action]).concat([[back]])),
     }, actor, dependencies, message);
   } catch (error) {
@@ -536,19 +599,20 @@ async function showBookingOperationError(
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
   dependencies: BusinessBotHandlerDependencies,
 ) {
+  const locale = resolveBotLocale(actor);
   if (!(error instanceof BookingOperationError)) {
     await showStaleAction(actor, message, dependencies);
     return;
   }
-  const refresh = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, "Обновить", dependencies.now());
-  const menu = await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now());
+  const refresh = await navigationAction(actor, "BOOKING_REFRESH", { bookingId }, botMessage(locale, "buttonRefresh"), dependencies.now());
+  const menu = await navigationAction(actor, "menu.open", {}, botMessage(locale, "keyboardMainMenu"), dependencies.now());
   const text = {
-    FORBIDDEN: accessDeniedText("этой записи"),
-    NOT_FOUND: notFoundText("Запись", true),
-    INVALID_STATUS: "Действие недоступно в текущем состоянии записи. Обновите карточку.",
-    SLOT_UNAVAILABLE: "Это время уже занято. Старое время записи сохранено. Выберите другой слот.",
-    INVALID_INPUT: "Данные действия устарели или заполнены неверно. Обновите карточку.",
-    CUSTOMER_TELEGRAM_UNAVAILABLE: "Клиент не привязал Telegram, поэтому напоминание отправить нельзя.",
+    FORBIDDEN: accessDeniedText(locale === "tg" ? "ин сабт" : "этой записи", locale),
+    NOT_FOUND: notFoundText(locale === "tg" ? "Сабт" : "Запись", true, locale),
+    INVALID_STATUS: botMessage(locale, "invalidStatusText"),
+    SLOT_UNAVAILABLE: botMessage(locale, "slotUnavailableText"),
+    INVALID_INPUT: botMessage(locale, "invalidInputText"),
+    CUSTOMER_TELEGRAM_UNAVAILABLE: botMessage(locale, "customerTelegramUnavailableText"),
   }[error.code];
   await deliver({ text, replyMarkup: inlineView([[refresh, menu]]) }, actor, dependencies, message);
 }
@@ -558,12 +622,13 @@ async function showStaleAction(
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
   dependencies: BusinessBotHandlerDependencies,
 ) {
+  const locale = resolveBotLocale(actor);
   const [refresh, menu] = await Promise.all([
-    navigationAction(actor, "menu.open", {}, "Обновить", dependencies.now()),
-    navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+    navigationAction(actor, "menu.open", {}, botMessage(locale, "buttonRefresh"), dependencies.now()),
+    navigationAction(actor, "menu.open", {}, botMessage(locale, "keyboardMainMenu"), dependencies.now()),
   ]);
   await deliver({
-    text: "Это действие уже недействительно. Обновите данные или откройте актуальное меню.",
+    text: botMessage(locale, "staleActionText"),
     replyMarkup: inlineView([[refresh, menu]]),
   }, actor, dependencies, message);
 }
@@ -574,13 +639,14 @@ async function showPaymentReviewList(
   dependencies: BusinessBotHandlerDependencies,
   message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     const result = await listBusinessBotPaymentReviews(actor, cursor);
     const openActions = await Promise.all(result.items.map(payment => navigationAction(
       actor,
       "payment.open",
       { paymentId: payment.id },
-      `Открыть · ${payment.booking.customer.name}`,
+      openPaymentButtonText(locale, payment.booking.customer.name),
       dependencies.now(),
     )));
     const navigation: BusinessBotAction[] = [];
@@ -589,20 +655,23 @@ async function showPaymentReviewList(
         actor,
         "payments.list",
         { cursor: result.nextCursor },
-        "Показать ещё",
+        botMessage(locale, "buttonShowMore"),
         dependencies.now(),
       ));
     }
     navigation.push(
-      await navigationAction(actor, "payments.list", {}, "Обновить", dependencies.now()),
-      await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+      await navigationAction(actor, "payments.list", {}, botMessage(locale, "buttonRefresh"), dependencies.now()),
+      await navigationAction(actor, "menu.open", {}, botMessage(locale, "keyboardMainMenu"), dependencies.now()),
     );
     const text = result.items.length
-      ? ["Чеки на проверке", "", ...result.items.map((payment, index) => [
-        `${index + 1}. ${payment.booking.customer.name} · ${payment.booking.service.name}`,
-        `${formatSomoni(payment.amountDiram)} · ${attentionReasonLabel(payment.attentionReason)}`,
-      ].join("\n"))].join("\n\n")
-      : "Чеки на проверке\n\nВсе чеки проверены.";
+      ? paymentsQueueListText(locale, result.items.map((payment, index) => ({
+        index: index + 1,
+        customerName: payment.booking.customer.name,
+        serviceName: payment.booking.service.name,
+        amount: formatSomoni(payment.amountDiram, locale === "tg" ? "tg-TJ" : "ru-TJ"),
+        attentionReason: attentionReasonLabel(payment.attentionReason, locale),
+      })))
+      : botMessage(locale, "paymentsQueueEmpty");
     await deliver({
       text,
       replyMarkup: inlineView([...openActions.map(action => [action]), ...pairRows(navigation)]),
@@ -619,33 +688,35 @@ async function showPaymentReviewCard(
   message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
   notice?: string,
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     const payment = await getBusinessBotPaymentReview(actor, paymentId);
     const actions: BusinessBotAction[] = [];
     if (isPaymentReviewActionable(payment)) {
       if (payment.hasReceipt) {
-        actions.push(await navigationAction(actor, "PAYMENT_RECEIPT", { paymentId, submissionId: payment.submissionId! }, "Показать чек", dependencies.now()));
+        actions.push(await navigationAction(actor, "PAYMENT_RECEIPT", { paymentId, submissionId: payment.submissionId! }, botMessage(locale, "buttonShowReceipt"), dependencies.now()));
       }
       actions.push(
-        await navigationAction(actor, "PAYMENT_APPROVE_BEGIN", { paymentId, submissionId: payment.submissionId! }, "Подтвердить оплату", dependencies.now()),
-        await navigationAction(actor, "PAYMENT_REJECT_BEGIN", { paymentId, submissionId: payment.submissionId! }, "Отклонить чек", dependencies.now()),
+        await navigationAction(actor, "PAYMENT_APPROVE_BEGIN", { paymentId, submissionId: payment.submissionId! }, botMessage(locale, "buttonApprovePayment"), dependencies.now()),
+        await navigationAction(actor, "PAYMENT_REJECT_BEGIN", { paymentId, submissionId: payment.submissionId! }, botMessage(locale, "buttonRejectReceipt"), dependencies.now()),
       );
     }
     actions.push(
-      await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Обновить", dependencies.now()),
-      await navigationAction(actor, "payments.list", {}, "К очереди", dependencies.now()),
-      await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+      await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, botMessage(locale, "buttonRefresh"), dependencies.now()),
+      await navigationAction(actor, "payments.list", {}, botMessage(locale, "buttonBackToQueue"), dependencies.now()),
+      await navigationAction(actor, "menu.open", {}, botMessage(locale, "keyboardMainMenu"), dependencies.now()),
     );
     const base = paymentReviewView({
+      locale,
       customerName: payment.booking.customer.name,
       serviceName: payment.booking.service.name,
       startsAt: payment.booking.startsAt,
       timeZone: payment.booking.branch.timeZone,
       amountDiram: payment.amountDiram,
       recipientCardLast4: payment.recipientCardLast4 ?? undefined,
-      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason) : undefined,
+      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason, locale) : undefined,
     });
-    const statusNotice = [...new Set([notice, paymentDecisionNotice(payment)].filter((value): value is string => Boolean(value)))].join("\n");
+    const statusNotice = [...new Set([notice, paymentDecisionNotice(payment, locale)].filter((value): value is string => Boolean(value)))].join("\n");
     await deliver(viewWithActions(statusNotice ? { ...base, text: `${statusNotice}\n\n${base.text}` } : base, actions), actor, dependencies, message);
   } catch (error) {
     await showPaymentReviewError(actor, paymentId, error, message, dependencies);
@@ -659,10 +730,11 @@ async function showPaymentReceipt(
   dependencies: BusinessBotHandlerDependencies,
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     const payment = await getBusinessBotPaymentReview(actor, paymentId);
     if (!dependencies.sendPhoto) {
-      await deliver({ text: "Фото чека временно недоступно. Обновите карточку и попробуйте снова." }, actor, dependencies, message);
+      await deliver({ text: botMessage(locale, "receiptPhotoUnavailable") }, actor, dependencies, message);
       return;
     }
     const receipt = await (dependencies.loadPaymentReceipt ?? getPaymentReceiptForReview)({
@@ -671,15 +743,16 @@ async function showPaymentReceipt(
       paymentId,
       submissionId,
     });
-    const back = await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Назад к проверке", dependencies.now());
+    const back = await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, botMessage(locale, "buttonBackToReview"), dependencies.now());
     const caption = paymentReviewView({
+      locale,
       customerName: payment.booking.customer.name,
       serviceName: payment.booking.service.name,
       startsAt: payment.booking.startsAt,
       timeZone: payment.booking.branch.timeZone,
       amountDiram: payment.amountDiram,
       recipientCardLast4: payment.recipientCardLast4 ?? undefined,
-      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason) : undefined,
+      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason, locale) : undefined,
     }).text;
     await dependencies.sendPhoto(actor.destination.chatId, receipt.body, caption, inlineView([[back]]));
   } catch (error) {
@@ -694,6 +767,7 @@ async function showPaymentApprovalConfirmation(
   dependencies: BusinessBotHandlerDependencies,
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     const payment = await getBusinessBotPaymentReview(actor, paymentId);
     if (!isPaymentReviewActionable(payment)) {
@@ -701,23 +775,24 @@ async function showPaymentApprovalConfirmation(
       return;
     }
     if (payment.submissionId !== submissionId) {
-      await showPaymentReviewCard(actor, paymentId, dependencies, message, "Состояние изменилось. Проверьте новый чек перед решением.");
+      await showPaymentReviewCard(actor, paymentId, dependencies, message, botMessage(locale, "reviewStateChanged"));
       return;
     }
     const [confirmAction, dismissAction] = await Promise.all([
-      mutationAction(actor, "PAYMENT_APPROVE_CONFIRM", { paymentId, submissionId }, "Да, подтвердить", dependencies.now()),
-      navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Назад", dependencies.now()),
+      mutationAction(actor, "PAYMENT_APPROVE_CONFIRM", { paymentId, submissionId }, botMessage(locale, "buttonConfirmYes"), dependencies.now()),
+      navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, botMessage(locale, "buttonBack"), dependencies.now()),
     ]);
     await deliver(paymentReviewView({
+      locale,
       customerName: payment.booking.customer.name,
       serviceName: payment.booking.service.name,
       startsAt: payment.booking.startsAt,
       timeZone: payment.booking.branch.timeZone,
       amountDiram: payment.amountDiram,
       recipientCardLast4: payment.recipientCardLast4 ?? undefined,
-      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason) : undefined,
+      attentionReason: payment.attentionReason ? attentionReasonLabel(payment.attentionReason, locale) : undefined,
       confirmation: {
-        text: "Подтвердить оплату после сверки чека? Запись станет подтверждённой.",
+        text: botMessage(locale, "approvalConfirmPrompt"),
         confirmAction,
         dismissAction,
       },
@@ -734,6 +809,7 @@ async function showPaymentRejectionReasons(
   dependencies: BusinessBotHandlerDependencies,
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
 ) {
+  const locale = resolveBotLocale(actor);
   try {
     const payment = await getBusinessBotPaymentReview(actor, paymentId);
     if (!isPaymentReviewActionable(payment)) {
@@ -741,10 +817,14 @@ async function showPaymentRejectionReasons(
       return;
     }
     if (payment.submissionId !== submissionId) {
-      await showPaymentReviewCard(actor, paymentId, dependencies, message, "Состояние изменилось. Проверьте новый чек перед решением.");
+      await showPaymentReviewCard(actor, paymentId, dependencies, message, botMessage(locale, "reviewStateChanged"));
       return;
     }
-    const reasons = ["Сумма не совпадает", "Карта получателя не совпадает", "Оплата не подтверждена банком"];
+    const reasons = [
+      botMessage(locale, "rejectionReasonAmount"),
+      botMessage(locale, "rejectionReasonRecipient"),
+      botMessage(locale, "rejectionReasonBank"),
+    ];
     const actions = await Promise.all(reasons.map(reason => mutationAction(
       actor,
       "PAYMENT_REJECT_REASON",
@@ -752,9 +832,9 @@ async function showPaymentRejectionReasons(
       reason,
       dependencies.now(),
     )));
-    const back = await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Назад", dependencies.now());
+    const back = await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, botMessage(locale, "buttonBack"), dependencies.now());
     await deliver({
-      text: "Отклонить чек? Выберите причину отклонения. Решение сохранится в истории записи.",
+      text: botMessage(locale, "rejectionConfirmPrompt"),
       replyMarkup: inlineView([...actions.map(action => [action]), [back]]),
     }, actor, dependencies, message);
   } catch (error) {
@@ -769,47 +849,50 @@ async function showPaymentReviewError(
   message: NonNullable<BusinessBotUpdate["callback_query"]>["message"] | undefined,
   dependencies: BusinessBotHandlerDependencies,
 ) {
+  const locale = resolveBotLocale(actor);
   if (!(error instanceof PaymentReviewError)) {
     await showStaleAction(actor, message, dependencies);
     return;
   }
   if (error.code === "INVALID_STATUS" && paymentId) {
-    await showPaymentReviewCard(actor, paymentId, dependencies, message, "Состояние изменилось. Показаны актуальные данные.");
+    await showPaymentReviewCard(actor, paymentId, dependencies, message, botMessage(locale, "reviewStateStale"));
     return;
   }
   const actions = [
-    ...(paymentId ? [await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, "Обновить", dependencies.now())] : []),
-    await navigationAction(actor, "menu.open", {}, "Главное меню", dependencies.now()),
+    ...(paymentId ? [await navigationAction(actor, "PAYMENT_REFRESH", { paymentId }, botMessage(locale, "buttonRefresh"), dependencies.now())] : []),
+    await navigationAction(actor, "menu.open", {}, botMessage(locale, "keyboardMainMenu"), dependencies.now()),
   ];
   const text = {
-    FORBIDDEN: accessDeniedText("проверке чеков"),
-    NOT_FOUND: notFoundText("Чек", false),
-    INVALID_STATUS: "Чек уже обработан. Обновите карточку, чтобы увидеть текущее состояние.",
-    INVALID_INPUT: "Причина должна содержать от 3 до 300 символов.",
+    FORBIDDEN: accessDeniedText(locale === "tg" ? "санҷиши чекҳо" : "проверке чеков", locale),
+    NOT_FOUND: notFoundText(locale === "tg" ? "Чек" : "Чек", false, locale),
+    INVALID_STATUS: botMessage(locale, "paymentInvalidStatusText"),
+    INVALID_INPUT: botMessage(locale, "paymentInvalidInputText"),
   }[error.code];
   await deliver({ text, replyMarkup: inlineView([actions]) }, actor, dependencies, message);
 }
 
 async function showChecks(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
+  const locale = resolveBotLocale(actor);
   if (actor.role === "STAFF") {
-    await dependencies.sendMessage(actor.destination.chatId, "Проверка чеков доступна владельцу и администратору.");
+    await dependencies.sendMessage(actor.destination.chatId, botMessage(locale, "checksAccessDenied"));
     return;
   }
   await showPaymentReviewList(actor, null, dependencies);
 }
 
-function attentionReasonLabel(reason: string | null) {
-  return ({
-    AMOUNT_MISMATCH: "Сумма не совпадает",
-    RECIPIENT_MISMATCH: "Карта не совпадает",
-    OPERATION_TIME_MISMATCH: "Время операции не совпадает",
-    RECEIPT_NOT_SUCCESSFUL: "Оплата неуспешна",
-    BOOKING_NOT_PENDING: "Статус записи изменился",
-    OCR_FAILED: "Чек не распознан",
-    OCR_UNRELIABLE: "Чек не распознан",
-    RECEIPT_MISMATCH: "Данные не совпадают",
-    DUPLICATE_OPERATION: "Операция уже использована",
-  } as Record<string, string>)[reason ?? ""] ?? "Нужна ручная проверка";
+function attentionReasonLabel(reason: string | null, locale: BotLocale) {
+  const map = {
+    AMOUNT_MISMATCH: botMessage(locale, "attentionAmountMismatch"),
+    RECIPIENT_MISMATCH: botMessage(locale, "attentionRecipientMismatch"),
+    OPERATION_TIME_MISMATCH: botMessage(locale, "attentionOperationTimeMismatch"),
+    RECEIPT_NOT_SUCCESSFUL: botMessage(locale, "attentionReceiptNotSuccessful"),
+    BOOKING_NOT_PENDING: botMessage(locale, "attentionBookingNotPending"),
+    OCR_FAILED: botMessage(locale, "attentionOcrFailed"),
+    OCR_UNRELIABLE: botMessage(locale, "attentionOcrFailed"),
+    RECEIPT_MISMATCH: botMessage(locale, "attentionReceiptMismatch"),
+    DUPLICATE_OPERATION: botMessage(locale, "attentionDuplicateOperation"),
+  } as Record<string, string>;
+  return map[reason ?? ""] ?? botMessage(locale, "attentionNeedsManualReview");
 }
 
 function isPaymentReviewActionable(payment: {
@@ -829,53 +912,54 @@ function paymentDecisionNotice(payment: {
   reviewReason: string | null;
   hasReceipt: boolean;
   booking: { status: string };
-}) {
-  if (payment.status === "RECEIPT_ACCEPTED") return "Оплата подтверждена. Запись подтверждена.";
-  if (payment.status === "REJECTED") return `Чек отклонён.${payment.reviewReason ? ` Причина: ${payment.reviewReason}.` : ""}`;
+}, locale: BotLocale) {
+  if (payment.status === "RECEIPT_ACCEPTED") return botMessage(locale, "paymentApproved");
+  if (payment.status === "REJECTED") return paymentRejectedNoticeText(locale, payment.reviewReason);
   if (payment.booking.status !== "PENDING_PAYMENT") {
-    return `Текущее состояние: запись ${bookingReviewStatusLabel(payment.booking.status)}; оплата ${paymentReviewStatusLabel(payment.status)}. Решение по чеку недоступно.`;
+    return currentStateBookingNotice(locale, bookingReviewStatusLabel(payment.booking.status, locale), paymentReviewStatusLabel(payment.status, locale));
   }
   if (payment.status === "NEEDS_ATTENTION" && !payment.hasReceipt) {
-    return "Текущее состояние: запись ожидает оплаты; оплата требует проверки, но актуального чека на проверке нет.";
+    return currentStateNoReceiptNotice(locale);
   }
   if (payment.status !== "NEEDS_ATTENTION") {
-    return `Текущее состояние: запись ожидает оплаты; оплата ${paymentReviewStatusLabel(payment.status)}.`;
+    return currentStatePaymentNotice(locale, paymentReviewStatusLabel(payment.status, locale));
   }
   return null;
 }
 
-function bookingReviewStatusLabel(status: string) {
-  return ({
-    PENDING_PAYMENT: "ожидает оплаты",
-    CONFIRMED: "подтверждена",
-    CANCELLED: "отменена",
-    EXPIRED: "истекла",
-  } as Record<string, string>)[status] ?? "изменилась";
+function bookingReviewStatusLabel(status: string, locale: BotLocale) {
+  const map = {
+    PENDING_PAYMENT: botMessage(locale, "bookingStatusPendingPayment"),
+    CONFIRMED: botMessage(locale, "bookingStatusConfirmed"),
+    CANCELLED: botMessage(locale, "bookingStatusCancelled"),
+    EXPIRED: botMessage(locale, "bookingStatusExpired"),
+  } as Record<string, string>;
+  return map[status] ?? botMessage(locale, "bookingStatusChanged");
 }
 
-function paymentReviewStatusLabel(status: string) {
-  return ({
-    PENDING: "ожидает оплаты",
-    RECEIPT_PROCESSING: "обрабатывается",
-    NEEDS_ATTENTION: "требует проверки",
-    RECEIPT_ACCEPTED: "подтверждена",
-    REJECTED: "отклонена",
-  } as Record<string, string>)[status] ?? "изменилась";
+function paymentReviewStatusLabel(status: string, locale: BotLocale) {
+  const map = {
+    PENDING: botMessage(locale, "paymentStatusPending"),
+    RECEIPT_PROCESSING: botMessage(locale, "paymentStatusProcessing"),
+    NEEDS_ATTENTION: botMessage(locale, "paymentStatusNeedsAttention"),
+    RECEIPT_ACCEPTED: botMessage(locale, "paymentStatusAccepted"),
+    REJECTED: botMessage(locale, "paymentStatusRejected"),
+  } as Record<string, string>;
+  return map[status] ?? botMessage(locale, "paymentStatusChanged");
 }
 
 async function showCustomerLink(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
+  const locale = resolveBotLocale(actor);
   const slug = actor.business.slug;
   const url = slug ? `${requiredAppUrl()}/b/${encodeURIComponent(slug)}` : requiredAppUrl();
-  await dependencies.sendMessage(actor.destination.chatId, "Ссылка для записи клиентов:", {
-    inline_keyboard: [[{ text: "Открыть запись", url }]],
+  await dependencies.sendMessage(actor.destination.chatId, botMessage(locale, "customerLinkPrompt"), {
+    inline_keyboard: [[{ text: botMessage(locale, "customerLinkButton"), url }]],
   });
 }
 
 async function showHelp(actor: BusinessBotPlatformActor, dependencies: BusinessBotHandlerDependencies) {
-  await dependencies.sendMessage(
-    actor.destination.chatId,
-    "Используйте меню для записей и рабочего дня. Бизнес создаёт только одного бота — клиентского; владельцы и команда работают здесь, в общем @manclient_bot.",
-  );
+  const locale = resolveBotLocale(actor);
+  await dependencies.sendMessage(actor.destination.chatId, botMessage(locale, "helpText"));
 }
 
 async function navigationAction(
@@ -961,11 +1045,11 @@ function stringValue(value: Prisma.JsonValue | undefined) {
   return typeof value === "string" ? value : null;
 }
 
-function titleForFilter(filter: BusinessBotBookingFilter["kind"]) {
+function titleForFilter(filter: BusinessBotBookingFilter["kind"], locale: BotLocale) {
   switch (filter) {
-    case "today": return "Записи на сегодня";
-    case "pending": return "Ожидают оплату";
-    case "upcoming": return "Ближайшие записи";
+    case "today": return botMessage(locale, "titleTodayBookings");
+    case "pending": return botMessage(locale, "titlePendingBookings");
+    case "upcoming": return botMessage(locale, "titleUpcomingBookings");
   }
 }
 
@@ -975,13 +1059,13 @@ function addDays(value: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatDate(value: string, timeZone: string) {
-  return new Intl.DateTimeFormat("ru-RU", { timeZone, day: "numeric", month: "short", weekday: "short" })
+function formatDate(value: string, timeZone: string, locale: BotLocale) {
+  return new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone, day: "numeric", month: "short", weekday: "short" })
     .format(new Date(`${value}T12:00:00.000Z`));
 }
 
-function formatTime(value: Date, timeZone: string) {
-  return new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" }).format(value);
+function formatTime(value: Date, timeZone: string, locale: BotLocale) {
+  return new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" }).format(value);
 }
 
 function pairRows(actions: BusinessBotAction[]) {

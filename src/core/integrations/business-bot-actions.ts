@@ -34,7 +34,8 @@ export type BusinessBotActionKind =
   | "BOOKING_RESCHEDULE_SLOT"
   | "BOOKING_CANCEL_BEGIN"
   | "BOOKING_CANCEL_REASON"
-  | "BOOKING_REFRESH";
+  | "BOOKING_REFRESH"
+  | "SET_LANGUAGE";
 
 type StoredActionPayload = {
   actorUserId: string;

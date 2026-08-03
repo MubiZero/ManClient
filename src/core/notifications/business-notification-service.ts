@@ -22,12 +22,26 @@ export type ScheduleBusinessNotificationInput = {
   scheduledAt: Date;
 };
 
-type NotificationDatabase = Pick<Prisma.TransactionClient, "businessNotification">;
+type NotificationDatabase = Pick<Prisma.TransactionClient, "businessNotification" | "business">;
 
-export function scheduleBusinessNotification(
+const NOTIFICATION_GATE_FIELD: Partial<Record<BusinessNotificationKind, "notifyOnNewBooking" | "notifyOnPaymentNeedsReview" | "notifyOnCancellation">> = {
+  BOOKING_CONFIRMED: "notifyOnNewBooking",
+  RECEIPT_NEEDS_REVIEW: "notifyOnPaymentNeedsReview",
+  BOOKING_CANCELLED: "notifyOnCancellation",
+};
+
+export async function scheduleBusinessNotification(
   input: ScheduleBusinessNotificationInput,
   database: NotificationDatabase = prisma,
 ) {
+  const gateField = NOTIFICATION_GATE_FIELD[input.kind];
+  if (gateField) {
+    const business = await database.business.findUnique({
+      where: { id: input.businessId },
+      select: { [gateField]: true },
+    });
+    if (business && !business[gateField]) return null;
+  }
   return database.businessNotification.upsert({
     where: {
       businessId_deduplicationKey: {

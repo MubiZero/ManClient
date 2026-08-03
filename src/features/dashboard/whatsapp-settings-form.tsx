@@ -10,6 +10,7 @@ export type WhatsAppSettingsValue = {
   phoneNumberId: string | null;
   templateName: string | null;
   confirmationTemplateName: string | null;
+  cancellationTemplateName: string | null;
   languageCode: string;
 };
 
@@ -17,6 +18,7 @@ export function WhatsAppSettingsForm({ initial }: { initial: WhatsAppSettingsVal
   const [phoneNumberId, setPhoneNumberId] = useState(initial.phoneNumberId ?? "");
   const [templateName, setTemplateName] = useState(initial.templateName ?? "");
   const [confirmationTemplateName, setConfirmationTemplateName] = useState(initial.confirmationTemplateName ?? "");
+  const [cancellationTemplateName, setCancellationTemplateName] = useState(initial.cancellationTemplateName ?? "");
   const [languageCode, setLanguageCode] = useState(initial.languageCode);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -30,7 +32,7 @@ export function WhatsAppSettingsForm({ initial }: { initial: WhatsAppSettingsVal
       const response = await fetch("/api/dashboard/settings/whatsapp", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phoneNumberId, templateName, confirmationTemplateName, languageCode }),
+        body: JSON.stringify({ phoneNumberId, templateName, confirmationTemplateName, cancellationTemplateName, languageCode }),
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(result.error);
@@ -60,6 +62,15 @@ export function WhatsAppSettingsForm({ initial }: { initial: WhatsAppSettingsVal
 
         <Field label="Шаблон напоминания" hint="Название одобренного WhatsApp-шаблона для напоминаний о визите." htmlFor="whatsapp-reminder-template">
           <Input id="whatsapp-reminder-template" value={templateName} onChange={(event) => setTemplateName(event.target.value)} placeholder="booking_reminder" />
+        </Field>
+
+        <Field label="Шаблон отмены записи" hint="Название одобренного WhatsApp-шаблона для уведомления об отмене записи." htmlFor="whatsapp-cancellation-template">
+          <Input
+            id="whatsapp-cancellation-template"
+            value={cancellationTemplateName}
+            onChange={(event) => setCancellationTemplateName(event.target.value)}
+            placeholder="booking_cancelled"
+          />
         </Field>
 
         <div className="flex flex-col gap-1.5">

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { listBusinesses } from "@/core/platform/business-directory";
 import { Badge } from "@/features/ui-kit/badge";
+import { Button } from "@/features/ui-kit/button";
 import { Input } from "@/features/ui-kit/field";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
@@ -14,7 +15,16 @@ export default async function PlatformBusinessesPage({ searchParams }: { searchP
 
   return (
     <>
-      <PageHeader eyebrow="Платформа" title="Бизнесы" description={cursor ? "Следующая страница" : `Показаны первые ${businesses.length}`} />
+      <PageHeader
+        eyebrow="Платформа"
+        title="Бизнесы"
+        description={cursor ? "Следующая страница" : `Показаны первые ${businesses.length}`}
+        action={
+          <Link href="/platform/businesses/new">
+            <Button type="button">Создать бизнес</Button>
+          </Link>
+        }
+      />
 
       <form className="max-w-sm">
         <div className="relative">

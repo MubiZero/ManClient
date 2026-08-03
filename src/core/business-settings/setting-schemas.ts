@@ -27,7 +27,15 @@ export const whatsappSettingsSchema = z.object({
   phoneNumberId: optionalText(64),
   templateName: optionalText(512),
   confirmationTemplateName: optionalText(512),
+  cancellationTemplateName: optionalText(512),
   languageCode: z.enum(["ru", "tg"]).default("ru"),
+}).strict();
+
+export const notificationSettingsSchema = z.object({
+  notifyOnNewBooking: z.boolean(),
+  notifyOnPaymentNeedsReview: z.boolean(),
+  notifyOnCancellation: z.boolean(),
+  cancellationPolicy: optionalText(500),
 }).strict();
 
 export const branchInputSchema = z.object({
