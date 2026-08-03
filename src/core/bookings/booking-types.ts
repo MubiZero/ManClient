@@ -9,6 +9,7 @@ export type ReserveAllocationInput = {
   expiresAt: Date | null;
   createdAt: Date;
   amountDiram: number;
+  promoCode?: string;
   status?: "PENDING_PAYMENT" | "CONFIRMED";
   source?: "WEB" | "TELEGRAM" | "DASHBOARD";
   actor?: { type: "customer" | "membership"; id: string };

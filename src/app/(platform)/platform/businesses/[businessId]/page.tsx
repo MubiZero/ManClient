@@ -3,12 +3,16 @@ import Link from "next/link";
 
 import { requirePlatformAdmin } from "@/core/auth/platform-session";
 import { formatSomoni } from "@/core/formatting/money";
-import { loadBusinessDetail, setBusinessStatus } from "@/core/platform/business-directory";
+import { loadBusinessDetail, setBusinessStatus, setBusinessSubscriptionPlan } from "@/core/platform/business-directory";
+import { PLAN_DESCRIPTIONS, PLAN_LABELS } from "@/core/platform/subscription-plans";
 import { Badge } from "@/features/ui-kit/badge";
 import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui-kit/card";
+import { Select } from "@/features/ui-kit/field";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { StatCard } from "@/features/ui-kit/stat-card";
+
+const PLAN_OPTIONS = ["START", "STANDARD", "PREMIUM"] as const;
 
 export default async function PlatformBusinessDetailPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
@@ -23,6 +27,14 @@ export default async function PlatformBusinessDetailPage({ params }: { params: P
     if (!detail) notFound();
     const nextStatus = detail.business.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
     await setBusinessStatus({ businessId, status: nextStatus, actorUserId: admin.userId });
+    redirect(`/platform/businesses/${businessId}`);
+  }
+
+  async function changePlan(formData: FormData) {
+    "use server";
+    const admin = await requirePlatformAdmin();
+    const plan = String(formData.get("plan") ?? "START") as (typeof PLAN_OPTIONS)[number];
+    await setBusinessSubscriptionPlan({ businessId, plan, actorUserId: admin.userId });
     redirect(`/platform/businesses/${businessId}`);
   }
 
@@ -51,6 +63,27 @@ export default async function PlatformBusinessDetailPage({ params }: { params: P
         <StatCard label="Сотрудников" value={String(business._count.staffMembers)} />
         <StatCard label="Принято оплат" value={formatSomoni(revenueDiram)} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Тариф</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <form action={changePlan} className="flex items-center gap-2">
+            <Select name="plan" defaultValue={business.subscriptionPlan} className="w-auto">
+              {PLAN_OPTIONS.map((plan) => (
+                <option key={plan} value={plan}>
+                  {PLAN_LABELS[plan]}
+                </option>
+              ))}
+            </Select>
+            <Button type="submit" size="sm" variant="secondary">
+              Сохранить
+            </Button>
+          </form>
+          <p className="text-sm text-muted-foreground">{PLAN_DESCRIPTIONS[business.subscriptionPlan]}</p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

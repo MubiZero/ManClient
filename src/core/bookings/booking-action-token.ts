@@ -2,11 +2,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 type BookingAction = "link_payment" | "view_payment";
 type TokenInput = { paymentId: string; action: BookingAction; expiresAt: Date };
-type CustomerBookingAction = "cancel_booking" | "reschedule_booking";
+type CustomerBookingAction = "cancel_booking" | "reschedule_booking" | "review_booking";
 type CustomerBookingTokenInput = { bookingId: string; action: CustomerBookingAction; expiresAt: Date };
 
 const actionCodes: Record<BookingAction, string> = { link_payment: "p", view_payment: "w" };
-const customerActionCodes: Record<CustomerBookingAction, string> = { cancel_booking: "c", reschedule_booking: "r" };
+const customerActionCodes: Record<CustomerBookingAction, string> = { cancel_booking: "c", reschedule_booking: "r", review_booking: "v" };
 
 export function createBookingActionToken(input: TokenInput): string {
   const expiresAt = Math.floor(input.expiresAt.getTime() / 1000).toString(36);

@@ -12,6 +12,8 @@ export type NotificationSettingsValue = {
   notifyOnPaymentNeedsReview: boolean;
   notifyOnCancellation: boolean;
   cancellationPolicy: string | null;
+  smsNotificationsEnabled: boolean;
+  smsFeatureAvailable: boolean;
 };
 
 export function NotificationSettingsForm({ initial }: { initial: NotificationSettingsValue }) {
@@ -19,6 +21,7 @@ export function NotificationSettingsForm({ initial }: { initial: NotificationSet
   const [notifyOnPaymentNeedsReview, setNotifyOnPaymentNeedsReview] = useState(initial.notifyOnPaymentNeedsReview);
   const [notifyOnCancellation, setNotifyOnCancellation] = useState(initial.notifyOnCancellation);
   const [cancellationPolicy, setCancellationPolicy] = useState(initial.cancellationPolicy ?? "");
+  const [smsNotificationsEnabled, setSmsNotificationsEnabled] = useState(initial.smsNotificationsEnabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -36,6 +39,7 @@ export function NotificationSettingsForm({ initial }: { initial: NotificationSet
           notifyOnPaymentNeedsReview,
           notifyOnCancellation,
           cancellationPolicy,
+          smsNotificationsEnabled,
         }),
       });
       const result = (await response.json()) as { error?: string };
@@ -72,6 +76,25 @@ export function NotificationSettingsForm({ initial }: { initial: NotificationSet
             <span className="flex flex-col gap-0.5">
               <strong className="font-medium text-foreground">Отмена записи</strong>
               <small className="text-xs text-muted-foreground">Уведомлять, когда запись отменена.</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="px-1.5 text-sm font-semibold text-foreground">SMS-уведомления клиентам</legend>
+          <label className={`flex min-h-16 items-center gap-3 rounded-md bg-secondary px-4 py-3.5 ${initial.smsFeatureAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}>
+            <Checkbox
+              checked={smsNotificationsEnabled}
+              disabled={!initial.smsFeatureAvailable}
+              onChange={(event) => setSmsNotificationsEnabled(event.target.checked)}
+            />
+            <span className="flex flex-col gap-0.5">
+              <strong className="font-medium text-foreground">Отправлять SMS клиентам</strong>
+              <small className="text-xs text-muted-foreground">
+                {initial.smsFeatureAvailable
+                  ? "Подтверждения, отмены и напоминания о записи будут дублироваться по SMS."
+                  : "Доступно на тарифах Стандарт и Премиум. Обновите тариф, чтобы включить SMS-уведомления."}
+              </small>
             </span>
           </label>
         </fieldset>

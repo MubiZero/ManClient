@@ -199,6 +199,7 @@ describe("business bot booking mutations", () => {
     await sendDueBookingReminders(new Date("2026-07-29T07:00:00.000Z"), {
       sendTelegram: async (_token, chatId, text) => { delivered.push({ chatId, text }); },
       sendWhatsApp: async () => ({ externalId: "unused" }),
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
     expect(delivered).toEqual([{ chatId: "customer-chat-7001", text: expect.stringContaining("оплате") }]);
     await expect(prisma.payment.findUniqueOrThrow({ where: { bookingId: booking.id } })).resolves.toMatchObject({ status: "PENDING" });

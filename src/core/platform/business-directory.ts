@@ -57,3 +57,24 @@ export async function setBusinessStatus(input: { businessId: string; status: "AC
     );
   });
 }
+
+export async function setBusinessSubscriptionPlan(input: {
+  businessId: string;
+  plan: "START" | "STANDARD" | "PREMIUM";
+  actorUserId: string;
+}) {
+  await prisma.$transaction(async (transaction) => {
+    const previous = await transaction.business.findUniqueOrThrow({ where: { id: input.businessId }, select: { subscriptionPlan: true } });
+    await transaction.business.update({ where: { id: input.businessId }, data: { subscriptionPlan: input.plan } });
+    await writeAuditEvent(
+      {
+        businessId: input.businessId,
+        type: "business.plan_changed",
+        actorType: "platform_admin",
+        actorId: input.actorUserId,
+        metadata: { from: previous.subscriptionPlan, to: input.plan },
+      },
+      transaction,
+    );
+  });
+}

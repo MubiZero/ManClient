@@ -1,8 +1,13 @@
-import { staffInputSchema } from "@/core/business-settings/setting-schemas";
+import { commissionPercentSchema, staffInputSchema } from "@/core/business-settings/setting-schemas";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
+import { businessHasFeature } from "@/core/platform/subscription-plans";
+
+// `commissionPercent` is gated by the STAFF_COMMISSIONS plan feature: businesses without the
+// feature have any submitted value silently dropped to `null` server-side (not a hard
+// PLAN_REQUIRED throw), matching how the form hides the field entirely for those plans.
 
 type StaffInput = {
   businessId: string;
@@ -12,6 +17,7 @@ type StaffInput = {
   branchIds: string[];
   primaryBranchId: string;
   serviceIds: string[];
+  commissionPercent?: number | string | null;
 };
 
 export function createStaff(input: StaffInput) { return saveStaff(input); }
@@ -21,20 +27,24 @@ async function saveStaff(input: StaffInput & { staffId?: string }) {
   const parsed = staffInputSchema.safeParse({ displayName: input.displayName, phone: input.phone, branchIds: input.branchIds, primaryBranchId: input.primaryBranchId, serviceIds: input.serviceIds });
   if (!parsed.success) throw new SettingsError("INVALID_INPUT");
   const value = parsed.data;
+  const commissionParsed = commissionPercentSchema.safeParse(input.commissionPercent ?? null);
+  if (!commissionParsed.success) throw new SettingsError("INVALID_INPUT");
   return prisma.$transaction(async transaction => {
     await requireSettingsAccess(transaction, input);
+    const business = await transaction.business.findUniqueOrThrow({ where: { id: input.businessId }, select: { subscriptionPlan: true } });
+    const commissionPercent = businessHasFeature(business.subscriptionPlan, "STAFF_COMMISSIONS") ? commissionParsed.data ?? null : null;
     const branchCount = await transaction.branch.count({ where: { id: { in: value.branchIds }, businessId: input.businessId, archivedAt: null } });
     const services = await transaction.service.findMany({ where: { id: { in: value.serviceIds }, branch: { businessId: input.businessId }, archivedAt: null }, select: { id: true, branchId: true } });
     if (branchCount !== value.branchIds.length || services.length !== value.serviceIds.length || services.some(service => !value.branchIds.includes(service.branchId))) throw new SettingsError("INVALID_INPUT");
 
     let staffId = input.staffId;
     if (staffId) {
-      const result = await transaction.staffMember.updateMany({ where: { id: staffId, businessId: input.businessId }, data: { displayName: value.displayName, phone: value.phone } });
+      const result = await transaction.staffMember.updateMany({ where: { id: staffId, businessId: input.businessId }, data: { displayName: value.displayName, phone: value.phone, commissionPercent } });
       if (result.count !== 1) throw new SettingsError("NOT_FOUND");
       await transaction.staffBranch.deleteMany({ where: { staffId } });
       await transaction.staffMember.update({ where: { id: staffId }, data: { services: { set: value.serviceIds.map(id => ({ id })) } } });
     } else {
-      const staff = await transaction.staffMember.create({ data: { businessId: input.businessId, displayName: value.displayName, phone: value.phone, services: { connect: value.serviceIds.map(id => ({ id })) } }, select: { id: true } });
+      const staff = await transaction.staffMember.create({ data: { businessId: input.businessId, displayName: value.displayName, phone: value.phone, commissionPercent, services: { connect: value.serviceIds.map(id => ({ id })) } }, select: { id: true } });
       staffId = staff.id;
     }
     await transaction.staffBranch.createMany({ data: value.branchIds.map(branchId => ({ staffId: staffId!, branchId, isPrimary: branchId === value.primaryBranchId })) });

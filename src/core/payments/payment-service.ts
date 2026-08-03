@@ -2,7 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
-import { scheduleBookingReminders, scheduleWhatsAppConfirmation } from "@/core/notifications/notification-service";
+import { scheduleBookingReminders, scheduleReviewRequest, scheduleSmsConfirmation, scheduleWhatsAppConfirmation } from "@/core/notifications/notification-service";
 import { decryptCardNumber } from "@/core/payments/card-encryption";
 import { receiptInputSchema, type ReceiptInput } from "@/core/payments/receipt-recognizer";
 import { createPaymentUrl } from "@/integrations/dushanbe-city/payment-link";
@@ -140,7 +140,9 @@ export async function confirmFromReceipt(input: ReceiptInput) {
         },
       }, transaction);
       await scheduleBookingReminders(payment.bookingId, transaction);
+      await scheduleReviewRequest(payment.bookingId, transaction);
       await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
+      await scheduleSmsConfirmation(payment.bookingId, transaction);
       await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: new Date() }, transaction);
       await scheduleUpcomingBusinessVisit({ businessId: payment.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
       await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED" }, transaction);

@@ -155,7 +155,16 @@ export async function getPublicPayment(paymentId: string) {
     where: { id: paymentId },
     select: {
       id: true, amountDiram: true, status: true, reviewDeadline: true,
-      booking: { select: { status: true, expiresAt: true, startsAt: true, customer: { select: { name: true } }, service: { select: { name: true } }, staff: { select: { displayName: true } }, branch: { select: { name: true, timeZone: true } } } },
+      booking: {
+        select: {
+          status: true, expiresAt: true, startsAt: true,
+          customer: { select: { name: true } },
+          service: { select: { name: true } },
+          staff: { select: { displayName: true } },
+          branch: { select: { name: true, timeZone: true } },
+          promoRedemption: { select: { discountAppliedDiram: true, promoCode: { select: { code: true } } } },
+        },
+      },
       business: { select: { name: true, slug: true, logoStorageKey: true, brandColor: true } },
       submissions: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, createdAt: true } },
     },

@@ -40,6 +40,9 @@ describe("business notification settings", () => {
       notifyOnPaymentNeedsReview: true,
       notifyOnCancellation: true,
       cancellationPolicy: null,
+      smsNotificationsEnabled: false,
+      subscriptionPlan: "START",
+      smsFeatureAvailable: false,
     });
   });
 
@@ -58,10 +61,37 @@ describe("business notification settings", () => {
       notifyOnPaymentNeedsReview: true,
       notifyOnCancellation: false,
       cancellationPolicy: "Отмена бесплатна за 24 часа.",
+      smsNotificationsEnabled: false,
     });
 
     const settings = await getNotificationSettings(businessId);
-    expect(settings).toEqual(updated);
+    expect(settings).toEqual({ ...updated, subscriptionPlan: "START", smsFeatureAvailable: false });
+  });
+
+  it("rejects turning on SMS notifications when the business plan does not include the SMS feature", async () => {
+    await expect(updateNotificationSettings({
+      businessId,
+      actorUserId,
+      notifyOnNewBooking: true,
+      notifyOnPaymentNeedsReview: true,
+      notifyOnCancellation: true,
+      smsNotificationsEnabled: true,
+    })).rejects.toMatchObject({ code: "PLAN_REQUIRED" } satisfies Partial<SettingsError>);
+  });
+
+  it("allows turning on SMS notifications once the business plan includes the SMS feature", async () => {
+    await prisma.business.update({ where: { id: businessId }, data: { subscriptionPlan: "STANDARD" } });
+
+    const updated = await updateNotificationSettings({
+      businessId,
+      actorUserId,
+      notifyOnNewBooking: true,
+      notifyOnPaymentNeedsReview: true,
+      notifyOnCancellation: true,
+      smsNotificationsEnabled: true,
+    });
+
+    expect(updated.smsNotificationsEnabled).toBe(true);
   });
 
   it("clears the cancellation policy when left blank", async () => {

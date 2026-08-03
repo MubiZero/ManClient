@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Bell, Building2, Calendar, Contact, LayoutDashboard, Menu, MessageCircle, Package, Palette, Plug, Receipt, Settings, Users } from "lucide-react";
+import { BarChart3, Bell, Building2, Calendar, Contact, CreditCard, Hourglass, LayoutDashboard, Menu, MessageCircle, Package, Palette, Percent, Plug, Receipt, Settings, Star, Ticket, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -19,6 +19,9 @@ const allItems: NavigationItem[] = [
   { href: "/dashboard/payments/review", label: "Проверка чеков", group: "work", icon: Receipt, mobile: "more", adminOnly: true },
   { href: "/dashboard/analytics", label: "Аналитика", group: "work", icon: BarChart3, mobile: "more", adminOnly: true },
   { href: "/dashboard/customers", label: "Клиенты", group: "work", icon: Contact, mobile: "more", adminOnly: true },
+  { href: "/dashboard/waitlist", label: "Лист ожидания", group: "work", icon: Hourglass, mobile: "more", adminOnly: true },
+  { href: "/dashboard/reviews", label: "Отзывы", group: "work", icon: Star, mobile: "more", adminOnly: true },
+  { href: "/dashboard/commissions", label: "Комиссии", group: "work", icon: Percent, mobile: "more", adminOnly: true },
   { href: "/dashboard/settings/branches", label: "Филиалы", group: "settings", icon: Building2, mobile: "more" },
   { href: "/dashboard/settings/services", label: "Услуги", group: "settings", icon: Package, mobile: "more" },
   { href: "/dashboard/settings/staff", label: "Команда", group: "settings", icon: Users, mobile: "more" },
@@ -28,6 +31,8 @@ const allItems: NavigationItem[] = [
   { href: "/dashboard/settings/whatsapp", label: "WhatsApp", group: "settings", icon: MessageCircle, mobile: "more" },
   { href: "/dashboard/settings/notifications", label: "Уведомления", group: "settings", icon: Bell, mobile: "more" },
   { href: "/dashboard/settings/branding", label: "Брендинг", group: "settings", icon: Palette, mobile: "more" },
+  { href: "/dashboard/settings/promo-codes", label: "Промокоды", group: "settings", icon: Ticket, mobile: "more", adminOnly: true },
+  { href: "/dashboard/settings/plan", label: "Тариф", group: "settings", icon: CreditCard, mobile: "more", adminOnly: true },
 ];
 
 export function dashboardNavigationForRole(role: DashboardRole): NavigationItem[] {

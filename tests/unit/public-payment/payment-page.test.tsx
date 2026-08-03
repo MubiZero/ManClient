@@ -22,7 +22,9 @@ const payment = {
 
 describe("PaymentPage", () => {
   it("shows the visit context and the time remaining to pay", () => {
-    const html = renderToStaticMarkup(<PaymentPage token="test-token" initialPayment={payment} paymentUrl="https://pay.example" />);
+    const html = renderToStaticMarkup(
+      <PaymentPage token="test-token" initialPayment={payment} paymentUrl="https://pay.example" locale="ru" />,
+    );
 
     expect(html).toContain("Мужская стрижка");
     expect(html).toContain("Алишер");
@@ -36,6 +38,7 @@ describe("PaymentPage", () => {
         token="test-token"
         initialPayment={{ ...payment, booking: { ...payment.booking, status: "EXPIRED", expiresAt: new Date("2020-08-02T05:30:00.000Z") } }}
         paymentUrl="https://pay.example"
+        locale="ru"
       />,
     );
 

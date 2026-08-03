@@ -1,11 +1,12 @@
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
 import { cardLast4 } from "@/core/formatting/card-number";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
-import { scheduleBookingReminders, scheduleWhatsAppConfirmation, scheduleWhatsAppPaymentRejected } from "@/core/notifications/notification-service";
+import { businessHasFeature } from "@/core/platform/subscription-plans";
+import { scheduleBookingReminders, scheduleReviewRequest, scheduleSmsConfirmation, scheduleSmsPaymentRejected, scheduleWhatsAppConfirmation, scheduleWhatsAppPaymentRejected } from "@/core/notifications/notification-service";
 import { getReceipt, type ReceiptObject } from "@/core/payments/receipt-storage";
 import { scheduleBusinessNotification, scheduleUpcomingBusinessVisit } from "@/core/notifications/business-notification-service";
 import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
@@ -118,9 +119,12 @@ export async function approvePaymentReview(input: ActorInput & { paymentId: stri
     }
     await transaction.receiptSubmission.update({ where: { id: submission.id }, data: { status: "ACCEPTED", reviewedAt: now, reviewedBy: `membership:${actor.id}`, reviewNote: reason } });
     await transaction.booking.update({ where: { id: payment.bookingId }, data: { status: "CONFIRMED", confirmedAt: now, confirmedBy: `membership:${actor.id}`, expiresAt: null } });
+    await recordCommissionEntry(transaction, { businessId: input.businessId, bookingId: payment.bookingId, staffId: payment.booking.staffId, amountDiram: payment.amountDiram });
     await writeAuditEvent({ businessId: input.businessId, bookingId: payment.bookingId, type: "payment.review_approved", actorType: "membership", actorId: actor.id, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
     await scheduleBookingReminders(payment.bookingId, transaction);
+    await scheduleReviewRequest(payment.bookingId, transaction);
     await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
+    await scheduleSmsConfirmation(payment.bookingId, transaction);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: now }, transaction);
     await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
     await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now }, transaction);
@@ -155,6 +159,7 @@ export async function rejectPaymentReview(input: ActorInput & { paymentId: strin
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", deduplicationKey: `payment:${payment.id}:rejected`, scheduledAt: now }, transaction);
     await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
     await scheduleWhatsAppPaymentRejected(payment.bookingId, transaction);
+    await scheduleSmsPaymentRejected(payment.bookingId, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
 }
@@ -179,9 +184,12 @@ export async function approvePaymentAsPlatformAdmin(input: { paymentId: string; 
     }
     await transaction.receiptSubmission.update({ where: { id: submission.id }, data: { status: "ACCEPTED", reviewedAt: now, reviewedBy: `platform_admin:${input.actorUserId}`, reviewNote: reason } });
     await transaction.booking.update({ where: { id: payment.bookingId }, data: { status: "CONFIRMED", confirmedAt: now, confirmedBy: `platform_admin:${input.actorUserId}`, expiresAt: null } });
+    await recordCommissionEntry(transaction, { businessId: payment.businessId, bookingId: payment.bookingId, staffId: payment.booking.staffId, amountDiram: payment.amountDiram });
     await writeAuditEvent({ businessId: payment.businessId, bookingId: payment.bookingId, type: "payment.review_approved", actorType: "platform_admin", actorId: input.actorUserId, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
     await scheduleBookingReminders(payment.bookingId, transaction);
+    await scheduleReviewRequest(payment.bookingId, transaction);
     await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
+    await scheduleSmsConfirmation(payment.bookingId, transaction);
     await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: now }, transaction);
     await scheduleUpcomingBusinessVisit({ businessId: payment.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
     await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now }, transaction);
@@ -213,6 +221,7 @@ export async function rejectPaymentAsPlatformAdmin(input: { paymentId: string; a
     await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", deduplicationKey: `payment:${payment.id}:rejected`, scheduledAt: now }, transaction);
     await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
     await scheduleWhatsAppPaymentRejected(payment.bookingId, transaction);
+    await scheduleSmsPaymentRejected(payment.bookingId, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
 }
@@ -262,6 +271,32 @@ function safeReviewPayment<T extends {
       },
     },
   };
+}
+
+async function recordCommissionEntry(
+  transaction: Prisma.TransactionClient,
+  input: { businessId: string; bookingId: string; staffId: string; amountDiram: number },
+) {
+  const business = await transaction.business.findUniqueOrThrow({
+    where: { id: input.businessId },
+    select: { subscriptionPlan: true, defaultCommissionPercent: true },
+  });
+  if (!businessHasFeature(business.subscriptionPlan, "STAFF_COMMISSIONS")) return;
+  const staff = await transaction.staffMember.findUniqueOrThrow({ where: { id: input.staffId }, select: { commissionPercent: true } });
+  const percent = staff.commissionPercent ?? business.defaultCommissionPercent ?? 0;
+  if (percent <= 0) return;
+  const amountDiram = Math.round((input.amountDiram * percent) / 100);
+  try {
+    await transaction.commissionEntry.create({
+      data: { businessId: input.businessId, staffId: input.staffId, bookingId: input.bookingId, amountDiram, percent },
+    });
+  } catch (error) {
+    // The payment-status claim guard above already prevents this from running twice for the
+    // same approval; this catch is a safety net against the @@unique([bookingId]) constraint
+    // in case of a race, mirroring the P2002 handling used elsewhere in payment flows.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+    throw error;
+  }
 }
 
 async function requireReviewAccess(

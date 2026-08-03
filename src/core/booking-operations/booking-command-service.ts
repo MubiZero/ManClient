@@ -5,11 +5,12 @@ import { getAvailableStarts } from "@/core/availability/availability-service";
 import { bookingScopeWhere, requireBookingAccess } from "@/core/booking-operations/booking-access";
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { reserveAllocation } from "@/core/bookings/booking-allocation";
+import { notifyWaitlistForFreedSlot } from "@/core/bookings/waitlist-service";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
 import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
-import { scheduleBookingReminders, scheduleWhatsAppCancellation } from "@/core/notifications/notification-service";
+import { scheduleBookingReminders, scheduleReviewRequest, scheduleSmsCancellation, scheduleWhatsAppCancellation } from "@/core/notifications/notification-service";
 import {
   scheduleBusinessNotification,
   scheduleUpcomingBusinessVisit,
@@ -36,6 +37,7 @@ export async function createManualBooking(input: ActorInput & z.input<typeof man
   try {
     const booking = await reserveAllocation({ branchId: value.branchId, serviceId: value.serviceId, staffId: value.staffId, customerId: customer.id, resourceIds, startsAt: value.startsAt, durationMinutes: service.durationMinutes, expiresAt: null, createdAt: now, amountDiram: service.amountDiram, status: "CONFIRMED", source: "DASHBOARD", actor: { type: "membership", id: scope.id }, confirmedAt: now, confirmedBy: `membership:${scope.id}` });
     await scheduleBookingReminders(booking.id);
+    await scheduleReviewRequest(booking.id);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CONFIRMED", deduplicationKey: `booking:${booking.id}:confirmed`, scheduledAt: now });
     await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id, startsAt: value.startsAt });
     return { bookingId: booking.id };
@@ -58,7 +60,10 @@ export async function confirmBusinessBooking(input: ActorInput & { bookingId: st
     await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id, startsAt: booking.startsAt }, transaction);
     return { id: booking.id, changed: true };
   });
-  if (result.changed) await scheduleBookingReminders(result.id);
+  if (result.changed) {
+    await scheduleBookingReminders(result.id);
+    await scheduleReviewRequest(result.id);
+  }
   return { bookingId: result.id };
 }
 
@@ -107,7 +112,13 @@ export async function cancelBusinessBooking(input: ActorInput & { bookingId: str
     await skipUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id }, transaction);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CANCELLED", deduplicationKey: `booking:${booking.id}:cancelled`, scheduledAt: now }, transaction);
     await scheduleWhatsAppCancellation(booking.id, transaction);
+    await scheduleSmsCancellation(booking.id, transaction);
     await writeAuditEvent({ businessId: input.businessId, bookingId: booking.id, type: "booking.cancelled", actorType: "membership", actorId: scope.id, metadata: { cancelledAt: now.toISOString(), reason } }, transaction);
+    await notifyWaitlistForFreedSlot(
+      { businessId: input.businessId, branchId: booking.branchId, serviceId: booking.serviceId, staffId: booking.staffId, freedStartsAt: booking.startsAt, freedEndsAt: booking.endsAt },
+      transaction,
+      now,
+    );
     return { bookingId: booking.id };
   });
 }
@@ -183,7 +194,7 @@ export async function getBusinessBookingAvailableStarts(
   return { starts, timeZone: booking.branch.timeZone };
 }
 
-async function assertAvailable(input: { branchId: string; serviceId: string; staffId: string; resourceIds: string[]; startsAt: Date; durationMinutes: number; excludeBookingId?: string }) {
+export async function assertAvailable(input: { branchId: string; serviceId: string; staffId: string; resourceIds: string[]; startsAt: Date; durationMinutes: number; excludeBookingId?: string }) {
   const starts = await getAvailableStarts({ ...input, rangeStartsAt: input.startsAt, rangeEndsAt: new Date(input.startsAt.getTime() + input.durationMinutes * 60_000), intervalMinutes: input.durationMinutes });
   if (starts.length !== 1) throw new BookingOperationError("SLOT_UNAVAILABLE");
 }

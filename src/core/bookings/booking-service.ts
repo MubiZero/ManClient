@@ -19,6 +19,7 @@ const createBookingSchema = z.object({
     phone: z.string().regex(/^\+992\d{9}$/),
   }),
   source: z.enum(["WEB", "TELEGRAM"]).default("WEB"),
+  promoCode: z.string().trim().min(1).max(32).optional(),
 });
 
 export type CreateBookingInput = z.input<typeof createBookingSchema>;
@@ -103,6 +104,7 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
     expiresAt,
     createdAt: now,
     amountDiram: service.amountDiram,
+    promoCode: validatedInput.promoCode,
     source: validatedInput.source,
     actor: { type: "customer", id: customer.id },
   });

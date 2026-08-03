@@ -17,7 +17,7 @@ describe("business booking commands", () => {
     const created = await createManualBooking({ businessId: fixture.business.id, actorUserId: owner.id, branchId: fixture.branch.id, serviceId: fixture.service.id, staffId: fixture.staff.id, startsAt: new Date("2026-08-02T05:00:00.000Z"), customer: { name: "Ручной клиент", phone: "+992900001144" } }, new Date("2026-08-01T04:00:00.000Z"));
     await expect(prisma.booking.findUniqueOrThrow({ where: { id: created.bookingId }, include: { payment: true } })).resolves.toMatchObject({ status: "CONFIRMED", source: "DASHBOARD", expiresAt: null, confirmedBy: `membership:${membership.id}`, payment: { status: "PENDING" } });
 
-    await rescheduleBusinessBooking({ businessId: fixture.business.id, actorUserId: owner.id, bookingId: created.bookingId, startsAt: new Date("2026-08-02T06:00:00.000Z") });
+    await rescheduleBusinessBooking({ businessId: fixture.business.id, actorUserId: owner.id, bookingId: created.bookingId, startsAt: new Date("2026-08-02T06:00:00.000Z") }, new Date("2026-08-01T04:30:00.000Z"));
     await cancelBusinessBooking({ businessId: fixture.business.id, actorUserId: owner.id, bookingId: created.bookingId, reason: "Клиент попросил отменить" }, new Date("2026-08-01T05:00:00.000Z"));
     const stored = await prisma.booking.findUniqueOrThrow({ where: { id: created.bookingId }, include: { auditEvents: true } });
     expect(stored).toMatchObject({ startsAt: new Date("2026-08-02T06:00:00.000Z"), status: "CANCELLED", cancellationReason: "Клиент попросил отменить" });

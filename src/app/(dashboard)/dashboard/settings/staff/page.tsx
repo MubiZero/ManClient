@@ -5,6 +5,7 @@ import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { archiveStaff, createStaff, restoreStaff, updateStaff } from "@/core/business-settings/staff-service";
 import { prisma } from "@/core/database/prisma";
+import { businessHasFeature } from "@/core/platform/subscription-plans";
 import { ArchiveConfirmDialog } from "@/features/dashboard/archive-confirm-dialog";
 import { EntityListPage } from "@/features/dashboard/entity-list-page";
 import { SettingsSheet } from "@/features/dashboard/settings-sheet";
@@ -19,6 +20,7 @@ type PageProps = { searchParams: Promise<{ action?: string; edit?: string; archi
 
 export default async function StaffPage({ searchParams }: PageProps) {
   const member = await requireBusinessAdmin();
+  const commissionEnabled = businessHasFeature(member.business.subscriptionPlan, "STAFF_COMMISSIONS");
   const query = await searchParams;
   const [items, branches, services] = await Promise.all([
     prisma.staffMember.findMany({ where: { businessId: member.businessId }, include: { membership: true, branches: { include: { branch: true }, orderBy: { isPrimary: "desc" } }, services: true }, orderBy: [{ archivedAt: "asc" }, { displayName: "asc" }] }),
@@ -107,7 +109,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
       )}
 
       <SettingsSheet open={query.action === "new"} closeHref="/dashboard/settings/staff" title="Новый специалист" visuallyHiddenTitle>
-        <StaffForm action={create} branches={branches} services={services} error={errorMessage(query.error)} />
+        <StaffForm action={create} branches={branches} services={services} error={errorMessage(query.error)} commissionEnabled={commissionEnabled} />
       </SettingsSheet>
       <SettingsSheet open={Boolean(editing)} closeHref="/dashboard/settings/staff" title="Изменить специалиста" visuallyHiddenTitle>
         {editing ? (
@@ -115,8 +117,9 @@ export default async function StaffPage({ searchParams }: PageProps) {
             action={update}
             branches={branches}
             services={services}
-            staff={{ id: editing.id, displayName: editing.displayName, phone: editing.phone, branchIds: editing.branches.map((item) => item.branchId), primaryBranchId: editingPrimary?.branchId ?? branches[0]?.id ?? "", serviceIds: editing.services.map((item) => item.id) }}
+            staff={{ id: editing.id, displayName: editing.displayName, phone: editing.phone, branchIds: editing.branches.map((item) => item.branchId), primaryBranchId: editingPrimary?.branchId ?? branches[0]?.id ?? "", serviceIds: editing.services.map((item) => item.id), commissionPercent: editing.commissionPercent }}
             error={errorMessage(query.error)}
+            commissionEnabled={commissionEnabled}
           />
         ) : null}
       </SettingsSheet>
@@ -135,7 +138,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
   );
 }
 
-function staffValues(formData: FormData) { return { displayName: String(formData.get("displayName") ?? ""), phone: String(formData.get("phone") ?? ""), branchIds: formData.getAll("branchIds").map(String), primaryBranchId: String(formData.get("primaryBranchId") ?? ""), serviceIds: formData.getAll("serviceIds").map(String) }; }
+function staffValues(formData: FormData) { const commissionRaw = String(formData.get("commissionPercent") ?? "").trim(); return { displayName: String(formData.get("displayName") ?? ""), phone: String(formData.get("phone") ?? ""), branchIds: formData.getAll("branchIds").map(String), primaryBranchId: String(formData.get("primaryBranchId") ?? ""), serviceIds: formData.getAll("serviceIds").map(String), commissionPercent: commissionRaw === "" ? null : commissionRaw }; }
 function errorCode(error: unknown) { return error instanceof SettingsError ? error.code : "INVALID_INPUT"; }
 function errorMessage(code?: string) { return ({ INVALID_INPUT: "Выберите хотя бы один филиал и убедитесь, что основной филиал отмечен.", FUTURE_BOOKINGS: "Сначала перенесите или отмените будущие записи специалиста.", NOT_FOUND: "Специалист не найден или уже недоступен." } as Record<string, string>)[code ?? ""]; }
 function noticeMessage(code?: string) { return ({ created: "Специалист создан", updated: "Изменения сохранены", archived: "Специалист архивирован", restored: "Специалист восстановлен" } as Record<string, string>)[code ?? ""]; }

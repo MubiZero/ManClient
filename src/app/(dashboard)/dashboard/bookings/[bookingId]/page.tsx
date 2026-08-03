@@ -6,9 +6,13 @@ import { requireBusinessSession } from "@/core/auth/business-session";
 import { cancelBusinessBooking, confirmBusinessBooking, rescheduleBusinessBooking } from "@/core/booking-operations/booking-command-service";
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { getBusinessBooking } from "@/core/booking-operations/booking-query-service";
+import { cancelBookingSeries } from "@/core/bookings/recurring-booking-service";
+import { SettingsError } from "@/core/business-settings/settings-error";
 import { formatSomoni } from "@/core/formatting/money";
 import { BookingActionsPanel } from "@/features/dashboard/bookings/booking-actions-panel";
 import { BookingStatus, PaymentStatus } from "@/features/dashboard/bookings/booking-status";
+import { CancelSeriesButton } from "@/features/dashboard/bookings/cancel-series-button";
+import { Badge } from "@/features/ui-kit/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui-kit/card";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { ToastEmitter } from "@/features/ui-kit/toast-emitter";
@@ -19,7 +23,7 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
   const membership = await requireBusinessSession();
   const { bookingId } = await params;
   const query = await searchParams;
-  let booking;
+  let booking: Awaited<ReturnType<typeof getBusinessBooking>>;
   try {
     booking = await getBusinessBooking({ businessId: membership.businessId, actorUserId: membership.userId, bookingId });
   } catch (error) {
@@ -59,6 +63,17 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
     }
     redirect(`/dashboard/bookings/${bookingId}?notice=rescheduled`);
   }
+  async function cancelSeries() {
+    "use server";
+    const current = await requireBusinessSession();
+    if (!booking.seriesId) redirect(`/dashboard/bookings/${bookingId}?error=NOT_FOUND`);
+    try {
+      await cancelBookingSeries({ businessId: current.businessId, seriesId: booking.seriesId, actor: { type: "business", businessId: current.businessId, membershipId: current.id } });
+    } catch (error) {
+      redirect(`/dashboard/bookings/${bookingId}?error=${error instanceof SettingsError ? error.code : "INVALID_INPUT"}`);
+    }
+    redirect(`/dashboard/bookings/${bookingId}?notice=series_cancelled`);
+  }
 
   const active = booking.status === "PENDING_PAYMENT" || booking.status === "CONFIRMED";
 
@@ -79,6 +94,13 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
           </div>
         }
       />
+
+      {booking.seriesId ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary/40 px-4 py-3">
+          <Badge variant="info">Часть серии повторяющихся записей</Badge>
+          {active ? <CancelSeriesButton action={cancelSeries} /> : null}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card>
@@ -188,7 +210,7 @@ function errorCode(error: unknown) {
   return error instanceof BookingOperationError ? error.code : "INVALID_INPUT";
 }
 function noticeMessage(code?: string) {
-  return ({ created: "Запись создана", confirmed: "Запись подтверждена вручную", rescheduled: "Запись перенесена", cancelled: "Запись отменена" } as Record<string, string>)[code ?? ""];
+  return ({ created: "Запись создана", confirmed: "Запись подтверждена вручную", rescheduled: "Запись перенесена", cancelled: "Запись отменена", series_cancelled: "Серия повторяющихся записей отменена" } as Record<string, string>)[code ?? ""];
 }
 function errorMessage(code?: string) {
   return (

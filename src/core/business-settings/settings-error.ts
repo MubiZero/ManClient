@@ -6,7 +6,8 @@ export type SettingsErrorCode =
   | "FUTURE_BOOKINGS"
   | "LAST_ACTIVE_BRANCH"
   | "CANNOT_PUBLISH"
-  | "ALREADY_ARCHIVED";
+  | "ALREADY_ARCHIVED"
+  | "PLAN_REQUIRED";
 
 export class SettingsError extends Error {
   constructor(

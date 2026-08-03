@@ -31,6 +31,7 @@ describe("sendDueBookingReminders", () => {
     await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
       sendTelegram: async (token) => { tokens.push(token); },
       sendWhatsApp: async () => ({ externalId: "unused" }),
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
 
     expect(tokens).toEqual(["10013:tenant-reminder-token"]);
@@ -43,6 +44,7 @@ describe("sendDueBookingReminders", () => {
     await sendDueBookingReminders(new Date("2026-08-02T06:00:00.000Z"), {
       sendTelegram: async () => { throw new Error("must not send"); },
       sendWhatsApp: async () => ({ externalId: "unused" }),
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
 
     await expect(prisma.message.findFirstOrThrow({ where: { bookingId } })).resolves.toMatchObject({ status: "SKIPPED", attempts: 0 });
@@ -56,6 +58,7 @@ describe("sendDueBookingReminders", () => {
     await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
       sendTelegram: async () => { throw new Error("remote failure with sensitive details"); },
       sendWhatsApp: async () => ({ externalId: "unused" }),
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
 
     await expect(prisma.message.findFirstOrThrow({ where: { bookingId } })).resolves.toMatchObject({ status: "FAILED", attempts: 3, lastError: "TELEGRAM delivery failed" });
@@ -98,6 +101,7 @@ describe("sendDueBookingReminders", () => {
     await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
       sendTelegram: async (_token, chatId) => { delivered.push(chatId); },
       sendWhatsApp: async () => ({ externalId: "unused" }),
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
 
     expect(delivered).toEqual([]);

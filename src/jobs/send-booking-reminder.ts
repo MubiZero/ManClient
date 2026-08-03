@@ -1,16 +1,20 @@
+import { createCustomerBookingToken } from "@/core/bookings/booking-action-token";
 import { prisma } from "@/core/database/prisma";
 import { decryptSecret } from "@/core/security/secret-encryption";
+import { sendSms } from "@/integrations/payom/payom-client";
 import { createTelegramApi } from "@/integrations/telegram/telegram-api";
 import { sendTemplateMessage, type WhatsAppTemplateMessage } from "@/integrations/whatsapp/whatsapp-client";
 
 type DeliveryDependencies = {
   sendTelegram: (token: string, chatId: string, text: string) => Promise<void>;
   sendWhatsApp: (input: WhatsAppTemplateMessage) => Promise<{ externalId: string }>;
+  sendSms: (input: { telephone: string; text: string }) => Promise<{ externalId: string; deliveryStatus: string }>;
 };
 
 const defaultDependencies: DeliveryDependencies = {
   sendTelegram: (token, chatId, text) => createTelegramApi(token).sendMessage(chatId, text),
   sendWhatsApp: sendTemplateMessage,
+  sendSms,
 };
 
 export async function sendDueBookingReminders(now = new Date(), dependencies = defaultDependencies) {
@@ -64,7 +68,13 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
         const encryptedToken = message.booking.business.telegramIntegrations[0]?.botTokenEncrypted;
         const encryptionKey = process.env.INTEGRATION_ENCRYPTION_KEY;
         if (!encryptedToken || !encryptionKey) throw new Error("Business Telegram bot is unavailable");
-        await dependencies.sendTelegram(decryptSecret(encryptedToken, encryptionKey), chatId, reminderText(message.kind, message.booking));
+        const reviewUrl = message.kind === "REVIEW_REQUEST" ? buildReviewUrl(message.bookingId, now) : undefined;
+        await dependencies.sendTelegram(decryptSecret(encryptedToken, encryptionKey), chatId, reminderText(message.kind, message.booking, reviewUrl));
+      } else if (message.channel === "SMS") {
+        externalId = (await dependencies.sendSms({
+          telephone: message.booking.customer.phone,
+          text: reminderText(message.kind, message.booking),
+        })).externalId;
       } else {
         const business = message.booking.business;
         if (!business.whatsappPhoneNumberId) throw new Error("WhatsApp business settings are unavailable");
@@ -101,8 +111,20 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
   return processed;
 }
 
-function reminderText(kind: string, booking: { customer: { name: string; telegramLocale: string }; service: { name: string }; startsAt: Date }) {
+function buildReviewUrl(bookingId: string, now: Date): string {
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60_000);
+  const token = createCustomerBookingToken({ bookingId, action: "review_booking", expiresAt });
+  const appUrl = process.env.APP_URL?.replace(/\/$/, "") ?? "";
+  return `${appUrl}/review/${token}`;
+}
+
+function reminderText(kind: string, booking: { customer: { name: string; telegramLocale: string }; service: { name: string }; startsAt: Date }, reviewUrl?: string) {
   const tg = booking.customer.telegramLocale === "tg";
+  if (kind === "REVIEW_REQUEST") {
+    return tg
+      ? `Ташаккур барои ташриф! Лутфан моро баҳо диҳед: ${reviewUrl}`
+      : `Спасибо за визит! Оцените нас: ${reviewUrl}`;
+  }
   if (kind === "PAYMENT_APPROVED") return tg ? "Пардохт тасдиқ шуд. Сабти шумо тасдиқ шудааст." : "Оплата подтверждена. Запись сохранена.";
   if (kind === "PAYMENT_REJECTED") return tg ? "Расид тасдиқ нашуд. Лутфан расиди дурустро аз нав фиристед." : "Чек не подтверждён. Откройте запись и отправьте корректный чек ещё раз.";
   if (kind === "RECEIPT_NEEDS_REVIEW") return tg ? "Расид қабул шуд ва ба маъмур барои санҷиш фиристода шуд." : "Чек получен и передан администратору на проверку.";

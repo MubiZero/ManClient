@@ -35,8 +35,23 @@ export const notificationSettingsSchema = z.object({
   notifyOnNewBooking: z.boolean(),
   notifyOnPaymentNeedsReview: z.boolean(),
   notifyOnCancellation: z.boolean(),
+  smsNotificationsEnabled: z.boolean().default(false),
   cancellationPolicy: optionalText(500),
 }).strict();
+
+export const promoCodeInputSchema = z.object({
+  code: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9_-]+$/, "INVALID_CODE_FORMAT"),
+  discountType: z.enum(["PERCENT", "FIXED"]),
+  discountValue: z.coerce.number().int().positive(),
+  maxRedemptions: z.coerce.number().int().positive().optional(),
+  expiresAt: z.coerce.date().optional(),
+}).strict().superRefine((value, context) => {
+  if (value.discountType === "PERCENT" && value.discountValue > 100) {
+    context.addIssue({ code: "custom", path: ["discountValue"], message: "PERCENT_MAX_100" });
+  }
+});
+
+export const commissionPercentSchema = z.coerce.number().int().min(0).max(100).nullish();
 
 export const branchInputSchema = z.object({
   name: nameSchema,

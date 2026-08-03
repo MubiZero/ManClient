@@ -9,6 +9,7 @@ export async function POST(request: Request) {
     notifyOnPaymentNeedsReview?: boolean;
     notifyOnCancellation?: boolean;
     cancellationPolicy?: string;
+    smsNotificationsEnabled?: boolean;
   };
 
   try {
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
       notifyOnPaymentNeedsReview: Boolean(body.notifyOnPaymentNeedsReview),
       notifyOnCancellation: Boolean(body.notifyOnCancellation),
       cancellationPolicy: body.cancellationPolicy,
+      smsNotificationsEnabled: Boolean(body.smsNotificationsEnabled),
     });
     return Response.json(updated);
   } catch (error) {
@@ -30,6 +32,6 @@ function errorResponse(error: unknown) {
   if (!(error instanceof SettingsError)) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
-  const status = error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : 400;
+  const status = error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : error.code === "PLAN_REQUIRED" ? 402 : 400;
   return Response.json({ error: error.code }, { status });
 }

@@ -20,6 +20,8 @@ export default async function NotificationSettingsPage() {
           notifyOnPaymentNeedsReview: settings.notifyOnPaymentNeedsReview,
           notifyOnCancellation: settings.notifyOnCancellation,
           cancellationPolicy: settings.cancellationPolicy,
+          smsNotificationsEnabled: settings.smsNotificationsEnabled,
+          smsFeatureAvailable: settings.smsFeatureAvailable,
         }}
       />
     </>

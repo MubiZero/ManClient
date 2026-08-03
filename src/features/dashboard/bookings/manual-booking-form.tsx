@@ -2,16 +2,22 @@
 
 import { useMemo, useState } from "react";
 
+import { Checkbox } from "@/features/ui-kit/checkbox";
 import { ButtonLink } from "@/features/ui-kit/button";
 import { cn } from "@/features/ui-kit/cn";
 import { Field, Input, Select } from "@/features/ui-kit/field";
 import { SubmitButton } from "@/features/ui-kit/submit-button";
 
+const MIN_OCCURRENCES = 2;
+const MAX_OCCURRENCES = 12;
+const DEFAULT_OCCURRENCES = 4;
+
 type Staff = { id: string; displayName: string };
 type Service = { id: string; name: string; branchId: string; staffMembers: Staff[] };
 type Branch = { id: string; name: string; timeZone: string };
 
-export function ManualBookingForm({ action, branches, services, error }: { action: (formData: FormData) => void | Promise<void>; branches: Branch[]; services: Service[]; error?: string }) {
+export function ManualBookingForm({ action, branches, services, error, canRepeat = false }: { action: (formData: FormData) => void | Promise<void>; branches: Branch[]; services: Service[]; error?: string; canRepeat?: boolean }) {
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
   const branchServices = useMemo(() => services.filter((item) => item.branchId === branchId), [services, branchId]);
   const timeZone = branches.find((item) => item.id === branchId)?.timeZone ?? "Asia/Dushanbe";
@@ -96,6 +102,28 @@ export function ManualBookingForm({ action, branches, services, error }: { actio
         <Field label="Имя клиента"><Input name="customerName" required minLength={2} maxLength={120} /></Field>
         <Field label="Телефон клиента"><Input name="customerPhone" type="tel" required placeholder="+992 90 000 00 00" /></Field>
       </div>
+      {canRepeat ? (
+        <div className="flex flex-col gap-3 rounded-md border border-border bg-secondary/40 p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Checkbox name="repeatEnabled" checked={repeatEnabled} onChange={(event) => setRepeatEnabled(event.target.checked)} />
+            Повторять эту запись
+          </label>
+          {repeatEnabled ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Частота повтора">
+                <Select name="repeatFrequency" defaultValue="WEEKLY">
+                  <option value="WEEKLY">Раз в неделю</option>
+                  <option value="BIWEEKLY">Раз в 2 недели</option>
+                  <option value="MONTHLY">Раз в месяц</option>
+                </Select>
+              </Field>
+              <Field label={`Количество записей (${MIN_OCCURRENCES}–${MAX_OCCURRENCES})`}>
+                <Input name="repeatCount" type="number" min={MIN_OCCURRENCES} max={MAX_OCCURRENCES} defaultValue={DEFAULT_OCCURRENCES} />
+              </Field>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {slotError || error ? <p className="text-sm text-destructive" role="alert">{slotError || error}</p> : null}
       <div className="flex justify-end gap-3">
         <ButtonLink variant="quiet" href="/dashboard/bookings">Отмена</ButtonLink>

@@ -5,9 +5,9 @@ import { SubmitButton } from "@/features/ui-kit/submit-button";
 
 type BranchOption = { id: string; name: string };
 type ServiceOption = { id: string; name: string; branchId: string };
-type StaffValue = { id: string; displayName: string; phone: string | null; branchIds: string[]; primaryBranchId: string; serviceIds: string[] };
+type StaffValue = { id: string; displayName: string; phone: string | null; branchIds: string[]; primaryBranchId: string; serviceIds: string[]; commissionPercent?: number | null };
 
-export function StaffForm({ action, branches, services, staff, error }: { action: (formData: FormData) => void | Promise<void>; branches: BranchOption[]; services: ServiceOption[]; staff?: StaffValue; error?: string }) {
+export function StaffForm({ action, branches, services, staff, error, commissionEnabled }: { action: (formData: FormData) => void | Promise<void>; branches: BranchOption[]; services: ServiceOption[]; staff?: StaffValue; error?: string; commissionEnabled?: boolean }) {
   const editing = Boolean(staff);
   return (
     <form className="flex flex-col gap-6" action={action}>
@@ -20,6 +20,11 @@ export function StaffForm({ action, branches, services, staff, error }: { action
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Имя специалиста"><Input name="displayName" required minLength={2} maxLength={120} defaultValue={staff?.displayName} /></Field>
         <Field label="Телефон"><Input name="phone" type="tel" inputMode="tel" placeholder="+992 90 000 00 00" defaultValue={staff?.phone ?? ""} /></Field>
+        {commissionEnabled ? (
+          <Field label="Комиссия за услугу, %">
+            <Input name="commissionPercent" type="number" inputMode="numeric" min={0} max={100} step={1} defaultValue={staff?.commissionPercent ?? ""} />
+          </Field>
+        ) : null}
       </div>
       <fieldset className="flex min-w-0 flex-col gap-1 rounded-md border border-border p-4">
         <legend className="px-1.5 text-sm font-semibold text-foreground">Филиалы</legend>

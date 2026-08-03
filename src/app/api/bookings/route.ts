@@ -1,6 +1,6 @@
 import { ZodError } from "zod";
 
-import { BookingConflictError } from "@/core/bookings/booking-allocation";
+import { BookingConflictError, PromoCodeInvalidError } from "@/core/bookings/booking-allocation";
 import { createBookingActionToken } from "@/core/bookings/booking-action-token";
 import { BookingValidationError, createPendingBooking } from "@/core/bookings/booking-service";
 import { prisma } from "@/core/database/prisma";
@@ -36,6 +36,10 @@ export async function POST(request: Request): Promise<Response> {
 
     if (error instanceof BookingConflictError) {
       return Response.json({ error: error.code }, { status: 409 });
+    }
+
+    if (error instanceof PromoCodeInvalidError) {
+      return Response.json({ error: "PROMO_CODE_INVALID", reason: error.code }, { status: 400 });
     }
 
     if (error instanceof ZodError || error instanceof BookingValidationError) {

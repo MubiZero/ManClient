@@ -2,6 +2,8 @@ import { BookingStatus, Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
+import { redeemPromoCode, validatePromoCode } from "@/core/promotions/promo-code-service";
+import { SettingsError } from "@/core/business-settings/settings-error";
 
 import type { ReserveAllocationInput } from "./booking-types";
 
@@ -16,6 +18,18 @@ export class BookingConflictError extends Error {
   constructor(code: BookingConflictCode) {
     super(code);
     this.name = "BookingConflictError";
+    this.code = code;
+  }
+}
+
+export type PromoCodeInvalidReason = "NOT_FOUND" | "EXPIRED" | "INACTIVE" | "LIMIT_REACHED";
+
+export class PromoCodeInvalidError extends Error {
+  readonly code: PromoCodeInvalidReason;
+
+  constructor(code: PromoCodeInvalidReason) {
+    super(code);
+    this.name = "PromoCodeInvalidError";
     this.code = code;
   }
 }
@@ -59,6 +73,18 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
       throw new BookingConflictError(hasConflictingResource ? "RESOURCE_UNAVAILABLE" : "STAFF_UNAVAILABLE");
     }
 
+    let amountDiram = input.amountDiram;
+    if (input.promoCode) {
+      const validation = await validatePromoCode(
+        { businessId: branch.businessId, code: input.promoCode, serviceAmountDiram: input.amountDiram },
+        transaction,
+      );
+      if (!validation.valid) {
+        throw new PromoCodeInvalidError(validation.reason);
+      }
+      amountDiram = validation.finalAmountDiram;
+    }
+
     const booking = await transaction.booking.create({
       data: {
         businessId: branch.businessId,
@@ -80,12 +106,28 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
         payment: {
           create: {
             businessId: branch.businessId,
-            amountDiram: input.amountDiram,
+            amountDiram,
           },
         },
       },
       include: { payment: true, resources: true },
     });
+
+    if (input.promoCode) {
+      try {
+        await redeemPromoCode(
+          { businessId: branch.businessId, code: input.promoCode, bookingId: booking.id, serviceAmountDiram: input.amountDiram },
+          transaction,
+        );
+      } catch (error) {
+        if (error instanceof SettingsError && error.code === "INVALID_INPUT") {
+          const reason = (error.details?.reason as PromoCodeInvalidReason | undefined) ?? "NOT_FOUND";
+          throw new PromoCodeInvalidError(reason);
+        }
+        throw error;
+      }
+    }
+
     await writeAuditEvent({
       businessId: branch.businessId,
       bookingId: booking.id,

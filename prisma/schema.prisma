@@ -46,6 +46,36 @@ enum ReceiptSubmissionStatus {
 enum MessageChannel {
   TELEGRAM
   WHATSAPP
+  SMS
+}
+
+enum SubscriptionPlan {
+  START
+  STANDARD
+  PREMIUM
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum BookingSeriesStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  CONVERTED
+  CANCELLED
+}
+
+enum PromoDiscountType {
+  PERCENT
+  FIXED
 }
 
 enum MessageStatus {
@@ -132,7 +162,7 @@ model Business {
   payments                         Payment[]
   receiptSubmissions               ReceiptSubmission[]
   messages                         Message[]
-  businessNotifications           BusinessNotification[]
+  businessNotifications            BusinessNotification[]
   auditEvents                      AuditEvent[]
   telegramIntegrations             BusinessTelegramIntegration[]
   managedBotConnectionIntents      ManagedBotConnectionIntent[]
@@ -149,6 +179,15 @@ model Business {
   notifyOnPaymentNeedsReview       Boolean                       @default(true)
   notifyOnCancellation             Boolean                       @default(true)
   cancellationPolicy               String?
+  subscriptionPlan                 SubscriptionPlan              @default(START)
+  smsNotificationsEnabled          Boolean                       @default(false)
+  defaultCommissionPercent         Int?
+  publicPageLocale                 String                        @default("ru")
+  bookingSeries                    BookingSeries[]
+  waitlistEntries                  WaitlistEntry[]
+  commissionEntries                CommissionEntry[]
+  reviews                          Review[]
+  promoCodes                       PromoCode[]
   createdAt                        DateTime                      @default(now())
   updatedAt                        DateTime                      @updatedAt
 }
@@ -181,19 +220,19 @@ model Branch {
 }
 
 model Membership {
-  id                String                 @id @default(cuid())
-  businessId        String
-  userId            String
-  role              BusinessRole
-  languageCode      String?
-  business          Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  staff             StaffMember?
-  telegramIdentities BusinessTelegramIdentity[]
-  platformChatLinks PlatformChatLink[]
+  id                          String                       @id @default(cuid())
+  businessId                  String
+  userId                      String
+  role                        BusinessRole
+  languageCode                String?
+  business                    Business                     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user                        User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staff                       StaffMember?
+  telegramIdentities          BusinessTelegramIdentity[]
+  platformChatLinks           PlatformChatLink[]
   managedBotConnectionIntents ManagedBotConnectionIntent[]
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
 
   @@unique([businessId, userId])
   @@index([userId])
@@ -212,49 +251,49 @@ model PlatformChatLink {
 }
 
 model BusinessTelegramIntegration {
-  id                     String                    @id @default(cuid())
-  businessId             String
-  publicId               String                    @unique
-  botId                  String
-  botUsername            String
-  botTokenEncrypted      String?
-  webhookSecretEncrypted String?
-  status                 TelegramIntegrationStatus @default(PENDING)
-  connectionMethod       TelegramConnectionMethod @default(TOKEN)
+  id                         String                    @id @default(cuid())
+  businessId                 String
+  publicId                   String                    @unique
+  botId                      String
+  botUsername                String
+  botTokenEncrypted          String?
+  webhookSecretEncrypted     String?
+  status                     TelegramIntegrationStatus @default(PENDING)
+  connectionMethod           TelegramConnectionMethod  @default(TOKEN)
   managedOwnerTelegramUserId String?
-  managedAt              DateTime?
-  lastWebhookError       String?
-  connectedByUserId      String?
-  connectedAt            DateTime?
-  disconnectedAt         DateTime?
-  business               Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  connectedBy            User?                     @relation("TelegramIntegrationConnector", fields: [connectedByUserId], references: [id], onDelete: SetNull)
-  conversations          Conversation[]
-  inboundUpdates         InboundChannelUpdate[]
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
+  managedAt                  DateTime?
+  lastWebhookError           String?
+  connectedByUserId          String?
+  connectedAt                DateTime?
+  disconnectedAt             DateTime?
+  business                   Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  connectedBy                User?                     @relation("TelegramIntegrationConnector", fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  conversations              Conversation[]
+  inboundUpdates             InboundChannelUpdate[]
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
 
   @@index([businessId, status])
   @@index([botId, status])
 }
 
 model ManagedBotConnectionIntent {
-  id                    String                     @id @default(cuid())
-  businessId            String
-  membershipId          String
-  telegramUserId        String
-  suggestedUsername     String
-  displayName           String
-  status                ManagedBotConnectionStatus @default(PENDING)
-  botId                 String?
-  processingStartedAt   DateTime?
-  expiresAt             DateTime
-  completedAt           DateTime?
-  lastErrorCode         String?
-  business              Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  membership            Membership                 @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  id                  String                     @id @default(cuid())
+  businessId          String
+  membershipId        String
+  telegramUserId      String
+  suggestedUsername   String
+  displayName         String
+  status              ManagedBotConnectionStatus @default(PENDING)
+  botId               String?
+  processingStartedAt DateTime?
+  expiresAt           DateTime
+  completedAt         DateTime?
+  lastErrorCode       String?
+  business            Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership          Membership                 @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 
   @@index([membershipId, status, expiresAt])
   @@index([telegramUserId, status, expiresAt])
@@ -275,17 +314,17 @@ model BusinessTelegramIdentity {
 }
 
 model BusinessTelegramChat {
-  id                 String                   @id @default(cuid())
-  telegramIdentityId String
-  chatId             String
-  chatType           TelegramChatType
-  active             Boolean                  @default(true)
-  linkedAt           DateTime                 @default(now())
-  disabledAt         DateTime?
-  telegramIdentity   BusinessTelegramIdentity @relation(fields: [telegramIdentityId], references: [id], onDelete: Cascade)
+  id                     String                         @id @default(cuid())
+  telegramIdentityId     String
+  chatId                 String
+  chatType               TelegramChatType
+  active                 Boolean                        @default(true)
+  linkedAt               DateTime                       @default(now())
+  disabledAt             DateTime?
+  telegramIdentity       BusinessTelegramIdentity       @relation(fields: [telegramIdentityId], references: [id], onDelete: Cascade)
   notificationDeliveries BusinessNotificationDelivery[]
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
+  createdAt              DateTime                       @default(now())
+  updatedAt              DateTime                       @updatedAt
 
   @@unique([telegramIdentityId, chatId])
   @@index([chatId, active])
@@ -361,22 +400,25 @@ model InboundChannelUpdate {
 }
 
 model StaffMember {
-  id           String     @id @default(cuid())
-  businessId   String
-  membershipId String?    @unique
-  displayName  String
-  phone        String?
-  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  membership   Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
-  branches     StaffBranch[]
-  services     Service[]
-  bookings     Booking[]
-  scheduleRules StaffScheduleRule[]
-  scheduleBreaks ScheduleBreak[]
+  id                 String              @id @default(cuid())
+  businessId         String
+  membershipId       String?             @unique
+  displayName        String
+  phone              String?
+  business           Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership         Membership?         @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  branches           StaffBranch[]
+  services           Service[]
+  bookings           Booking[]
+  scheduleRules      StaffScheduleRule[]
+  scheduleBreaks     ScheduleBreak[]
   scheduleExceptions ScheduleException[]
-  archivedAt   DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  commissionPercent  Int?
+  commissionEntries  CommissionEntry[]
+  bookingSeries      BookingSeries[]
+  archivedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([businessId, archivedAt])
 }
@@ -412,55 +454,166 @@ model Service {
 }
 
 model Resource {
-  id        String            @id @default(cuid())
-  branchId  String
-  name      String
-  kind      String            @default("OTHER")
-  capacity  Int               @default(1)
-  isAvailable Boolean         @default(true)
-  archivedAt DateTime?
-  branch    Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  services  ServiceResource[]
-  bookings  BookingResource[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id          String            @id @default(cuid())
+  branchId    String
+  name        String
+  kind        String            @default("OTHER")
+  capacity    Int               @default(1)
+  isAvailable Boolean           @default(true)
+  archivedAt  DateTime?
+  branch      Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  services    ServiceResource[]
+  bookings    BookingResource[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([branchId])
 }
 
 model Booking {
-  id          String            @id @default(cuid())
-  businessId  String
-  branchId    String
-  serviceId   String
-  staffId     String
-  customerId  String
-  startsAt    DateTime
-  endsAt      DateTime
-  expiresAt   DateTime?
-  status      BookingStatus     @default(PENDING_PAYMENT)
-  source      BookingSource     @default(WEB)
-  confirmedAt DateTime?
-  confirmedBy String?
-  cancelledAt DateTime?
-  cancelledBy String?
-  cancellationReason String?
-  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branch      Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  service     Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  staff       StaffMember       @relation(fields: [staffId], references: [id], onDelete: Restrict)
-  customer    Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  resources   BookingResource[]
-  payment     Payment?
-  messages    Message[]
+  id                    String                 @id @default(cuid())
+  businessId            String
+  branchId              String
+  serviceId             String
+  staffId               String
+  customerId            String
+  startsAt              DateTime
+  endsAt                DateTime
+  expiresAt             DateTime?
+  status                BookingStatus          @default(PENDING_PAYMENT)
+  source                BookingSource          @default(WEB)
+  confirmedAt           DateTime?
+  confirmedBy           String?
+  cancelledAt           DateTime?
+  cancelledBy           String?
+  cancellationReason    String?
+  seriesId              String?
+  seriesIndex           Int?
+  business              Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch                Branch                 @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  service               Service                @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  staff                 StaffMember            @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  customer              Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  series                BookingSeries?         @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  resources             BookingResource[]
+  payment               Payment?
+  messages              Message[]
   businessNotifications BusinessNotification[]
-  auditEvents AuditEvent[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  auditEvents           AuditEvent[]
+  review                Review?
+  waitlistConversions   WaitlistEntry[]
+  commissionEntry       CommissionEntry?
+  promoRedemption       PromoCodeRedemption?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@index([businessId, branchId, startsAt, endsAt])
   @@index([staffId, startsAt, endsAt])
   @@index([status, expiresAt])
+  @@index([seriesId])
+}
+
+model BookingSeries {
+  id               String              @id @default(cuid())
+  businessId       String
+  branchId         String
+  serviceId        String
+  staffId          String
+  customerId       String
+  frequency        RecurrenceFrequency
+  intervalCount    Int                 @default(1)
+  occurrencesTotal Int
+  status           BookingSeriesStatus @default(ACTIVE)
+  createdBy        String
+  business         Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bookings         Booking[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  staffMember      StaffMember?        @relation(fields: [staffMemberId], references: [id])
+  staffMemberId    String?
+
+  @@index([businessId, status])
+}
+
+model WaitlistEntry {
+  id                 String         @id @default(cuid())
+  businessId         String
+  branchId           String
+  serviceId          String
+  staffId            String?
+  customerId         String
+  desiredFrom        DateTime
+  desiredTo          DateTime
+  status             WaitlistStatus @default(WAITING)
+  notifiedAt         DateTime?
+  convertedBookingId String?        @unique
+  business           Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  convertedBooking   Booking?       @relation(fields: [convertedBookingId], references: [id], onDelete: SetNull)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([businessId, branchId, serviceId, status])
+  @@index([status, desiredFrom, desiredTo])
+}
+
+model CommissionEntry {
+  id          String      @id @default(cuid())
+  businessId  String
+  staffId     String
+  bookingId   String      @unique
+  amountDiram Int
+  percent     Int
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staff       StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  booking     Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+
+  @@index([businessId, staffId, createdAt])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  businessId String
+  bookingId  String   @unique
+  customerId String
+  rating     Int
+  comment    String?
+  isHidden   Boolean  @default(false)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, isHidden, createdAt])
+}
+
+model PromoCode {
+  id              String                @id @default(cuid())
+  businessId      String
+  code            String
+  discountType    PromoDiscountType
+  discountValue   Int
+  maxRedemptions  Int?
+  redemptionCount Int                   @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean               @default(true)
+  business        Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  redemptions     PromoCodeRedemption[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([businessId, code])
+}
+
+model PromoCodeRedemption {
+  id                   String    @id @default(cuid())
+  promoCodeId          String
+  bookingId            String    @unique
+  discountAppliedDiram Int
+  promoCode            PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  booking              Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt            DateTime  @default(now())
+
+  @@index([promoCodeId])
 }
 
 model Message {
@@ -505,18 +658,18 @@ model BusinessNotification {
 }
 
 model BusinessNotificationDelivery {
-  id             String                       @id @default(cuid())
+  id             String               @id @default(cuid())
   notificationId String
   destinationId  String
-  status         MessageStatus                @default(SCHEDULED)
+  status         MessageStatus        @default(SCHEDULED)
   scheduledAt    DateTime
-  attempts       Int                          @default(0)
-  maxAttempts    Int                          @default(3)
+  attempts       Int                  @default(0)
+  maxAttempts    Int                  @default(3)
   lastError      String?
-  notification   BusinessNotification         @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-  destination    BusinessTelegramChat         @relation(fields: [destinationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime                     @default(now())
-  updatedAt      DateTime                     @updatedAt
+  notification   BusinessNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  destination    BusinessTelegramChat @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
   @@unique([notificationId, destinationId])
   @@index([status, scheduledAt])
@@ -544,7 +697,7 @@ model Customer {
   name           String
   phone          String
   telegramChatId String?
-  telegramLocale String     @default("ru")
+  telegramLocale String    @default("ru")
   business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   bookings       Booking[]
   createdAt      DateTime  @default(now())
@@ -556,28 +709,28 @@ model Customer {
 }
 
 model Payment {
-  id                  String        @id @default(cuid())
+  id                  String              @id @default(cuid())
   businessId          String
-  bookingId           String        @unique
+  bookingId           String              @unique
   amountDiram         Int
-  status              PaymentStatus @default(PENDING)
+  status              PaymentStatus       @default(PENDING)
   operationNumber     String?
   receiptAmountDiram  Int?
   recipientCardSuffix String?
   operationAt         DateTime?
   receiptStorageKey   String?
   receiptAcceptedAt   DateTime?
-  isBankVerified      Boolean       @default(false)
+  isBankVerified      Boolean             @default(false)
   attentionReason     String?
   reviewReason        String?
   reviewedAt          DateTime?
   reviewedBy          String?
   reviewDeadline      DateTime?
-  business            Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  booking             Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  business            Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking             Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   submissions         ReceiptSubmission[]
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   @@unique([businessId, operationNumber])
   @@index([businessId, status])
@@ -603,8 +756,8 @@ model ReceiptSubmission {
   reviewNote            String?
   business              Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
   payment               Payment                 @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 
   @@index([businessId, status, createdAt])
   @@index([paymentId, createdAt])
@@ -681,7 +834,7 @@ model ScheduleException {
   staffId   String?
   startsAt  DateTime
   endsAt    DateTime
-  available Boolean     @default(false)
+  available Boolean      @default(false)
   note      String?
   branch    Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
   staff     StaffMember? @relation(fields: [staffId], references: [id], onDelete: Cascade)

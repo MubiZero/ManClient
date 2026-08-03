@@ -1,7 +1,8 @@
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
+import { notifyWaitlistForFreedSlot } from "@/core/bookings/waitlist-service";
 import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
-import { scheduleWhatsAppCancellation } from "@/core/notifications/notification-service";
+import { scheduleSmsCancellation, scheduleWhatsAppCancellation } from "@/core/notifications/notification-service";
 
 export type BookingActor =
   | { type: "customer"; customerId: string }
@@ -38,6 +39,12 @@ export async function cancelBooking(input: { bookingId: string; actor: BookingAc
     }, transaction);
     await scheduleCustomerTelegramNotification({ bookingId: booking.id, kind: "BOOKING_CANCELLED", scheduledAt: now }, transaction);
     await scheduleWhatsAppCancellation(booking.id, transaction);
+    await scheduleSmsCancellation(booking.id, transaction);
+    await notifyWaitlistForFreedSlot(
+      { businessId: booking.businessId, branchId: booking.branchId, serviceId: booking.serviceId, staffId: booking.staffId, freedStartsAt: booking.startsAt, freedEndsAt: booking.endsAt },
+      transaction,
+      now,
+    );
     return booking;
   });
 }

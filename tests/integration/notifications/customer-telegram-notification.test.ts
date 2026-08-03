@@ -23,7 +23,7 @@ describe("customer Telegram notifications", () => {
     await scheduleCustomerTelegramNotification({ bookingId: pending.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now });
     const delivered: string[] = [];
 
-    await sendDueBookingReminders(now, { sendTelegram: async (_token, _chatId, text) => { delivered.push(text); }, sendWhatsApp: async () => ({ externalId: "unused" }) });
+    await sendDueBookingReminders(now, { sendTelegram: async (_token, _chatId, text) => { delivered.push(text); }, sendWhatsApp: async () => ({ externalId: "unused" }), sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }) });
 
     expect(delivered).toEqual(["Пардохт тасдиқ шуд. Сабти шумо тасдиқ шудааст."]);
     await expect(prisma.message.findFirstOrThrow({ where: { bookingId: pending.bookingId, kind: "PAYMENT_APPROVED" } })).resolves.toMatchObject({ status: "SENT", attempts: 1 });

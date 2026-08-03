@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
+import { localDateTimeToUtc, todayInTimeZone } from "@/core/formatting/dushanbe-date";
 import { formatSomoni } from "@/core/formatting/money";
 import {
   formatTajikPhoneInput,
@@ -11,10 +11,18 @@ import {
 } from "@/core/formatting/tajik-phone";
 import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
+import { Checkbox } from "@/features/ui-kit/checkbox";
 import { cn } from "@/features/ui-kit/cn";
-import { Field, Input, Label } from "@/features/ui-kit/field";
+import { Field, Input, Label, Select } from "@/features/ui-kit/field";
 import { SelectableCard } from "@/features/ui-kit/selectable-card";
 import { StepProgress } from "@/features/ui-kit/step-progress";
+import type { SupportedLocale } from "@/i18n/translate";
+import { intlLocale, moneyLocale, t } from "@/i18n/translate";
+
+type RepeatFrequency = "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+const MIN_OCCURRENCES = 2;
+const MAX_OCCURRENCES = 12;
+const DEFAULT_OCCURRENCES = 4;
 
 type Staff = { id: string; displayName: string };
 type Service = {
@@ -42,12 +50,22 @@ type BookingProgressInput = {
   startsAt: string;
 };
 
+type PromoStatus = "idle" | "checking" | "valid" | "invalid";
+
 export function BookingForm({
   businessSlug,
   branches,
+  locale,
+  canRepeat = false,
+  canUsePromoCodes = false,
+  canUseWaitlist = false,
 }: {
   businessSlug: string;
   branches: Branch[];
+  locale: SupportedLocale;
+  canRepeat?: boolean;
+  canUsePromoCodes?: boolean;
+  canUseWaitlist?: boolean;
 }) {
   const router = useRouter();
   const [branchId, setBranchId] = useState(
@@ -61,9 +79,25 @@ export function BookingForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatFrequency, setRepeatFrequency] = useState<RepeatFrequency>("WEEKLY");
+  const [repeatCount, setRepeatCount] = useState(DEFAULT_OCCURRENCES);
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [promoStatus, setPromoStatus] = useState<PromoStatus>("idle");
+  const [promoDiscountDiram, setPromoDiscountDiram] = useState(0);
+  const [promoFinalAmountDiram, setPromoFinalAmountDiram] = useState<number | null>(null);
+  const [isCheckingPromo, setIsCheckingPromo] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [waitlistName, setWaitlistName] = useState("");
+  const [waitlistPhone, setWaitlistPhone] = useState("");
+  const [waitlistFrom, setWaitlistFrom] = useState("");
+  const [waitlistTo, setWaitlistTo] = useState("");
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistError, setWaitlistError] = useState("");
+  const [waitlistDone, setWaitlistDone] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
 
   const branch = branches.find(({ id }) => id === branchId);
@@ -80,17 +114,17 @@ export function BookingForm({
   const steps =
     branches.length > 1
       ? [
-          { id: "branch", label: "Филиал" },
-          { id: "service", label: "Услуга" },
-          { id: "staff", label: "Специалист" },
-          { id: "time", label: "Время" },
-          { id: "contact", label: "Контакты" },
+          { id: "branch", label: t(locale, "booking.steps.branch") },
+          { id: "service", label: t(locale, "booking.steps.service") },
+          { id: "staff", label: t(locale, "booking.steps.staff") },
+          { id: "time", label: t(locale, "booking.steps.time") },
+          { id: "contact", label: t(locale, "booking.steps.contact") },
         ]
       : [
-          { id: "service", label: "Услуга" },
-          { id: "staff", label: "Специалист" },
-          { id: "time", label: "Время" },
-          { id: "contact", label: "Контакты" },
+          { id: "service", label: t(locale, "booking.steps.service") },
+          { id: "staff", label: t(locale, "booking.steps.staff") },
+          { id: "time", label: t(locale, "booking.steps.time") },
+          { id: "contact", label: t(locale, "booking.steps.contact") },
         ];
 
   useEffect(() => () => requestRef.current?.abort(), []);
@@ -148,6 +182,9 @@ export function BookingForm({
     setStartsAt("");
     setStarts([]);
     setError("");
+    setWaitlistOpen(false);
+    setWaitlistDone(false);
+    setWaitlistError("");
     requestRef.current?.abort();
     if (!nextDate || !service || !staffId || !branch) return;
 
@@ -170,38 +207,51 @@ export function BookingForm({
       setStarts(data.starts);
     } catch {
       if (request.signal.aborted || requestRef.current !== request) return;
-      setError(
-        "Не удалось загрузить свободное время. Проверьте соединение и попробуйте ещё раз.",
-      );
+      setError(t(locale, "booking.errors.slotsLoadFailed"));
     } finally {
       if (requestRef.current === request) setIsLoadingSlots(false);
     }
   }
 
   function onPhoneBlur() {
-    setPhoneError(validateBookingPhone(phone));
+    setPhoneError(validateBookingPhone(phone, locale));
   }
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submitWaitlist(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
-    const normalizedPhone = normalizeTajikPhone(phone);
-    if (!service || !staffId || !startsAt) {
-      setError("Вернитесь к выбору времени и выберите свободный слот.");
-      return;
-    }
-    if (!name.trim()) {
-      setError("Введите имя, чтобы бизнес мог подтвердить запись.");
+    setWaitlistError("");
+    if (!branch || !service || !staffId) return;
+    const normalizedPhone = normalizeTajikPhone(waitlistPhone);
+    if (!waitlistName.trim()) {
+      setWaitlistError(t(locale, "booking.waitlist.nameRequired"));
       return;
     }
     if (!normalizedPhone) {
-      setPhoneError(validateBookingPhone(phone));
+      setWaitlistError(t(locale, "booking.waitlist.phoneInvalid"));
+      return;
+    }
+    if (!waitlistFrom || !waitlistTo) {
+      setWaitlistError(t(locale, "booking.waitlist.periodRequired"));
       return;
     }
 
-    setIsSubmitting(true);
+    let desiredFrom: Date;
+    let desiredTo: Date;
     try {
-      const response = await fetch("/api/bookings", {
+      desiredFrom = localDateTimeToUtc(waitlistFrom, "00:00", branch.timeZone);
+      desiredTo = localDateTimeToUtc(waitlistTo, "23:59", branch.timeZone);
+    } catch {
+      setWaitlistError(t(locale, "booking.waitlist.datesInvalid"));
+      return;
+    }
+    if (desiredFrom >= desiredTo) {
+      setWaitlistError(t(locale, "booking.waitlist.rangeInvalid"));
+      return;
+    }
+
+    setWaitlistSubmitting(true);
+    try {
+      const response = await fetch("/api/public/waitlist", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -209,30 +259,134 @@ export function BookingForm({
           branchId,
           serviceId: service.id,
           staffId,
-          resourceIds: service.resources.map(({ resourceId }) => resourceId),
-          startsAt,
-          customer: { name: name.trim(), phone: normalizedPhone },
+          desiredFrom: desiredFrom.toISOString(),
+          desiredTo: desiredTo.toISOString(),
+          customer: { name: waitlistName.trim(), phone: normalizedPhone },
         }),
+      });
+      if (!response.ok) throw new Error("waitlist");
+      setWaitlistDone(true);
+    } catch {
+      setWaitlistError(t(locale, "booking.waitlist.submitFailed"));
+    } finally {
+      setWaitlistSubmitting(false);
+    }
+  }
+
+  function onPromoCodeChange(value: string) {
+    setPromoCodeInput(value);
+    setPromoStatus("idle");
+    setPromoDiscountDiram(0);
+    setPromoFinalAmountDiram(null);
+  }
+
+  async function applyPromoCode() {
+    if (!service || !promoCodeInput.trim()) return;
+    setIsCheckingPromo(true);
+    setPromoStatus("checking");
+    try {
+      const response = await fetch("/api/public/promo/validate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ businessSlug, code: promoCodeInput.trim(), serviceId: service.id }),
+      });
+      const data = (await response.json()) as {
+        valid: boolean;
+        discountDiram?: number;
+        finalAmountDiram?: number;
+      };
+      if (data.valid) {
+        setPromoStatus("valid");
+        setPromoDiscountDiram(data.discountDiram ?? 0);
+        setPromoFinalAmountDiram(data.finalAmountDiram ?? service.amountDiram);
+      } else {
+        setPromoStatus("invalid");
+        setPromoDiscountDiram(0);
+        setPromoFinalAmountDiram(null);
+      }
+    } catch {
+      setPromoStatus("invalid");
+      setPromoDiscountDiram(0);
+      setPromoFinalAmountDiram(null);
+    } finally {
+      setIsCheckingPromo(false);
+    }
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const normalizedPhone = normalizeTajikPhone(phone);
+    if (!service || !staffId || !startsAt) {
+      setError(t(locale, "booking.errors.selectTimeFirst"));
+      return;
+    }
+    if (!name.trim()) {
+      setError(t(locale, "booking.errors.nameRequired"));
+      return;
+    }
+    if (!normalizedPhone) {
+      setPhoneError(validateBookingPhone(phone, locale));
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const useRepeat = canRepeat && repeatEnabled;
+      const appliedPromoCode = canUsePromoCodes && promoStatus === "valid" ? promoCodeInput.trim() : undefined;
+      const response = await fetch(useRepeat ? "/api/bookings/recurring" : "/api/bookings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          useRepeat
+            ? {
+                businessSlug,
+                branchId,
+                serviceId: service.id,
+                staffId,
+                resourceIds: service.resources.map(({ resourceId }) => resourceId),
+                startsAt,
+                customer: { name: name.trim(), phone: normalizedPhone },
+                frequency: repeatFrequency,
+                occurrencesTotal: repeatCount,
+              }
+            : {
+                businessSlug,
+                branchId,
+                serviceId: service.id,
+                staffId,
+                resourceIds: service.resources.map(({ resourceId }) => resourceId),
+                startsAt,
+                customer: { name: name.trim(), phone: normalizedPhone },
+                ...(appliedPromoCode ? { promoCode: appliedPromoCode } : {}),
+              },
+        ),
       });
       if (response.status === 409) {
         setStarts((values) => values.filter((value) => value !== startsAt));
         setStartsAt("");
-        setError(
-          "Это время только что заняли. Выберите другой свободный слот.",
-        );
+        setError(t(locale, "booking.errors.slotTaken"));
         return;
       }
       if (response.status === 503) {
-        setError(
-          "Онлайн-оплата этого филиала пока не настроена. Свяжитесь с бизнесом напрямую.",
-        );
+        setError(t(locale, "booking.errors.paymentsNotConfigured"));
         return;
+      }
+      if (response.status === 400) {
+        const data = (await response.json()) as { error?: string };
+        if (data.error === "PROMO_CODE_INVALID") {
+          setPromoStatus("invalid");
+          setPromoDiscountDiram(0);
+          setPromoFinalAmountDiram(null);
+          setError(t(locale, "booking.errors.promoCodeExpired"));
+          return;
+        }
       }
       if (!response.ok) throw new Error("booking");
       const data = (await response.json()) as { paymentPath: string };
       router.replace(data.paymentPath);
     } catch {
-      setError("Запись не создана. Проверьте данные и попробуйте ещё раз.");
+      setError(t(locale, "booking.errors.submitFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -255,7 +409,7 @@ export function BookingForm({
         <CardContent className="flex flex-col gap-5 p-6">
           {currentStep === "branch" ? (
             <>
-              <StepHeading number={1} title="Выберите филиал" />
+              <StepHeading number={1} locale={locale} title={t(locale, "booking.headings.selectBranch")} />
               <div className="grid gap-3 sm:grid-cols-2">
                 {branches.map((item) => (
                   <SelectableCard
@@ -271,17 +425,21 @@ export function BookingForm({
           {currentStep === "service" && branch ? (
             <>
               <StepHeading
+                locale={locale}
                 number={branches.length > 1 ? 2 : 1}
-                title="Выберите услугу"
+                title={t(locale, "booking.headings.selectService")}
                 onBack={branches.length > 1 ? goBack : undefined}
-                backLabel="Назад к выбору филиала"
+                backLabel={t(locale, "booking.back.toBranch")}
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 {branch.services.map((item) => (
                   <SelectableCard
                     key={item.id}
                     title={item.name}
-                    subtitle={`${item.durationMinutes} мин · ${formatSomoni(item.amountDiram)}`}
+                    subtitle={t(locale, "booking.durationAndPrice", {
+                      minutes: item.durationMinutes,
+                      price: formatSomoni(item.amountDiram, moneyLocale(locale)),
+                    })}
                     selected={serviceId === item.id}
                     onClick={() => chooseService(item.id)}
                   />
@@ -292,10 +450,11 @@ export function BookingForm({
           {currentStep === "staff" && service ? (
             <>
               <StepHeading
+                locale={locale}
                 number={branches.length > 1 ? 3 : 2}
-                title="Выберите специалиста"
+                title={t(locale, "booking.headings.selectStaff")}
                 onBack={goBack}
-                backLabel="Назад к выбору услуги"
+                backLabel={t(locale, "booking.back.toService")}
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 {service.staffMembers.map((item) => (
@@ -320,12 +479,13 @@ export function BookingForm({
           {currentStep === "time" && branch && service ? (
             <>
               <StepHeading
+                locale={locale}
                 number={branches.length > 1 ? 4 : 3}
-                title="Выберите время"
+                title={t(locale, "booking.headings.selectTime")}
                 onBack={goBack}
-                backLabel="Назад к выбору специалиста"
+                backLabel={t(locale, "booking.back.toStaff")}
               />
-              <Field label="Дата записи" htmlFor="booking-date">
+              <Field label={t(locale, "booking.dateLabel")} htmlFor="booking-date">
                 <Input
                   id="booking-date"
                   type="date"
@@ -337,15 +497,15 @@ export function BookingForm({
               </Field>
               {isLoadingSlots ? (
                 <p className="text-sm text-muted-foreground" aria-live="polite">
-                  Ищем свободное время…
+                  {t(locale, "booking.loadingSlots")}
                 </p>
               ) : date && starts.length === 0 && !error ? (
                 <p className="text-sm text-muted-foreground">
-                  На эту дату свободного времени нет. Выберите другой день.
+                  {t(locale, "booking.noSlotsForDate")}
                 </p>
               ) : null}
               {starts.length ? (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label="Свободное время">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label={t(locale, "booking.availableTimesAriaLabel")}>
                   {starts.map((value) => (
                     <button
                       data-slot
@@ -358,7 +518,7 @@ export function BookingForm({
                         "aria-[pressed=true]:border-primary aria-[pressed=true]:bg-primary aria-[pressed=true]:text-primary-foreground",
                       )}
                     >
-                      {formatBookingTime(value, branch.timeZone)}
+                      {formatBookingTime(value, branch.timeZone, locale)}
                     </button>
                   ))}
                 </div>
@@ -368,17 +528,64 @@ export function BookingForm({
           {currentStep === "contact" && branch && service ? (
             <>
               <StepHeading
+                locale={locale}
                 number={branches.length > 1 ? 5 : 4}
-                title="Оставьте контакты"
+                title={t(locale, "booking.headings.enterContacts")}
                 onBack={goBack}
-                backLabel="Назад к выбору времени"
+                backLabel={t(locale, "booking.back.toTime")}
               />
               <p className="text-sm font-medium text-foreground">
-                {formatBookingTime(startsAt, branch.timeZone)} · {service.name} ·{" "}
-                {formatSomoni(service.amountDiram)}
+                {formatBookingTime(startsAt, branch.timeZone, locale)} · {service.name} ·{" "}
+                {promoStatus === "valid" && promoFinalAmountDiram !== null ? (
+                  <>
+                    <span className="text-muted-foreground line-through">
+                      {formatSomoni(service.amountDiram, moneyLocale(locale))}
+                    </span>{" "}
+                    <span>{formatSomoni(promoFinalAmountDiram, moneyLocale(locale))}</span>
+                  </>
+                ) : (
+                  formatSomoni(service.amountDiram, moneyLocale(locale))
+                )}
               </p>
+              {canUsePromoCodes ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="booking-promo-code">{t(locale, "booking.promoCodeLabel")}</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="booking-promo-code"
+                      name="promoCode"
+                      autoComplete="off"
+                      placeholder={t(locale, "booking.promoCodePlaceholder")}
+                      value={promoCodeInput}
+                      onChange={(event) => onPromoCodeChange(event.target.value)}
+                      onBlur={() => void applyPromoCode()}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={isCheckingPromo || !promoCodeInput.trim()}
+                      loading={isCheckingPromo}
+                      onClick={() => void applyPromoCode()}
+                    >
+                      {t(locale, "booking.promoApplyCta")}
+                    </Button>
+                  </div>
+                  {promoStatus === "valid" ? (
+                    <p className="text-[13px] text-brand-700 dark:text-brand-300">
+                      {t(locale, "booking.promoApplied", {
+                        amount: formatSomoni(promoDiscountDiram, moneyLocale(locale)),
+                      })}
+                    </p>
+                  ) : promoStatus === "invalid" ? (
+                    <p className="text-[13px] text-destructive" role="alert">
+                      {t(locale, "booking.promoInvalid")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Имя">
+                <Field label={t(locale, "booking.nameLabel")}>
                   <Input
                     name="name"
                     autoComplete="name"
@@ -389,7 +596,7 @@ export function BookingForm({
                   />
                 </Field>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="booking-phone">Телефон</Label>
+                  <Label htmlFor="booking-phone">{t(locale, "booking.phoneLabel")}</Label>
                   <Input
                     id="booking-phone"
                     name="phone"
@@ -415,12 +622,54 @@ export function BookingForm({
                   ) : null}
                 </div>
               </div>
+              {canRepeat ? (
+                <div className="flex flex-col gap-3 rounded-md border border-border bg-secondary/40 p-4">
+                  <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Checkbox
+                      checked={repeatEnabled}
+                      onChange={(event) => setRepeatEnabled(event.target.checked)}
+                    />
+                    {t(locale, "booking.repeatBookingLabel")}
+                  </label>
+                  {repeatEnabled ? (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label={t(locale, "booking.repeatFrequencyLabel")}>
+                        <Select
+                          value={repeatFrequency}
+                          onChange={(event) => setRepeatFrequency(event.target.value as RepeatFrequency)}
+                        >
+                          <option value="WEEKLY">{t(locale, "booking.repeatFrequency.weekly")}</option>
+                          <option value="BIWEEKLY">{t(locale, "booking.repeatFrequency.biweekly")}</option>
+                          <option value="MONTHLY">{t(locale, "booking.repeatFrequency.monthly")}</option>
+                        </Select>
+                      </Field>
+                      <Field
+                        label={t(locale, "booking.repeatCountLabel", {
+                          min: MIN_OCCURRENCES,
+                          max: MAX_OCCURRENCES,
+                        })}
+                      >
+                        <Input
+                          type="number"
+                          min={MIN_OCCURRENCES}
+                          max={MAX_OCCURRENCES}
+                          value={repeatCount}
+                          onChange={(event) => {
+                            const next = Number(event.target.value);
+                            if (Number.isNaN(next)) return;
+                            setRepeatCount(Math.min(MAX_OCCURRENCES, Math.max(MIN_OCCURRENCES, next)));
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <p className="text-sm text-muted-foreground">
-                После записи слот будет удерживаться 15 минут для оплаты. Деньги
-                поступят напрямую бизнесу.
+                {t(locale, "booking.holdNotice")}
               </p>
               <Button type="submit" size="lg" disabled={isSubmitting} loading={isSubmitting}>
-                {isSubmitting ? "Создаём запись…" : "Перейти к оплате"}
+                {isSubmitting ? t(locale, "booking.submitting") : t(locale, "booking.submitCta")}
               </Button>
             </>
           ) : null}
@@ -438,11 +687,13 @@ export function BookingForm({
 function StepHeading({
   number,
   title,
+  locale,
   onBack,
-  backLabel = "Назад",
+  backLabel = t(locale, "booking.back.default"),
 }: {
   number: number;
   title: string;
+  locale: SupportedLocale;
   onBack?: () => void;
   backLabel?: string;
 }) {
@@ -474,14 +725,12 @@ export function getBookingStep(input: BookingProgressInput): BookingStep {
   return "contact";
 }
 
-export function validateBookingPhone(value: string): string | null {
-  return normalizeTajikPhone(value)
-    ? null
-    : "Введите номер полностью: +992 90 123 45 67.";
+export function validateBookingPhone(value: string, locale: SupportedLocale = "ru"): string | null {
+  return normalizeTajikPhone(value) ? null : t(locale, "booking.errors.invalidPhone");
 }
 
-export function formatBookingTime(value: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("ru-RU", {
+export function formatBookingTime(value: string, timeZone: string, locale: SupportedLocale = "ru"): string {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     timeZone,
     hour: "2-digit",
     minute: "2-digit",

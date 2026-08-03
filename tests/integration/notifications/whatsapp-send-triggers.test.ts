@@ -30,6 +30,7 @@ describe("WhatsApp send triggers", () => {
     await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
       sendTelegram: async () => {},
       sendWhatsApp: async (input) => { sent.push(input); return { externalId: "ext-confirmation" }; },
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
 
     expect(sent).toContainEqual(
@@ -48,6 +49,7 @@ describe("WhatsApp send triggers", () => {
     await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
       sendTelegram: async () => {},
       sendWhatsApp: async (input) => { sent.push(input); return { externalId: "unused" }; },
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
 
     expect(sent).toEqual([]);
@@ -72,6 +74,7 @@ describe("WhatsApp send triggers", () => {
     await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
       sendTelegram: async () => {},
       sendWhatsApp: async (input) => { sent.push(input); return { externalId: "ext-cancellation" }; },
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
 
     expect(sent).toEqual([
@@ -98,6 +101,7 @@ describe("WhatsApp send triggers", () => {
     await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
       sendTelegram: async () => {},
       sendWhatsApp: async (input) => { sent.push(input); return { externalId: "ext-rejected" }; },
+      sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     });
 
     expect(sent).toEqual([
