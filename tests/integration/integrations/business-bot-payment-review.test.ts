@@ -387,7 +387,15 @@ describe("business bot payment review", () => {
     expect(["RECEIPT_ACCEPTED", "REJECTED"]).toContain(payment.status);
     expect(audit).toHaveLength(1);
     expect(audit[0]?.type).toBe(payment.status === "RECEIPT_ACCEPTED" ? "payment.review_approved" : "payment.review_rejected");
-    expect(schedules).toHaveLength(payment.status === "RECEIPT_ACCEPTED" ? 4 : 1);
+    // Either side of the race may win, so assert on the winner's own fan-out. Spelling the channels
+    // out rather than counting them means adding a channel fails here with what actually changed.
+    // This workspace has WhatsApp configured and the customer has Telegram, so both sides send twice
+    // over — the losing transaction must leave nothing behind.
+    expect(schedules.map(message => `${message.channel}:${message.kind}`).sort()).toEqual(
+      payment.status === "RECEIPT_ACCEPTED"
+        ? ["TELEGRAM:BOOKING_REMINDER", "TELEGRAM:PAYMENT_APPROVED", "WHATSAPP:BOOKING_CONFIRMATION", "WHATSAPP:BOOKING_REMINDER"]
+        : ["TELEGRAM:PAYMENT_REJECTED", "WHATSAPP:PAYMENT_REJECTED"],
+    );
   });
 
   it("validates a custom rejection reason and accepts a valid opaque custom decision", async () => {
