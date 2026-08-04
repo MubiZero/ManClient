@@ -1,14 +1,15 @@
 import { createCustomerBookingToken } from "@/core/bookings/booking-action-token";
 import { prisma } from "@/core/database/prisma";
 import { decryptSecret } from "@/core/security/secret-encryption";
-import { sendSms } from "@/integrations/payom/payom-client";
+import { sendSms, type PayomSmsMessage } from "@/integrations/payom/payom-client";
+import { buildPayomVariables, findPayomTemplateKind } from "@/integrations/payom/payom-templates";
 import { createTelegramApi } from "@/integrations/telegram/telegram-api";
 import { sendTemplateMessage, type WhatsAppTemplateMessage } from "@/integrations/whatsapp/whatsapp-client";
 
 type DeliveryDependencies = {
   sendTelegram: (token: string, chatId: string, text: string) => Promise<void>;
   sendWhatsApp: (input: WhatsAppTemplateMessage) => Promise<{ externalId: string }>;
-  sendSms: (input: { telephone: string; text: string }) => Promise<{ externalId: string; deliveryStatus: string }>;
+  sendSms: (input: PayomSmsMessage) => Promise<{ externalId: string; deliveryStatus: string }>;
 };
 
 const defaultDependencies: DeliveryDependencies = {
@@ -71,10 +72,20 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
         const reviewUrl = message.kind === "REVIEW_REQUEST" ? buildReviewUrl(message.bookingId, now) : undefined;
         await dependencies.sendTelegram(decryptSecret(encryptedToken, encryptionKey), chatId, reminderText(message.kind, message.booking, reviewUrl));
       } else if (message.channel === "SMS") {
-        externalId = (await dependencies.sendSms({
-          telephone: message.booking.customer.phone,
-          text: reminderText(message.kind, message.booking),
-        })).externalId;
+        const templateKind = findPayomTemplateKind(message.kind);
+        // No approved template means this kind cannot go out over SMS at all, so retrying it three
+        // times and burying it in FAILED would be noise. Skip it the same way an ineligible
+        // booking is skipped above.
+        if (!templateKind) {
+          await prisma.message.update({ where: { id: message.id }, data: { status: "SKIPPED" } });
+          processed += 1;
+          continue;
+        }
+        const template = buildPayomVariables(templateKind, message.booking.customer.telegramLocale, {
+          businessName: message.booking.business.name,
+          startsAt: message.booking.startsAt,
+        });
+        externalId = (await dependencies.sendSms({ telephone: message.booking.customer.phone, ...template })).externalId;
       } else {
         const business = message.booking.business;
         if (!business.whatsappPhoneNumberId) throw new Error("WhatsApp business settings are unavailable");
