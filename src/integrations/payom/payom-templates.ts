@@ -97,6 +97,7 @@ export function findPayomTemplateKind(messageKind: string): PayomTemplateKind | 
   if (messageKind === "BOOKING_REMINDER") return "BOOKING_REMINDER";
   if (messageKind === "BOOKING_CANCELLED") return "BOOKING_CANCELLED";
   if (messageKind === "PAYMENT_REJECTED") return "PAYMENT_REJECTED";
+  if (messageKind === "WAITLIST_SLOT_FREED") return "WAITLIST_SLOT_FREED";
   return null;
 }
 

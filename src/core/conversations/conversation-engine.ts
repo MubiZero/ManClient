@@ -1,6 +1,7 @@
 import type { ConversationChannel, Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
+import { isUniqueConstraintError } from "@/core/database/prisma-errors";
 import {
   conversationStates,
   transitionConversationState,
@@ -28,25 +29,38 @@ type HandleCommandInput = ConversationCommand & {
 export type ConversationReply = { text: string; state: ConversationStateName };
 
 export async function openConversation(input: OpenConversationInput) {
-  const conversation = await prisma.conversation.upsert({
-    where: {
-      businessId_channel_externalChatId: {
-        businessId: input.businessId,
-        channel: input.channel,
-        externalChatId: input.externalChatId,
-      },
-    },
-    create: {
+  const where = {
+    businessId_channel_externalChatId: {
       businessId: input.businessId,
-      integrationId: input.integrationId,
       channel: input.channel,
       externalChatId: input.externalChatId,
-      sessions: {
-        create: { state: "LANGUAGE", data: {}, expiresAt: input.expiresAt },
-      },
     },
-    update: { integrationId: input.integrationId, status: "ACTIVE" },
-  });
+  };
+  const update = { integrationId: input.integrationId, status: "ACTIVE" as const };
+
+  let conversation;
+  try {
+    conversation = await prisma.conversation.upsert({
+      where,
+      create: {
+        businessId: input.businessId,
+        integrationId: input.integrationId,
+        channel: input.channel,
+        externalChatId: input.externalChatId,
+        sessions: {
+          create: { state: "LANGUAGE", data: {}, expiresAt: input.expiresAt },
+        },
+      },
+      update,
+    });
+  } catch (error) {
+    // Telegram delivers webhooks concurrently, so two messages from the same chat can both find no
+    // conversation and both try to insert. upsert is not atomic against that — one insert loses on
+    // the unique key. The loser takes the winner's row instead of failing the whole webhook, which
+    // would otherwise drop a customer's message. The session block below still guarantees a session.
+    if (!isUniqueConstraintError(error)) throw error;
+    conversation = await prisma.conversation.update({ where, data: update });
+  }
   const activeSession = await prisma.conversationSession.findFirst({
     where: { conversationId: conversation.id, active: true },
   });

@@ -201,3 +201,76 @@ describe("listWaitlistEntries and cancelWaitlistEntry", () => {
     await expect(cancelWaitlistEntry({ businessId: other.business.id, waitlistEntryId: entry.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
+
+/**
+ * Delivery used to happen inline: a Telegram call inside the caller's cancellation transaction,
+ * with failures swallowed. That left entries marked NOTIFIED with nothing ever sent and no retry,
+ * so notification now goes on the Message queue like every other outbound message.
+ */
+describe("waitlist notification queueing", () => {
+  const freedSlot = { freedStartsAt: new Date("2026-08-02T05:00:00.000Z"), freedEndsAt: new Date("2026-08-02T05:45:00.000Z") };
+
+  async function notifyOne(fixture: Fixture, options: { telegram?: boolean; sms?: boolean } = {}) {
+    const entry = await joinAt(fixture, { phone: "+992900004401", createdAt: "2026-08-01T09:00:00.000Z" });
+    if (options.telegram) {
+      const stored = await prisma.waitlistEntry.findUniqueOrThrow({ where: { id: entry.id } });
+      await prisma.customer.update({ where: { id: stored.customerId }, data: { telegramChatId: `chat-${entry.id}` } });
+    }
+    if (options.sms) {
+      await prisma.business.update({ where: { id: fixture.business.id }, data: { smsNotificationsEnabled: true } });
+    }
+    await notifyWaitlistForFreedSlot(
+      { businessId: fixture.business.id, branchId: fixture.branch.id, serviceId: fixture.service.id, staffId: fixture.staff.id, ...freedSlot },
+      prisma,
+      new Date("2026-08-01T13:00:00.000Z"),
+    );
+    return entry;
+  }
+
+  it("queues a Telegram message and records the slot the message will name", async () => {
+    const fixture = await createWaitlistFixture();
+    const entry = await notifyOne(fixture, { telegram: true });
+
+    const messages = await prisma.message.findMany({ where: { waitlistEntryId: entry.id } });
+    expect(messages.map((message) => `${message.channel}:${message.kind}`)).toEqual(["TELEGRAM:WAITLIST_SLOT_FREED"]);
+    expect(messages[0]!.bookingId).toBeNull();
+    await expect(prisma.waitlistEntry.findUniqueOrThrow({ where: { id: entry.id } })).resolves.toMatchObject({
+      freedStartsAt: freedSlot.freedStartsAt,
+    });
+  });
+
+  it("adds SMS when the business has it enabled on a plan that includes it", async () => {
+    const fixture = await createWaitlistFixture();
+    const entry = await notifyOne(fixture, { telegram: true, sms: true });
+
+    const messages = await prisma.message.findMany({ where: { waitlistEntryId: entry.id } });
+    expect(messages.map((message) => message.channel).sort()).toEqual(["SMS", "TELEGRAM"]);
+  });
+
+  it("does not queue SMS when the plan lacks the feature even with the toggle on", async () => {
+    const fixture = await createWaitlistFixture();
+    await prisma.business.update({ where: { id: fixture.business.id }, data: { subscriptionPlan: "STANDARD" } });
+    const entry = await notifyOne(fixture, { telegram: true, sms: true });
+    // STANDARD does include SMS, so drop to START to prove the gate rather than the toggle.
+    await prisma.message.deleteMany({ where: { waitlistEntryId: entry.id } });
+    await prisma.waitlistEntry.update({ where: { id: entry.id }, data: { status: "WAITING", freedStartsAt: null } });
+    await prisma.business.update({ where: { id: fixture.business.id }, data: { subscriptionPlan: "START" } });
+
+    await notifyWaitlistForFreedSlot(
+      { businessId: fixture.business.id, branchId: fixture.branch.id, serviceId: fixture.service.id, staffId: fixture.staff.id, ...freedSlot },
+      prisma,
+      new Date("2026-08-01T13:00:00.000Z"),
+    );
+
+    const messages = await prisma.message.findMany({ where: { waitlistEntryId: entry.id } });
+    expect(messages.map((message) => message.channel)).toEqual(["TELEGRAM"]);
+  });
+
+  it("still consumes a notify slot when the customer is reachable on no channel", async () => {
+    const fixture = await createWaitlistFixture();
+    const entry = await notifyOne(fixture);
+
+    expect(await prisma.message.count({ where: { waitlistEntryId: entry.id } })).toBe(0);
+    await expect(prisma.waitlistEntry.findUniqueOrThrow({ where: { id: entry.id } })).resolves.toMatchObject({ status: "NOTIFIED" });
+  });
+});

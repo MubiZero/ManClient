@@ -553,6 +553,9 @@ model WaitlistEntry {
   desiredTo          DateTime
   status             WaitlistStatus @default(WAITING)
   notifiedAt         DateTime?
+  // The slot that came free, captured when the entry is notified. Without it the outgoing message
+  // cannot name a time, and the SMS template has nowhere to read {date-1}/{time-1} from.
+  freedStartsAt      DateTime?
   convertedBookingId String?        @unique
   business           Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   branch             Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
@@ -560,6 +563,7 @@ model WaitlistEntry {
   staff              StaffMember?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
   customer           Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
   convertedBooking   Booking?       @relation(fields: [convertedBookingId], references: [id], onDelete: SetNull)
+  messages           Message[]
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
@@ -628,24 +632,30 @@ model PromoCodeRedemption {
   @@index([promoCodeId])
 }
 
+/// Outbound customer message queue. Exactly one of bookingId / waitlistEntryId is set: most
+/// messages hang off a booking, but a freed-slot alert belongs to a waitlist entry and has no
+/// booking to point at.
 model Message {
-  id          String         @id @default(cuid())
-  businessId  String
-  bookingId   String
-  channel     MessageChannel
-  kind        String
-  status      MessageStatus  @default(SCHEDULED)
-  scheduledAt DateTime
-  attempts    Int            @default(0)
-  maxAttempts Int            @default(3)
-  externalId  String?
-  lastError   String?
-  business    Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  booking     Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  businessId      String
+  bookingId       String?
+  waitlistEntryId String?
+  channel         MessageChannel
+  kind            String
+  status          MessageStatus  @default(SCHEDULED)
+  scheduledAt     DateTime
+  attempts        Int            @default(0)
+  maxAttempts     Int            @default(3)
+  externalId      String?
+  lastError       String?
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking         Booking?       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  waitlistEntry   WaitlistEntry? @relation(fields: [waitlistEntryId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@unique([bookingId, channel, kind])
+  @@unique([waitlistEntryId, channel, kind])
   @@index([status, scheduledAt])
   @@index([externalId])
 }
@@ -704,19 +714,19 @@ model AuditEvent {
 }
 
 model Customer {
-  id             String    @id @default(cuid())
-  businessId     String
-  name           String
-  phone          String
-  telegramChatId String?
-  telegramLocale String    @default("ru")
+  id              String          @id @default(cuid())
+  businessId      String
+  name            String
+  phone           String
+  telegramChatId  String?
+  telegramLocale  String          @default("ru")
   business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   bookings        Booking[]
   bookingSeries   BookingSeries[]
   waitlistEntries WaitlistEntry[]
   reviews         Review[]
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   @@unique([businessId, phone])
   @@unique([businessId, telegramChatId])

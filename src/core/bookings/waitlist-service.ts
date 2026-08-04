@@ -3,18 +3,15 @@ import type { Prisma, WaitlistStatus } from "@/generated/prisma/client";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
-import { requirePlanFeature } from "@/core/platform/subscription-plans";
-import { decryptSecret } from "@/core/security/secret-encryption";
-import { createTelegramApi } from "@/integrations/telegram/telegram-api";
+import { businessHasFeature, requirePlanFeature } from "@/core/platform/subscription-plans";
 
 const WAITLIST_NOTIFY_LIMIT = 3;
+/** Shared with src/jobs/send-booking-reminder.ts and the payom template table. */
+export const WAITLIST_MESSAGE_KIND = "WAITLIST_SLOT_FREED";
 const WAITLIST_PAGE_SIZE = 50;
 
 type WaitlistJoinDatabase = Pick<Prisma.TransactionClient, "business" | "customer" | "waitlistEntry">;
-type WaitlistNotifyDatabase = Pick<
-  Prisma.TransactionClient,
-  "waitlistEntry" | "customer" | "businessTelegramIntegration"
->;
+type WaitlistNotifyDatabase = Pick<Prisma.TransactionClient, "waitlistEntry" | "customer" | "business" | "message">;
 
 export type JoinWaitlistInput = {
   businessId: string;
@@ -76,16 +73,14 @@ export type NotifyWaitlistForFreedSlotInput = {
  * just freed up (e.g. after a cancellation), oldest request first. Marks each notified entry as
  * NOTIFIED so at most a handful of people race for the same freed slot.
  *
- * NOTE ON DELIVERY: WaitlistEntry has no bookingId, but Message.bookingId is a required column, so
- * the existing Message-queue notification pipeline (scheduleBookingReminders and friends, processed
- * by src/jobs/send-booking-reminder.ts) cannot be reused as-is without a schema change. Per scope,
- * we do not touch prisma/schema.prisma, so this sends Telegram notifications synchronously and
- * directly (mirroring the low-level delivery call in send-booking-reminder.ts) instead of queuing a
- * Message row. WhatsApp is intentionally skipped: WhatsApp delivery requires a pre-approved message
- * template (whatsappTemplateName / whatsappConfirmationTemplateName / whatsappCancellationTemplateName),
- * and no such template exists for "waitlist slot available" without adding a new business setting -
- * out of scope here. If a customer has no linked Telegram chat (or the business has no active bot),
- * the entry is still marked NOTIFIED (they consumed one of the notify slots) but no message is sent.
+ * Delivery goes through the Message queue rather than calling Telegram here. This runs inside the
+ * caller's transaction — a booking cancellation — and a network call there would hold row locks for
+ * the length of a remote round trip, and would have no retry: a transient Telegram failure used to
+ * leave the entry marked NOTIFIED with nothing ever sent. Queued rows are picked up by
+ * src/jobs/send-booking-reminder.ts, which retries and records the failure.
+ *
+ * WhatsApp is skipped: it needs a per-business approved template and Business has no field for a
+ * waitlist one. Telegram and SMS both have working templates.
  */
 export async function notifyWaitlistForFreedSlot(
   input: NotifyWaitlistForFreedSlotInput,
@@ -109,33 +104,43 @@ export async function notifyWaitlistForFreedSlot(
 
   const customers = await database.customer.findMany({ where: { id: { in: candidates.map((entry) => entry.customerId) } } });
   const customerById = new Map(customers.map((customer) => [customer.id, customer]));
-  const integration = await database.businessTelegramIntegration.findFirst({ where: { businessId: input.businessId, status: "ACTIVE" } });
-  const encryptionKey = process.env.INTEGRATION_ENCRYPTION_KEY;
+  const business = await database.business.findUnique({
+    where: { id: input.businessId },
+    select: { smsNotificationsEnabled: true, subscriptionPlan: true },
+  });
+  const smsAvailable = Boolean(business?.smsNotificationsEnabled) && businessHasFeature(business!.subscriptionPlan, "SMS");
 
   let notified = 0;
   for (const entry of candidates) {
-    await database.waitlistEntry.update({ where: { id: entry.id }, data: { status: "NOTIFIED", notifiedAt: now } });
+    // freedStartsAt is what the outgoing message names as the free time; without storing it the
+    // job would have nothing to put in the message.
+    await database.waitlistEntry.update({
+      where: { id: entry.id },
+      data: { status: "NOTIFIED", notifiedAt: now, freedStartsAt: input.freedStartsAt },
+    });
     notified += 1;
 
     const customer = customerById.get(entry.customerId);
-    if (!customer?.telegramChatId || !integration?.botTokenEncrypted || !encryptionKey) continue;
-    try {
-      const token = decryptSecret(integration.botTokenEncrypted, encryptionKey);
-      await createTelegramApi(token).sendMessage(customer.telegramChatId, waitlistSlotAvailableText(customer.telegramLocale));
-    } catch {
-      // Best-effort delivery: a Telegram failure must not fail the caller's transaction
-      // (e.g. a booking cancellation), so we swallow it here.
+    const channels = [
+      ...(customer?.telegramChatId ? ["TELEGRAM" as const] : []),
+      ...(smsAvailable ? ["SMS" as const] : []),
+    ];
+    for (const channel of channels) {
+      await database.message.upsert({
+        where: { waitlistEntryId_channel_kind: { waitlistEntryId: entry.id, channel, kind: WAITLIST_MESSAGE_KIND } },
+        create: {
+          businessId: input.businessId,
+          waitlistEntryId: entry.id,
+          channel,
+          kind: WAITLIST_MESSAGE_KIND,
+          scheduledAt: now,
+        },
+        update: { scheduledAt: now, status: "SCHEDULED", attempts: 0, lastError: null },
+      });
     }
   }
   return notified;
 }
-
-function waitlistSlotAvailableText(locale: string) {
-  return locale === "tg"
-    ? "Хушхабар! Вақти озод дар листи интизорӣ пайдо шуд. Лутфан барои сабт ҳарчи зудтар бо мо тамос гиред."
-    : "Освободилось время из вашего листа ожидания! Свяжитесь с нами как можно скорее, чтобы записаться.";
-}
-
 export type WaitlistEntrySummary = {
   id: string;
   branchName: string;

@@ -60,10 +60,14 @@ describe("business registration", () => {
     };
     const first = await registerBusiness(input);
     businessIds.push(first.businessId);
-    const before = await prisma.business.count();
+    // Counting every business in the database makes this assertion depend on what other test files
+    // happen to be creating at the same moment, which reddens CI at random. Only this test's own
+    // registrations can tell us whether the rejected one rolled back.
+    const ownBusinesses = { memberships: { some: { user: { phone } } } };
+    const before = await prisma.business.count({ where: ownBusinesses });
 
     await expect(registerBusiness({ ...input, businessName: "Second Business" }))
       .rejects.toBeInstanceOf(RegistrationError);
-    await expect(prisma.business.count()).resolves.toBe(before);
+    await expect(prisma.business.count({ where: ownBusinesses })).resolves.toBe(before);
   });
 });

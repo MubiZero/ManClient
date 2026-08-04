@@ -1,4 +1,5 @@
 import { prisma } from "@/core/database/prisma";
+import { isUniqueConstraintError } from "@/core/database/prisma-errors";
 import { businessHasFeature } from "@/core/platform/subscription-plans";
 
 export class ReviewError extends Error {
@@ -93,13 +94,4 @@ export async function setReviewHidden(businessId: string, reviewId: string, isHi
   const result = await prisma.review.updateMany({ where: { id: reviewId, businessId }, data: { isHidden } });
   if (result.count !== 1) throw new ReviewError("NOT_FOUND");
   return { reviewId, isHidden };
-}
-
-function isUniqueConstraintError(error: unknown): boolean {
-  return Boolean(
-    error
-      && typeof error === "object"
-      && "code" in error
-      && (error as { code?: string }).code === "P2002",
-  );
 }
