@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import { requireBusinessSession } from "@/core/auth/business-session";
+import { rescheduleBusinessBooking } from "@/core/booking-operations/booking-command-service";
+import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { parseBookingFilters } from "@/core/booking-operations/booking-operation-schemas";
 import { listBusinessBookings } from "@/core/booking-operations/booking-query-service";
 import { getDaySchedule, getWeekSchedule } from "@/core/booking-operations/day-schedule-service";
@@ -29,6 +31,30 @@ export default async function BookingsPage({ searchParams }: PageProps) {
     filters.view === "week" ? getWeekSchedule(calendarInput) : null,
   ]);
   const calendar = day ?? week;
+
+  /**
+   * Dragging a visit in the grid. Returns the failure instead of throwing so the calendar can say why a
+   * move was refused — "the specialist is already busy then" is the whole point of the gesture — and only
+   * reloads on success, which keeps the block where the receptionist dropped it while the answer arrives.
+   */
+  async function moveBooking(input: { bookingId: string; startsAt: string; staffId: string }) {
+    "use server";
+    const current = await requireBusinessSession();
+    try {
+      const startsAt = new Date(input.startsAt);
+      if (Number.isNaN(startsAt.getTime())) throw new BookingOperationError("INVALID_INPUT");
+      await rescheduleBusinessBooking({
+        businessId: current.businessId,
+        actorUserId: current.userId,
+        bookingId: input.bookingId,
+        startsAt,
+        staffId: input.staffId,
+      });
+      return {};
+    } catch (error) {
+      return { error: error instanceof BookingOperationError ? error.code : "UNKNOWN" };
+    }
+  }
   const filtered = Boolean(filters.search || filters.status || filters.branchId || filters.staffId);
 
   return (
@@ -69,7 +95,7 @@ export default async function BookingsPage({ searchParams }: PageProps) {
               В неделе показаны все специалисты. Выберите одного в фильтре, чтобы записывать клиентов прямо из сетки.
             </p>
           ) : null}
-          {day ? <DayGrid schedule={day} now={new Date()} /> : null}
+          {day ? <DayGrid schedule={day} now={new Date()} moveAction={moveBooking} /> : null}
           {week ? <WeekGrid schedule={week} today={todayInTimeZone(result.timeZone)} /> : null}
         </section>
       ) : null}

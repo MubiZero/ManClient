@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { bookingScopeWhere, requireBookingAccess } from "@/core/booking-operations/booking-access";
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
+import { findBlockingBooking } from "@/core/availability/booking-window";
 import { reserveAllocation } from "@/core/bookings/booking-allocation";
 import { notifyWaitlistForFreedSlot } from "@/core/bookings/waitlist-service";
 import { writeAuditEvent } from "@/core/audit/audit-service";
@@ -67,12 +68,28 @@ export async function confirmBusinessBooking(input: ActorInput & { bookingId: st
   return { bookingId: result.id };
 }
 
-export async function rescheduleBusinessBooking(input: ActorInput & { bookingId: string; startsAt: Date }, now = new Date()) {
+/**
+ * Moves a visit in time and, when asked, to another specialist — the gesture a receptionist makes by
+ * dragging it across the calendar. `staffId` defaults to whoever has it now, so callers that only change
+ * the time are unaffected.
+ */
+export async function rescheduleBusinessBooking(input: ActorInput & { bookingId: string; startsAt: Date; staffId?: string }, now = new Date()) {
   if (input.startsAt <= now) throw new BookingOperationError("INVALID_INPUT");
   const scope = await requireBookingAccess(input);
   const booking = await prisma.booking.findFirst({ where: { id: input.bookingId, ...bookingScopeWhere(scope), status: { in: ["PENDING_PAYMENT", "CONFIRMED"] } }, include: { service: true, resources: true } });
   if (!booking) throw new BookingOperationError("NOT_FOUND");
-  await assertAvailable({ branchId: booking.branchId, serviceId: booking.serviceId, staffId: booking.staffId, resourceIds: booking.resources.map((item) => item.resourceId), startsAt: input.startsAt, durationMinutes: booking.service.durationMinutes, excludeBookingId: booking.id });
+  const staffId = input.staffId ?? booking.staffId;
+  if (staffId !== booking.staffId) {
+    // A specialist may only take a visit they could have been booked for in the first place: assigned to
+    // this branch, performing this service, and not archived.
+    if (scope.role === "STAFF") throw new BookingOperationError("FORBIDDEN");
+    const target = await prisma.staffMember.findFirst({
+      where: { id: staffId, businessId: input.businessId, archivedAt: null, branches: { some: { branchId: booking.branchId } }, services: { some: { id: booking.serviceId } } },
+      select: { id: true },
+    });
+    if (!target) throw new BookingOperationError("NOT_FOUND");
+  }
+  await assertAvailable({ branchId: booking.branchId, serviceId: booking.serviceId, staffId, resourceIds: booking.resources.map((item) => item.resourceId), startsAt: input.startsAt, durationMinutes: booking.service.durationMinutes, excludeBookingId: booking.id });
   const endsAt = new Date(input.startsAt.getTime() + booking.service.durationMinutes * 60_000);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -81,10 +98,23 @@ export async function rescheduleBusinessBooking(input: ActorInput & { bookingId:
         const current = await transaction.booking.findFirst({ where: { id: input.bookingId, ...bookingScopeWhere(currentScope), status: { in: ["PENDING_PAYMENT", "CONFIRMED"] } }, include: { resources: true } });
         if (!current) throw new BookingOperationError("NOT_FOUND");
         const resourceIds = current.resources.map((item) => item.resourceId);
-        const conflict = await transaction.booking.findFirst({ where: { id: { not: current.id }, branchId: current.branchId, status: { in: ["PENDING_PAYMENT", "CONFIRMED"] }, startsAt: { lt: endsAt }, endsAt: { gt: input.startsAt }, OR: [{ staffId: current.staffId }, ...(resourceIds.length ? [{ resources: { some: { resourceId: { in: resourceIds } } } }] : [])] } });
+        // Buffers count here too. The check above already refuses a move into a buffer, but this is the
+        // one that holds under concurrency, and the hand-rolled overlap query it replaces ignored buffers
+        // entirely — so two receptionists dragging at once could leave a chair double-booked.
+        const conflict = await findBlockingBooking({
+          branchId: current.branchId,
+          staffId,
+          resourceIds,
+          rangeStartsAt: input.startsAt,
+          rangeEndsAt: endsAt,
+          startsAt: input.startsAt,
+          endsAt,
+          buffers: booking.service,
+          excludeBookingId: current.id,
+        }, transaction);
         if (conflict) throw new BookingOperationError("SLOT_UNAVAILABLE");
-        await transaction.booking.update({ where: { id: current.id }, data: { startsAt: input.startsAt, endsAt } });
-        await writeAuditEvent({ businessId: input.businessId, bookingId: current.id, type: "booking.rescheduled", actorType: "membership", actorId: currentScope.id, metadata: { previousStartsAt: current.startsAt.toISOString(), startsAt: input.startsAt.toISOString() } }, transaction);
+        await transaction.booking.update({ where: { id: current.id }, data: { startsAt: input.startsAt, endsAt, staffId } });
+        await writeAuditEvent({ businessId: input.businessId, bookingId: current.id, type: "booking.rescheduled", actorType: "membership", actorId: currentScope.id, metadata: { previousStartsAt: current.startsAt.toISOString(), startsAt: input.startsAt.toISOString(), ...(staffId !== current.staffId ? { previousStaffId: current.staffId, staffId } : {}) } }, transaction);
         await scheduleBusinessNotification({ businessId: input.businessId, bookingId: current.id, kind: "BOOKING_RESCHEDULED", deduplicationKey: `booking:${current.id}:rescheduled:${input.startsAt.toISOString()}`, scheduledAt: now }, transaction);
         await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: current.id, startsAt: input.startsAt }, transaction);
       }, { isolationLevel: "Serializable" });
