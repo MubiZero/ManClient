@@ -103,4 +103,16 @@
   "booking.policy.horizon": "Записаться можно на срок до {days} дней вперёд.",
   "booking.policy.cancellation": "Отменить или перенести визит самостоятельно можно не позднее чем за {hours} ч.",
   "booking.policy.rescheduleLimit": "Перенести одну запись можно не более {count} раз(а).",
+  "booking.waitlist.cta": "Встать в лист ожидания",
+  "booking.waitlist.title": "Лист ожидания",
+  "booking.waitlist.description": "Если время освободится, мы напишем вам первым. Запись это не создаёт — вы решите сами.",
+  "booking.waitlist.nameLabel": "Имя",
+  "booking.waitlist.phoneLabel": "Телефон",
+  "booking.waitlist.fromLabel": "Удобно с",
+  "booking.waitlist.toLabel": "Удобно по",
+  "booking.waitlist.submitCta": "Записаться в лист",
+  "booking.waitlist.submitting": "Отправляем…",
+  "booking.waitlist.doneTitle": "Вы в листе ожидания",
+  "booking.waitlist.doneText": "Мы сообщим, как только время освободится.",
+  "booking.waitlist.close": "Закрыть"
 }

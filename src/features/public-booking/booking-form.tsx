@@ -12,6 +12,7 @@ import {
 import { PhoneVerificationPanel } from "@/features/public-booking/phone-verification-panel";
 import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/features/ui-kit/dialog";
 import { Checkbox } from "@/features/ui-kit/checkbox";
 import { cn } from "@/features/ui-kit/cn";
 import { Field, Input, Label, Select } from "@/features/ui-kit/field";
@@ -222,6 +223,18 @@ export function BookingForm({
     setPhoneError(validateBookingPhone(phone, locale));
   }
 
+  function openWaitlist() {
+    // Prefilled from the main form: by this point the customer has already picked a day and may have
+    // typed their name and phone, and asking for them twice is how a queue stays empty.
+    setWaitlistName((current) => current || name);
+    setWaitlistPhone((current) => current || phone);
+    setWaitlistFrom((current) => current || date);
+    setWaitlistTo((current) => current || addDays(date, 7));
+    setWaitlistError("");
+    setWaitlistDone(false);
+    setPendingVerification(null);
+    setWaitlistOpen(true);
+  }
 
   async function submitWaitlist(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -540,9 +553,16 @@ export function BookingForm({
                   {t(locale, "booking.loadingSlots")}
                 </p>
               ) : date && starts.length === 0 && !error ? (
-                <p className="text-sm text-muted-foreground">
-                  {t(locale, "booking.noSlotsForDate")}
-                </p>
+                <div className="flex flex-col items-start gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    {t(locale, "booking.noSlotsForDate")}
+                  </p>
+                  {canUseWaitlist ? (
+                    <Button type="button" variant="secondary" onClick={openWaitlist}>
+                      {t(locale, "booking.waitlist.cta")}
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
               {starts.length ? (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label={t(locale, "booking.availableTimesAriaLabel")}>
@@ -731,6 +751,89 @@ export function BookingForm({
           {error}
         </p>
       ) : null}
+      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>{t(locale, "booking.waitlist.title")}</DialogTitle>
+          </DialogHeader>
+          {waitlistDone ? (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm font-medium text-foreground">{t(locale, "booking.waitlist.doneTitle")}</p>
+              <p className="text-sm text-muted-foreground">{t(locale, "booking.waitlist.doneText")}</p>
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => setWaitlistOpen(false)}>
+                  {t(locale, "booking.waitlist.close")}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <form className="flex flex-col gap-4" onSubmit={submitWaitlist} noValidate>
+              <p className="text-sm text-muted-foreground">{t(locale, "booking.waitlist.description")}</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label={t(locale, "booking.waitlist.nameLabel")}>
+                  <Input
+                    name="waitlistName"
+                    autoComplete="name"
+                    maxLength={120}
+                    value={waitlistName}
+                    onChange={(event) => setWaitlistName(event.target.value)}
+                  />
+                </Field>
+                <Field label={t(locale, "booking.waitlist.phoneLabel")}>
+                  <Input
+                    name="waitlistPhone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+992 90 000 00 00"
+                    value={waitlistPhone}
+                    onChange={(event) => setWaitlistPhone(formatTajikPhoneInput(event.target.value))}
+                  />
+                </Field>
+                <Field label={t(locale, "booking.waitlist.fromLabel")}>
+                  <Input
+                    name="waitlistFrom"
+                    type="date"
+                    min={minDate}
+                    value={waitlistFrom}
+                    onChange={(event) => setWaitlistFrom(event.target.value)}
+                  />
+                </Field>
+                <Field label={t(locale, "booking.waitlist.toLabel")}>
+                  <Input
+                    name="waitlistTo"
+                    type="date"
+                    min={waitlistFrom || minDate}
+                    value={waitlistTo}
+                    onChange={(event) => setWaitlistTo(event.target.value)}
+                  />
+                </Field>
+              </div>
+              {waitlistError ? (
+                <p className="text-[13px] text-destructive" role="alert">
+                  {waitlistError}
+                </p>
+              ) : null}
+              {pendingVerification === "waitlist" ? (
+                <PhoneVerificationPanel
+                  locale={locale}
+                  phone={normalizeTajikPhone(waitlistPhone) ?? waitlistPhone}
+                  onVerified={(verificationId) => {
+                    setPendingVerification(null);
+                    void joinWaitlist(verificationId);
+                  }}
+                />
+              ) : (
+                <div className="flex justify-end">
+                  <Button type="submit" disabled={waitlistSubmitting} loading={waitlistSubmitting}>
+                    {waitlistSubmitting ? t(locale, "booking.waitlist.submitting") : t(locale, "booking.waitlist.submitCta")}
+                  </Button>
+                </div>
+              )}
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
@@ -786,4 +889,13 @@ export function formatBookingTime(value: string, timeZone: string, locale: Suppo
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+/** Adds days to a `yyyy-mm-dd` string, for the default waitlist window. */
+function addDays(date: string, days: number): string {
+  if (!date) return "";
+  const value = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(value.getTime())) return "";
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
 }

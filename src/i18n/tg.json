@@ -103,4 +103,16 @@
   "booking.policy.horizon": "То {days} рӯз пеш сабт кардан мумкин аст.",
   "booking.policy.cancellation": "Бекор кардан ё иваз кардани ташриф то {hours} соат пеш имконпазир аст.",
   "booking.policy.rescheduleLimit": "Як сабтро на бештар аз {count} бор иваз кардан мумкин аст.",
+  "booking.waitlist.cta": "Ба рӯйхати интизорӣ",
+  "booking.waitlist.title": "Рӯйхати интизорӣ",
+  "booking.waitlist.description": "Агар вақт озод шавад, мо аввал ба шумо хабар медиҳем. Ин сабтро эҷод намекунад.",
+  "booking.waitlist.nameLabel": "Ном",
+  "booking.waitlist.phoneLabel": "Телефон",
+  "booking.waitlist.fromLabel": "Аз",
+  "booking.waitlist.toLabel": "То",
+  "booking.waitlist.submitCta": "Ба рӯйхат дохил шудан",
+  "booking.waitlist.submitting": "Фиристода мешавад…",
+  "booking.waitlist.doneTitle": "Шумо дар рӯйхати интизорӣ",
+  "booking.waitlist.doneText": "Ҳамин ки вақт озод шавад, хабар медиҳем.",
+  "booking.waitlist.close": "Пӯшидан"
 }

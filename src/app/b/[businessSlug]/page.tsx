@@ -135,6 +135,7 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
               locale={locale}
               canRepeat={businessHasFeature(business.subscriptionPlan, "RECURRING_BOOKINGS")}
               canUsePromoCodes={businessHasFeature(business.subscriptionPlan, "PROMO_CODES")}
+              canUseWaitlist={businessHasFeature(business.subscriptionPlan, "WAITLIST")}
             />
             <PolicyNotice
               locale={locale}
