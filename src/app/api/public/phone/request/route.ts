@@ -11,6 +11,8 @@ import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedErro
 const requestSchema = z.object({
   phone: z.string().min(1),
   purpose: z.enum(["BOOKING", "PASSWORD_RESET"]).default("BOOKING"),
+  /** Names the salon in the SMS. Only the slug travels; the name itself is read from the database. */
+  businessSlug: z.string().trim().min(1).max(120).optional(),
 });
 
 /**
@@ -25,7 +27,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     await assertRateLimit("phone.request", `ip:${clientIdentifier(request)}`);
-    const result = await requestPhoneVerification({ phone: payload.phone, purpose: payload.purpose });
+    const result = await requestPhoneVerification({ phone: payload.phone, purpose: payload.purpose, businessSlug: payload.businessSlug });
 
     return Response.json(
       {

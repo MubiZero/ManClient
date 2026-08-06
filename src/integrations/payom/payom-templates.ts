@@ -95,18 +95,36 @@ const TEMPLATES: Record<PayomTemplateKind, Record<"ru" | "tg", PayomTemplate>> =
  * moderation is the gate on turning phone verification on at all — so it is read from
  * `PAYOM_PHONE_VERIFICATION_TEMPLATE_ID` and its absence is what keeps the feature switched off.
  *
- * The approved wording must carry the code in `text-1`, e.g. "ManClient: код подтверждения {text-1}".
- * Payom's `date-1`/`time-1` validators make any other placeholder useless for a numeric code.
+ * The approved wording is "{text-1}: код подтверждения {text-2}" — who is asking, then the code. The
+ * name is what tells a customer why an SMS arrived, so it carries the business for a booking and the
+ * platform for account recovery, where no single business is the one asking. Payom's `date-1`/`time-1`
+ * validators check formats, which makes them useless for either a name or a six-digit code.
  */
 export function findPhoneVerificationTemplateId(): string | null {
   const id = process.env.PAYOM_PHONE_VERIFICATION_TEMPLATE_ID?.trim();
   return id ? id : null;
 }
 
-export function buildPhoneVerificationSms(code: string): { templateId: string; variables: Record<string, string> } {
+/** Used when nobody in particular is asking — account recovery belongs to the platform, not a salon. */
+export const PLATFORM_SMS_LABEL = "ManClient";
+
+/**
+ * Cyrillic SMS fits 70 characters per segment. ": код подтверждения " plus six digits spends 26 of them,
+ * so a name longer than this turns every code into two segments at twice the price. A truncated salon
+ * name still tells the customer who is asking; a doubled bill on every code tells them nothing.
+ */
+const MAX_LABEL_LENGTH = 40;
+
+export function smsLabel(name: string | null | undefined): string {
+  const trimmed = name?.trim();
+  if (!trimmed) return PLATFORM_SMS_LABEL;
+  return trimmed.length <= MAX_LABEL_LENGTH ? trimmed : `${trimmed.slice(0, MAX_LABEL_LENGTH - 1).trimEnd()}…`;
+}
+
+export function buildPhoneVerificationSms(code: string, label: string): { templateId: string; variables: Record<string, string> } {
   const templateId = findPhoneVerificationTemplateId();
   if (!templateId) throw new Error("PAYOM_PHONE_VERIFICATION_TEMPLATE_ID is not configured");
-  return { templateId, variables: { "text-1": code } };
+  return { templateId, variables: { "text-1": smsLabel(label), "text-2": code } };
 }
 
 /**

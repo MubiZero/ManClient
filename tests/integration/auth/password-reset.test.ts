@@ -44,7 +44,7 @@ describe("password reset over SMS", () => {
     const { phone } = await createOwner("old-password-1");
     const requested = await requestPasswordReset({ phone }, new Date(), gateway);
     expect(requested.verificationId).not.toBeNull();
-    const code = sent[0]?.variables["text-1"] ?? "";
+    const code = sent[0]?.variables["text-2"] ?? "";
 
     await completePasswordReset({ verificationId: requested.verificationId ?? "", phone, code, password: "new-password-1" });
 
@@ -55,7 +55,7 @@ describe("password reset over SMS", () => {
   it("refuses to reuse the same code for a second reset", async () => {
     const { phone } = await createOwner("old-password-1");
     const requested = await requestPasswordReset({ phone }, new Date(), gateway);
-    const code = sent[0]?.variables["text-1"] ?? "";
+    const code = sent[0]?.variables["text-2"] ?? "";
     await completePasswordReset({ verificationId: requested.verificationId ?? "", phone, code, password: "new-password-1" });
 
     await expect(
@@ -67,7 +67,7 @@ describe("password reset over SMS", () => {
   it("refuses a wrong code and leaves the old password working", async () => {
     const { phone } = await createOwner("old-password-1");
     const requested = await requestPasswordReset({ phone }, new Date(), gateway);
-    const actual = sent[0]?.variables["text-1"] ?? "";
+    const actual = sent[0]?.variables["text-2"] ?? "";
     const wrong = actual === "000000" ? "111111" : "000000";
 
     await expect(
@@ -79,7 +79,7 @@ describe("password reset over SMS", () => {
   it("refuses a password shorter than the minimum before touching the code", async () => {
     const { phone } = await createOwner("old-password-1");
     const requested = await requestPasswordReset({ phone }, new Date(), gateway);
-    const code = sent[0]?.variables["text-1"] ?? "";
+    const code = sent[0]?.variables["text-2"] ?? "";
 
     await expect(
       completePasswordReset({ verificationId: requested.verificationId ?? "", phone, code, password: "short" }),
@@ -93,7 +93,7 @@ describe("password reset over SMS", () => {
   it("records the recovery in the business audit log", async () => {
     const { phone, businessId } = await createOwner("old-password-1");
     const requested = await requestPasswordReset({ phone }, new Date(), gateway);
-    const code = sent[0]?.variables["text-1"] ?? "";
+    const code = sent[0]?.variables["text-2"] ?? "";
     await completePasswordReset({ verificationId: requested.verificationId ?? "", phone, code, password: "new-password-1" });
 
     const events = await prisma.auditEvent.findMany({ where: { businessId, type: "auth.password_reset" } });
