@@ -1,6 +1,7 @@
 import { checkIntegrationHealthAlerts } from "@/core/platform/integration-alerts";
 import { retryReceiptSubmissions } from "@/core/payments/receipt-submission-service";
 import { expirePendingBookings } from "@/jobs/expire-pending-bookings";
+import { runDataRetention } from "@/core/maintenance/data-retention";
 import { runSecurityMaintenance } from "@/core/security/security-maintenance";
 import { sendDueBookingReminders } from "@/jobs/send-booking-reminder";
 import { sendDueBusinessTelegramNotifications } from "@/jobs/send-business-telegram-notifications";
@@ -15,6 +16,12 @@ import { sendDueBusinessTelegramNotifications } from "@/jobs/send-business-teleg
 export type ScheduledJob = {
   name: string;
   run: () => Promise<number>;
+  /**
+   * Shortest gap between runs. Absent means "every tick", which is right for anything that delivers
+   * messages; housekeeping that sweeps months-old rows would otherwise re-ask the same question sixty
+   * times an hour and find nothing.
+   */
+  intervalMs?: number;
 };
 
 export const SCHEDULED_JOBS: readonly ScheduledJob[] = [
@@ -24,6 +31,7 @@ export const SCHEDULED_JOBS: readonly ScheduledJob[] = [
   { name: "receipt-processing", run: () => retryReceiptSubmissions() },
   { name: "integration-health-alerts", run: () => checkIntegrationHealthAlerts() },
   { name: "security-maintenance", run: () => runSecurityMaintenance() },
+  { name: "data-retention", run: () => runDataRetention(), intervalMs: 60 * 60_000 },
 ];
 
 export function findScheduledJob(name: string): ScheduledJob | undefined {

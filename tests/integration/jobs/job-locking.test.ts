@@ -73,6 +73,15 @@ describe("job locking", () => {
       "receipt-processing",
       "integration-health-alerts",
       "security-maintenance",
+      "data-retention",
     ]);
+  });
+
+  it("keeps housekeeping on its own interval instead of every tick", () => {
+    // Delivery jobs must run as often as the scheduler ticks; a sweep of months-old rows asking the same
+    // question sixty times an hour is noise in the logs and load on the database for nothing.
+    const byName = new Map(SCHEDULED_JOBS.map((job) => [job.name, job]));
+    expect(byName.get("data-retention")?.intervalMs).toBe(60 * 60_000);
+    expect(byName.get("booking-reminders")?.intervalMs).toBeUndefined();
   });
 });

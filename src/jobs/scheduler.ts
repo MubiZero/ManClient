@@ -48,7 +48,7 @@ async function main(): Promise<void> {
             return;
           }
           current.failures = 0;
-          current.nextRunAt = 0;
+          current.nextRunAt = job.intervalMs ? Date.now() + job.intervalMs : 0;
         })
         .finally(() => {
           current.running = false;
