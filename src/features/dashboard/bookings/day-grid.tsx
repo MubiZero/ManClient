@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import type { DaySchedule, DayScheduleColumn } from "@/core/booking-operations/day-schedule-service";
 import { BookingBlock } from "@/features/dashboard/bookings/booking-block";
-import { useCalendarDrag, type CalendarDragTarget } from "@/features/dashboard/bookings/use-calendar-drag";
+import { applyPendingMove, useCalendarDrag, type CalendarDragTarget } from "@/features/dashboard/bookings/use-calendar-drag";
 import { cn } from "@/features/ui-kit/cn";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 
@@ -62,6 +62,8 @@ export function DayGrid({ schedule, now, moveAction }: { schedule: DaySchedule; 
   const hourMarks: number[] = [];
   for (let minute = Math.ceil(viewStartMinute / 60) * 60; minute <= viewEndMinute; minute += 60) hourMarks.push(minute);
   const nowMinute = now ? Math.round((now.getTime() - schedule.dayStartsAt.getTime()) / 60_000) : null;
+  // A visit released over another column belongs to that column until the server says otherwise.
+  const placed = applyPendingMove(schedule.columns.map((column) => ({ key: column.staffId, bookings: column.bookings })), drag.pendingMove);
 
   return (
     <div className="flex flex-col gap-2">
@@ -70,7 +72,12 @@ export function DayGrid({ schedule, now, moveAction }: { schedule: DaySchedule; 
           {drag.message}
         </p>
       ) : null}
-      <div className={cn("overflow-x-auto rounded-lg border border-border bg-card", drag.pending && "opacity-60")}>
+      {drag.saving ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          Переносим запись…
+        </p>
+      ) : null}
+      <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <div
           className="grid min-w-fit"
           style={{ gridTemplateColumns: `4rem repeat(${schedule.columns.length}, minmax(11rem, 1fr))` }}
@@ -136,7 +143,7 @@ export function DayGrid({ schedule, now, moveAction }: { schedule: DaySchedule; 
                   <span className="sr-only">{`Записать на ${formatMinute(slot)}, ${column.displayName}`}</span>
                 </Link>
               ))}
-              {column.bookings.map((booking) => (
+              {(placed.get(column.staffId) ?? column.bookings).map((booking) => (
                 <BookingBlock
                   key={booking.id}
                   booking={booking}

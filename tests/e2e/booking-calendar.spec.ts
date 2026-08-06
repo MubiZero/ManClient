@@ -116,10 +116,15 @@ test("owner drags a visit to another day in the week", async ({ page }) => {
   await page.mouse.move(thursday.x + thursday.width / 2, box.y + box.height / 2, { steps: 8 });
   await page.mouse.up();
 
-  // The grid reloads itself once the server has accepted the move, and the day headers count what each
-  // column holds. Waiting for that count is what keeps the navigation below from outrunning the request.
+  // The visit belongs to Thursday as soon as it is dropped there — the grid does not wait for the server
+  // before showing the answer the receptionist gave it.
   await expect(page.getByRole("link", { name: /чт.*17 сент.*записей: 1/is })).toBeVisible();
   await expect(page.getByRole("link", { name: /вт.*15 сент.*свободно/is })).toBeVisible();
+
+  // And it is still Thursday's after a reload, which is what proves the server was told rather than only
+  // the picture being redrawn.
+  await page.reload();
+  await expect(page.getByRole("link", { name: /чт.*17 сент.*записей: 1/is })).toBeVisible();
 
   await page.goto(`/dashboard/bookings?view=day&date=2026-09-17`);
   await expect(page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") })).toBeVisible();

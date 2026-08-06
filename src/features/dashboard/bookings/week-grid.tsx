@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import type { WeekSchedule, WeekScheduleDay } from "@/core/booking-operations/day-schedule-service";
 import { BookingBlock } from "@/features/dashboard/bookings/booking-block";
-import { useCalendarDrag, type CalendarDragTarget } from "@/features/dashboard/bookings/use-calendar-drag";
+import { applyPendingMove, useCalendarDrag, type CalendarDragTarget } from "@/features/dashboard/bookings/use-calendar-drag";
 import { cn } from "@/features/ui-kit/cn";
 
 /**
@@ -49,6 +49,8 @@ export function WeekGrid({ schedule, today, moveAction }: { schedule: WeekSchedu
   });
 
   const height = (viewEndMinute - viewStartMinute) * PIXELS_PER_MINUTE;
+  // A visit released over another day belongs to that day until the server says otherwise.
+  const placed = applyPendingMove(schedule.days.map((day) => ({ key: day.date, bookings: day.bookings })), drag.pendingMove);
   const hourMarks: number[] = [];
   for (let minute = Math.ceil(viewStartMinute / 60) * 60; minute <= viewEndMinute; minute += 60) hourMarks.push(minute);
 
@@ -59,7 +61,12 @@ export function WeekGrid({ schedule, today, moveAction }: { schedule: WeekSchedu
           {drag.message}
         </p>
       ) : null}
-      <div className={cn("overflow-x-auto rounded-lg border border-border bg-card", drag.pending && "opacity-60")}>
+      {drag.saving ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          Переносим запись…
+        </p>
+      ) : null}
+      <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <div className="grid min-w-fit" style={{ gridTemplateColumns: `4rem repeat(${schedule.days.length}, minmax(7rem, 1fr))` }}>
           <div className="sticky left-0 z-20 border-b border-r border-border bg-card px-2 py-2 text-xs font-medium text-muted-foreground">
             {schedule.branchName}
@@ -76,7 +83,7 @@ export function WeekGrid({ schedule, today, moveAction }: { schedule: WeekSchedu
             >
               <p className="text-xs uppercase tracking-wide text-muted-foreground">{weekdayLabel(day, schedule.timeZone)}</p>
               <p className="text-sm font-semibold text-foreground">{dayLabel(day, schedule.timeZone)}</p>
-              <p className="text-xs text-muted-foreground">{day.bookings.length ? `записей: ${day.bookings.length}` : "свободно"}</p>
+              <p className="text-xs text-muted-foreground">{count(placed, day) ? `записей: ${count(placed, day)}` : "свободно"}</p>
             </Link>
           ))}
 
@@ -126,7 +133,7 @@ export function WeekGrid({ schedule, today, moveAction }: { schedule: WeekSchedu
                     </Link>
                   ))
                 : null}
-              {day.bookings.map((booking) => (
+              {(placed.get(day.date) ?? day.bookings).map((booking) => (
                 <BookingBlock
                   key={booking.id}
                   booking={booking}
@@ -146,6 +153,11 @@ export function WeekGrid({ schedule, today, moveAction }: { schedule: WeekSchedu
       </div>
     </div>
   );
+}
+
+/** Counts what the column is drawing, so the header agrees with it during a move that is still saving. */
+function count(placed: Map<string, unknown[]>, day: WeekScheduleDay): number {
+  return (placed.get(day.date) ?? day.bookings).length;
 }
 
 function freeSlots(day: WeekScheduleDay, viewStartMinute: number, viewEndMinute: number): number[] {

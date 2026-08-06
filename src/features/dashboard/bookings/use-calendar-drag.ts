@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, useState, useTransition, type PointerEvent as ReactPointerEvent } from "react";
+
+import type { DayScheduleBooking } from "@/core/booking-operations/day-schedule-service";
 
 /**
  * Dragging a visit across a calendar. The day grid and the week grid draw different things in their
@@ -50,7 +52,15 @@ export function useCalendarDrag({
   // move had rendered yet.
   const activeRef = useRef<CalendarDrag | null>(null);
   const [drag, setDrag] = useState<CalendarDrag | null>(null);
-  const [pending, setPending] = useState(false);
+  /**
+   * Where a released visit is being moved to, held until the server has answered and the reloaded calendar
+   * agrees. Without it the block snapped back to its old place the instant the mouse came up and jumped
+   * again a second later — in the week view it visibly returned to the wrong day, which reads as a refusal
+   * and invites the receptionist to drag again or walk away from a move that was going through.
+   */
+  const [pendingMove, setPendingMove] = useState<CalendarDragTarget | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [refreshing, startRefresh] = useTransition();
   const [message, setMessage] = useState("");
   // A pointerup that ended a drag is followed by a click on the same element. The drag state is already
   // cleared by then — React may have re-rendered in between — so the fact that a drag happened has to
@@ -89,6 +99,14 @@ export function useCalendarDrag({
     };
   }
 
+  /**
+   * The optimistic placement is honoured only while the move is on its way and the reloaded calendar has
+   * not committed yet. Derived rather than cleared: the refresh transition stays pending until the fresh
+   * props are on screen, so this becomes null in the very render that carries them — no flicker, and no
+   * stale target left pinning a visit somewhere it no longer is.
+   */
+  const inFlightMove = submitting || refreshing ? pendingMove : null;
+
   function isDraggable(booking: DraggableBooking): boolean {
     return Boolean(onDrop) && MOVABLE_STATUSES.includes(booking.status);
   }
@@ -96,7 +114,7 @@ export function useCalendarDrag({
   function handlers(booking: DraggableBooking, trackKey: string) {
     return {
       onPointerDown(event: ReactPointerEvent<HTMLElement>) {
-        if (!isDraggable(booking) || pending) return;
+        if (!isDraggable(booking) || submitting) return;
         // Left button only: a right-click is a context menu, and a middle-click opens the card in a new tab.
         if (event.button !== 0) return;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -128,16 +146,24 @@ export function useCalendarDrag({
         draggedRef.current = true;
         if (current.startMinute === booking.startMinute && current.trackKey === trackKey) return;
 
-        setPending(true);
+        const target = { bookingId: booking.id, trackKey: current.trackKey, startMinute: current.startMinute };
+        setPendingMove(target);
+        setSubmitting(true);
         try {
-          const result = await onDrop({ bookingId: booking.id, trackKey: current.trackKey, startMinute: current.startMinute });
-          if (result.error) setMessage(moveErrorMessage(result.error));
-          // Only refreshed on success, so a refused move leaves the picture — and the explanation — alone.
-          else router.refresh();
+          const result = await onDrop(target);
+          if (result.error) {
+            // A refusal puts the visit back where it really is and says why, rather than leaving a picture
+            // that disagrees with the database.
+            setMessage(moveErrorMessage(result.error));
+            setPendingMove(null);
+          } else {
+            startRefresh(() => router.refresh());
+          }
         } catch {
           setMessage("Не удалось перенести запись. Попробуйте ещё раз.");
+          setPendingMove(null);
         } finally {
-          setPending(false);
+          setSubmitting(false);
         }
       },
       onClick(event: { preventDefault: () => void }) {
@@ -152,13 +178,47 @@ export function useCalendarDrag({
   return {
     /** Non-null only for the block being dragged, so the rest of the grid renders unchanged. */
     dragOf: (bookingId: string) => (drag?.bookingId === bookingId ? drag : null),
-    activeTrack: drag?.trackKey ?? null,
-    pending,
+    activeTrack: drag?.trackKey ?? inFlightMove?.trackKey ?? null,
+    pendingMove: inFlightMove,
+    /** True while a move is on its way to the server, so the grid can say so rather than only dim itself. */
+    saving: submitting,
     message,
     isDraggable,
     registerTrack,
     handlers,
   };
+}
+
+/**
+ * The bookings each column should draw, with a move that is still being confirmed already applied. The
+ * visit leaves the column it came from and appears in the one it was dropped in, at full width — a visit
+ * cannot be in two places, and the receptionist has to see the answer they gave.
+ */
+export function applyPendingMove<T extends DayScheduleBooking>(
+  tracks: Array<{ key: string; bookings: T[] }>,
+  move: CalendarDragTarget | null,
+): Map<string, T[]> {
+  const placed = new Map(tracks.map((track) => [track.key, track.bookings]));
+  if (!move) return placed;
+
+  const moving = tracks.flatMap((track) => track.bookings).find((booking) => booking.id === move.bookingId);
+  if (!moving) return placed;
+
+  for (const track of tracks) {
+    const withoutMoving = track.bookings.filter((booking) => booking.id !== move.bookingId);
+    placed.set(track.key, track.key === move.trackKey
+      ? [...withoutMoving, {
+          ...moving,
+          startMinute: move.startMinute,
+          endMinute: move.startMinute + (moving.endMinute - moving.startMinute),
+          blockedStartMinute: move.startMinute - (moving.startMinute - moving.blockedStartMinute),
+          blockedEndMinute: move.startMinute + (moving.blockedEndMinute - moving.startMinute),
+          lane: 0,
+          laneCount: 1,
+        }]
+      : withoutMoving);
+  }
+  return placed;
 }
 
 function moveErrorMessage(code: string): string {
