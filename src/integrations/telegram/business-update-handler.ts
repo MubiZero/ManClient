@@ -11,7 +11,7 @@ import { consumeConversationAction, createConversationAction } from "@/core/conv
 import type { ConversationData, ConversationLocale, ConversationStateName } from "@/core/conversations/conversation-state";
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { prisma } from "@/core/database/prisma";
-import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
+import { DEFAULT_TIME_ZONE, localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 import { assertPaymentCardConfigured, getPaymentUrl } from "@/core/payments/payment-service";
 import type { ReceiptRecognizer } from "@/core/payments/receipt-recognizer";
 import { contactKeyboard, inlineButtonGrid, inlineButtons } from "@/integrations/telegram/conversation-renderer";
@@ -597,11 +597,11 @@ function selectedService(businessId: string, data: ConversationData) {
 
 async function bookingSummary(businessId: string, data: ConversationData, locale: ConversationLocale) {
   const [branch, service, staff] = await Promise.all([
-    prisma.branch.findFirstOrThrow({ where: { id: required(data.branchId), businessId }, select: { name: true } }),
+    prisma.branch.findFirstOrThrow({ where: { id: required(data.branchId), businessId }, select: { name: true, timeZone: true } }),
     selectedService(businessId, data),
     prisma.staffMember.findFirstOrThrow({ where: { id: required(data.staffId), businessId }, select: { displayName: true } }),
   ]);
-  const visit = new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone: "Asia/Dushanbe", dateStyle: "medium", timeStyle: "short" }).format(new Date(required(data.startsAt)));
+  const visit = new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone: branch.timeZone, dateStyle: "medium", timeStyle: "short" }).format(new Date(required(data.startsAt)));
   return `${escapeTelegramHtml(branch.name)}\n${escapeTelegramHtml(service.name)} · ${escapeTelegramHtml(staff.displayName)}\n${visit}\n<b>${escapeTelegramHtml(required(data.name))}</b> · ${escapeTelegramHtml(required(data.phone))}\n<b>${(service.amountDiram / 100).toFixed(2)} TJS</b>`;
 }
 
@@ -633,7 +633,7 @@ function formatDateLabel(date: string) {
   return `${day}.${month}.${year}`;
 }
 
-function formatVisitTime(value: Date, timeZone = "Asia/Dushanbe") {
+function formatVisitTime(value: Date, timeZone = DEFAULT_TIME_ZONE) {
   return new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" }).format(value);
 }
 

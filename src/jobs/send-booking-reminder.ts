@@ -13,8 +13,8 @@ import { sendTemplateMessage, type WhatsAppTemplateMessage } from "@/integration
 
 type DeliverableMessage = Prisma.MessageGetPayload<{
   include: {
-    booking: { include: { customer: true; payment: true; business: { include: { telegramIntegrations: true } }; service: true } };
-    waitlistEntry: { include: { customer: true; business: { include: { telegramIntegrations: true } }; service: true } };
+    booking: { include: { customer: true; payment: true; business: { include: { telegramIntegrations: true } }; service: true; branch: true } };
+    waitlistEntry: { include: { customer: true; business: { include: { telegramIntegrations: true } }; service: true; branch: true } };
   };
 }>;
 
@@ -26,6 +26,8 @@ type DeliveryTarget = {
   serviceName: string;
   /** The moment the message is about: the visit, or the slot that came free. */
   occursAt: Date;
+  /** The branch's timezone — the only one in which "18:00" means anything to the customer. */
+  timeZone: string;
 };
 
 type DeliveryDependencies = {
@@ -68,6 +70,7 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
             payment: true,
             business: { include: { telegramIntegrations: { where: { status: "ACTIVE" }, take: 1 } } },
             service: true,
+            branch: true,
           },
         },
         waitlistEntry: {
@@ -75,6 +78,7 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
             customer: true,
             business: { include: { telegramIntegrations: { where: { status: "ACTIVE" }, take: 1 } } },
             service: true,
+            branch: true,
           },
         },
       },
@@ -109,6 +113,7 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
         const template = buildPayomVariables(templateKind, target.customer.telegramLocale, {
           businessName: target.business.name,
           startsAt: target.occursAt,
+          timeZone: target.timeZone,
         });
         externalId = (await dependencies.sendSms({ telephone: target.customer.phone, ...template })).externalId;
       } else {
@@ -125,7 +130,7 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
           to: target.customer.phone,
           templateName,
           languageCode: business.whatsappLanguageCode,
-          parameters: [target.customer.name, formatVisitTime(target.occursAt), target.serviceName],
+          parameters: [target.customer.name, formatVisitTime(target.occursAt, target.timeZone), target.serviceName],
         })).externalId;
       }
       await prisma.message.update({ where: { id: message.id }, data: { status: "SENT", attempts: { increment: 1 }, externalId } });
@@ -181,6 +186,7 @@ function resolveTarget(message: DeliverableMessage, now: Date): DeliveryTarget |
       business: entry.business,
       serviceName: entry.service.name,
       occursAt: entry.freedStartsAt,
+      timeZone: entry.branch.timeZone,
     };
   }
 
@@ -202,6 +208,7 @@ function resolveTarget(message: DeliverableMessage, now: Date): DeliveryTarget |
     business: booking.business,
     serviceName: booking.service.name,
     occursAt: booking.startsAt,
+    timeZone: booking.branch.timeZone,
   };
 }
 
@@ -217,8 +224,8 @@ function reminderText(kind: string, target: DeliveryTarget, reviewUrl?: string) 
   const tg = target.customer.telegramLocale === "tg";
   if (kind === WAITLIST_MESSAGE_KIND) {
     return tg
-      ? `Вақти озод пайдо шуд: ${formatVisitTime(target.occursAt, "tg-TJ")}. Лутфан ҳарчи зудтар бо мо тамос гиред.`
-      : `Освободилось время из вашего листа ожидания: ${formatVisitTime(target.occursAt)}. Свяжитесь с нами, чтобы записаться.`;
+      ? `Вақти озод пайдо шуд: ${formatVisitTime(target.occursAt, target.timeZone, "tg-TJ")}. Лутфан ҳарчи зудтар бо мо тамос гиред.`
+      : `Освободилось время из вашего листа ожидания: ${formatVisitTime(target.occursAt, target.timeZone)}. Свяжитесь с нами, чтобы записаться.`;
   }
   if (kind === "REVIEW_REQUEST") {
     return tg
@@ -229,13 +236,13 @@ function reminderText(kind: string, target: DeliveryTarget, reviewUrl?: string) 
   if (kind === "PAYMENT_REJECTED") return tg ? "Расид тасдиқ нашуд. Лутфан расиди дурустро аз нав фиристед." : "Чек не подтверждён. Откройте запись и отправьте корректный чек ещё раз.";
   if (kind === "RECEIPT_NEEDS_REVIEW") return tg ? "Расид қабул шуд ва ба маъмур барои санҷиш фиристода шуд." : "Чек получен и передан администратору на проверку.";
   if (kind === "BOOKING_CANCELLED") return tg ? "Сабт бекор шуд." : "Запись отменена.";
-  if (kind === "BOOKING_RESCHEDULED") return tg ? `Вақти нави сабт: ${formatVisitTime(booking.startsAt, "tg-TJ")}.` : `Запись перенесена: ${formatVisitTime(booking.startsAt, "ru-RU")}.`;
+  if (kind === "BOOKING_RESCHEDULED") return tg ? `Вақти нави сабт: ${formatVisitTime(booking.startsAt, target.timeZone, "tg-TJ")}.` : `Запись перенесена: ${formatVisitTime(booking.startsAt, target.timeZone, "ru-RU")}.`;
   if (kind === "PAYMENT_REMINDER") {
-    return tg ? `${booking.customer.name}, пардохти сабтро барои ${booking.service.name} ёдрас мекунем: ${formatVisitTime(booking.startsAt, "tg-TJ")}.` : `${booking.customer.name}, напоминаем об оплате записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt)}.`;
+    return tg ? `${booking.customer.name}, пардохти сабтро барои ${booking.service.name} ёдрас мекунем: ${formatVisitTime(booking.startsAt, target.timeZone, "tg-TJ")}.` : `${booking.customer.name}, напоминаем об оплате записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt, target.timeZone)}.`;
   }
-  return tg ? `${booking.customer.name}, сабти шуморо барои ${booking.service.name} ёдрас мекунем: ${formatVisitTime(booking.startsAt, "tg-TJ")}.` : `${booking.customer.name}, напоминаем о записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt)}.`;
+  return tg ? `${booking.customer.name}, сабти шуморо барои ${booking.service.name} ёдрас мекунем: ${formatVisitTime(booking.startsAt, target.timeZone, "tg-TJ")}.` : `${booking.customer.name}, напоминаем о записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt, target.timeZone)}.`;
 }
 
-function formatVisitTime(value: Date, locale = "ru-RU") {
-  return new Intl.DateTimeFormat(locale, { timeZone: "Asia/Dushanbe", dateStyle: "medium", timeStyle: "short" }).format(value);
+function formatVisitTime(value: Date, timeZone: string, locale = "ru-RU") {
+  return new Intl.DateTimeFormat(locale, { timeZone, dateStyle: "medium", timeStyle: "short" }).format(value);
 }

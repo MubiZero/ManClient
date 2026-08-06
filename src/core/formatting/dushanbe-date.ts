@@ -1,3 +1,10 @@
+/**
+ * Fallback for the handful of paths that format a time without a branch in hand. Every branch carries
+ * its own `timeZone`, so this is a default rather than the product's timezone — code that has a branch
+ * must pass it, or the first branch outside UTC+5 gets wrong times in its SMS and Telegram messages.
+ */
+export const DEFAULT_TIME_ZONE = "Asia/Dushanbe";
+
 export function todayInTimeZone(timeZone: string, now = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,

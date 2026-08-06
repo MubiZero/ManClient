@@ -9,6 +9,8 @@
  * for moderation and swapping the ID below.
  */
 
+import { DEFAULT_TIME_ZONE } from "@/core/formatting/dushanbe-date";
+
 export type PayomTemplateKind = "BOOKING_CONFIRMATION" | "BOOKING_REMINDER" | "BOOKING_CANCELLED" | "PAYMENT_REJECTED" | "WAITLIST_SLOT_FREED";
 
 /** Placeholder names are fixed by payom; `text-1` is free text, `date-1` and `time-1` are validated by format. */
@@ -124,18 +126,22 @@ export function findPayomTemplateKind(messageKind: string): PayomTemplateKind | 
 /**
  * Payom validates `date-1` against `Y-m-d` and rejects anything else, so a customer-friendly
  * "5 августа" is not available to us — the date always reads as 2026-08-05 in the delivered SMS.
- * Both values are rendered in Dushanbe time, which is the only timezone the product serves.
+ *
+ * `timeZone` comes from the branch the visit belongs to. It defaults to Dushanbe because that is where
+ * every pilot branch is, but it is a parameter rather than a constant: the first branch outside UTC+5
+ * would otherwise send every customer a time that is silently wrong by hours.
  */
 export function buildPayomVariables(
   kind: PayomTemplateKind,
   locale: string,
-  input: { businessName: string; startsAt: Date },
+  input: { businessName: string; startsAt: Date; timeZone?: string },
 ): { templateId: string; variables: Record<string, string> } {
   const template = TEMPLATES[kind][locale === "tg" ? "tg" : "ru"];
+  const timeZone = input.timeZone ?? DEFAULT_TIME_ZONE;
   const values: Record<TemplateVariable, string> = {
     "text-1": input.businessName,
-    "date-1": new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dushanbe", dateStyle: "short" }).format(input.startsAt),
-    "time-1": new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dushanbe", hour: "2-digit", minute: "2-digit", hour12: false }).format(input.startsAt),
+    "date-1": new Intl.DateTimeFormat("en-CA", { timeZone, dateStyle: "short" }).format(input.startsAt),
+    "time-1": new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(input.startsAt),
   };
 
   // Sending a placeholder the template does not contain would be silently dropped, and omitting one
