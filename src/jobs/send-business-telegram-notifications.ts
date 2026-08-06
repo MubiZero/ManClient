@@ -2,6 +2,8 @@ import { prisma } from "@/core/database/prisma";
 import { createBusinessBotAction } from "@/core/integrations/business-bot-actions";
 import { listBusinessTelegramDestinations } from "@/core/integrations/platform-chat-link";
 import type { BusinessNotificationKind } from "@/core/notifications/business-notification-service";
+import { errorText, logger } from "@/core/observability/logger";
+import { reportError } from "@/core/observability/report-error";
 import { createTelegramApi, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 
 type DeliveryDependencies = {
@@ -83,17 +85,26 @@ export async function sendDueBusinessTelegramNotifications(
           where: { id: delivery.id },
           data: { status: "SENT", attempts: { increment: 1 }, lastError: null },
         });
-      } catch {
+      } catch (error) {
         const attempts = delivery.attempts + 1;
+        const exhausted = attempts >= delivery.maxAttempts;
         await prisma.businessNotificationDelivery.update({
           where: { id: delivery.id },
           data: {
-            status: attempts >= delivery.maxAttempts ? "FAILED" : "SCHEDULED",
+            status: exhausted ? "FAILED" : "SCHEDULED",
             attempts,
-            scheduledAt: attempts >= delivery.maxAttempts ? delivery.scheduledAt : new Date(now.getTime() + 5 * 60_000),
+            scheduledAt: exhausted ? delivery.scheduledAt : new Date(now.getTime() + 5 * 60_000),
+            // Stays generic on purpose: the bot token travels in the Telegram request URL, so a raw
+            // client error is not something to persist. The detail goes to the log instead.
             lastError: "Telegram delivery failed",
           },
         });
+        const context = { notificationId: notification.id, deliveryId: delivery.id, businessId: notification.businessId, kind: notification.kind, attempts };
+        if (exhausted) {
+          reportError({ event: "business_notification.delivery_failed", error, context, fingerprint: `business-notification:${notification.kind}` });
+        } else {
+          logger.warn("business_notification.delivery_retrying", { ...context, error: errorText(error) });
+        }
       }
     }
     await refreshNotificationStatus(notification.id);

@@ -70,7 +70,9 @@ describe("SMS delivery", () => {
     await expect(prisma.message.findUniqueOrThrow({ where: { id: message.id } })).resolves.toMatchObject({
       status: "SCHEDULED",
       attempts: 1,
-      lastError: "SMS delivery failed",
+      // The gateway's own words, not a generic "SMS delivery failed": support reads this column to
+      // tell a rejected template apart from an unreachable gateway.
+      lastError: "SMS: templateMessage.variables[date-1]: должно быть в формате Y-m-d",
     });
   });
 });

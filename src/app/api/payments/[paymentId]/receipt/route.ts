@@ -1,30 +1,12 @@
-import { timingSafeEqual } from "node:crypto";
-
 import { ZodError } from "zod";
 
 import {
   DuplicateOperationError,
   confirmFromReceipt,
 } from "@/core/payments/payment-service";
+import { hasValidInternalSecret } from "@/core/security/internal-auth";
 
 type RouteContext = { params: Promise<{ paymentId: string }> };
-
-function hasValidInternalSecret(request: Request): boolean {
-  const expected = process.env.INTERNAL_API_SECRET;
-  const provided = request.headers.get("x-manclient-internal-secret");
-
-  if (!expected || !provided) {
-    return false;
-  }
-
-  const expectedBuffer = Buffer.from(expected);
-  const providedBuffer = Buffer.from(provided);
-
-  return (
-    expectedBuffer.length === providedBuffer.length &&
-    timingSafeEqual(expectedBuffer, providedBuffer)
-  );
-}
 
 export async function POST(request: Request, context: RouteContext): Promise<Response> {
   if (!hasValidInternalSecret(request)) {

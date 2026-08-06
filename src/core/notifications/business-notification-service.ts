@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
+import { errorText, logger } from "@/core/observability/logger";
 
 export type BusinessNotificationKind =
   | "NEW_BOOKING"
@@ -70,7 +71,15 @@ export async function scheduleBusinessNotificationSafely(
 ) {
   try {
     return await scheduleBusinessNotification(input, database);
-  } catch {
+  } catch (error) {
+    // Swallowed on purpose — a booking must not fail because its notification could not be queued.
+    // Logged so that "the owner got no Telegram card for this booking" is diagnosable afterwards.
+    logger.warn("business_notification.schedule_failed", {
+      businessId: input.businessId,
+      bookingId: input.bookingId,
+      kind: input.kind,
+      error: errorText(error),
+    });
     return null;
   }
 }

@@ -3,6 +3,8 @@ import type { Business, BusinessTelegramIntegration, Customer, Prisma } from "@/
 import { createCustomerBookingToken } from "@/core/bookings/booking-action-token";
 import { WAITLIST_MESSAGE_KIND } from "@/core/bookings/waitlist-service";
 import { prisma } from "@/core/database/prisma";
+import { errorText, logger } from "@/core/observability/logger";
+import { reportError } from "@/core/observability/report-error";
 import { decryptSecret } from "@/core/security/secret-encryption";
 import { sendSms, type PayomSmsMessage } from "@/integrations/payom/payom-client";
 import { buildPayomVariables, findPayomTemplateKind } from "@/integrations/payom/payom-templates";
@@ -127,17 +129,30 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
         })).externalId;
       }
       await prisma.message.update({ where: { id: message.id }, data: { status: "SENT", attempts: { increment: 1 }, externalId } });
-    } catch {
+    } catch (error) {
       const attempts = message.attempts + 1;
+      const exhausted = attempts >= message.maxAttempts;
       await prisma.message.update({
         where: { id: message.id },
         data: {
-          status: attempts >= message.maxAttempts ? "FAILED" : "SCHEDULED",
+          status: exhausted ? "FAILED" : "SCHEDULED",
           attempts,
-          scheduledAt: attempts >= message.maxAttempts ? message.scheduledAt : new Date(now.getTime() + 5 * 60_000),
-          lastError: `${message.channel} delivery failed`,
+          scheduledAt: exhausted ? message.scheduledAt : new Date(now.getTime() + 5 * 60_000),
+          // The provider's own words for SMS and WhatsApp — a rejected payom template and an
+          // unreachable gateway need different fixes, and this column is where support looks. Telegram
+          // stays generic: its bot token travels in the request URL, so its errors are logged, not stored.
+          lastError:
+            message.channel === "TELEGRAM"
+              ? "TELEGRAM delivery failed"
+              : `${message.channel}: ${errorText(error)}`.slice(0, 500),
         },
       });
+      const context = { messageId: message.id, businessId: message.businessId, channel: message.channel, kind: message.kind, attempts };
+      if (exhausted) {
+        reportError({ event: "message.delivery_failed", error, context, fingerprint: `message:${message.channel}:${message.kind}` });
+      } else {
+        logger.warn("message.delivery_retrying", { ...context, error: errorText(error) });
+      }
     }
     processed += 1;
   }

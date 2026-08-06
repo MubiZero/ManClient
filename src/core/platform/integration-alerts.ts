@@ -1,5 +1,6 @@
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
+import { errorText, logger } from "@/core/observability/logger";
 import { createTelegramApi } from "@/integrations/telegram/telegram-api";
 
 const ALERT_TYPE = "integration.alerted";
@@ -74,7 +75,7 @@ async function maybeAlert(input: {
   try {
     await input.telegram.sendMessage(input.chatId, input.message);
   } catch (error) {
-    process.stderr.write(`[integration-alerts] failed to notify admin chat: ${String(error)}\n`);
+    logger.warn("integration_alerts.notify_failed", { businessId: input.businessId, dedupeKey: input.dedupeKey, error: errorText(error) });
     return false;
   }
 

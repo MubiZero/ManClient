@@ -134,7 +134,22 @@ pnpm jobs:business-notifications
 pnpm jobs:scheduler
 ```
 
-Delivery имеет claim state, максимум три попытки и safe error в Message. Метрики для pilot: `FAILED` messages, `NEEDS_ATTENTION` payments, просроченные `PROCESSING` messages и глубина `SCHEDULED` queue.
+Delivery имеет claim state и максимум три попытки. В `Message.lastError` пишется ответ провайдера для SMS и WhatsApp (например, отклонённый payom-шаблон); для Telegram остаётся обобщённый текст, так как bot token передаётся в URL запроса — подробности уходят только в лог.
+
+## 7.1. Логи, метрики и алерты
+
+Приложение и планировщик пишут по одному JSON-объекту на строку в stdout. Уровень задаётся `LOG_LEVEL` (`debug|info|warn|error`, по умолчанию `info`). Значения секретов из окружения и bot token вырезаются из сообщений и stack trace автоматически, номера телефонов маскируются до последних четырёх цифр.
+
+Необработанные ошибки любого route, server action и RSC перехватываются в `src/instrumentation.ts`. Если задан `PLATFORM_ADMIN_ALERT_CHAT_ID`, о них и о задачах, исчерпавших попытки, приходит алерт в личный чат админа с `@manclient_bot`. Одинаковые ошибки не дублируются в течение часа.
+
+Метрики Prometheus:
+
+```bash
+curl -sS -H "x-manclient-internal-secret: $INTERNAL_API_SECRET" https://<host>/api/internal/metrics
+```
+
+Что смотреть в первую очередь: `manclient_customer_message_backlog_age_seconds` и `manclient_business_notification_backlog_age_seconds`. Значение, превышающее несколько минут, означает, что планировщик не работает, — по глубине очереди это выглядит как обычный тихий вечер. Дополнительно: `manclient_customer_messages{status="FAILED"}`, `manclient_receipt_submissions`, `manclient_telegram_integrations{status="ERROR"}`.
+
 
 ## 8. Ротация ключа карты
 
