@@ -205,6 +205,8 @@ pnpm build
 pnpm playwright test
 ```
 
+Браузерный сюит теперь блокирует deploy: `deploy` зависит от `test` и от `e2e`. Исключение одно — если загрузка Chromium с CDN Playwright не удалась (наблюдался 403 «not available in your location»), шаг помечает job как пропущенный в summary и релиз не держит. Падение самих тестов deploy останавливает.
+
 До pilot нужны также HTTPS probe, тест webhook secret/signature, backup restore rehearsal и проверка, что bucket не публичный.
 
 ### Owner smoke после release

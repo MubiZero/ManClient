@@ -56,11 +56,12 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-  # Deliberately NOT a dependency of `deploy`. Running the browser suite means
-  # downloading Chromium from Playwright's CDN, which has answered
-  # 403 "not available in your location" for this runner — an outage in
-  # somebody else's infrastructure must not be able to hold up a release.
-  # Failures here are still red on the run and still need looking at.
+  # Gates the deploy, but only on its own verdict. Downloading Chromium from
+  # Playwright's CDN has answered 403 "not available in your location" for this
+  # runner, and an outage in somebody else's infrastructure must not hold up a
+  # release — so the browser download is allowed to fail and the suite is then
+  # skipped, while a real test failure fails this job and blocks the deploy.
+  # A skip is announced in the job summary rather than passing silently.
   e2e:
     runs-on: ubuntu-24.04
     services:
@@ -93,11 +94,17 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm playwright test
+      - id: browser
+        continue-on-error: true
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.browser.outcome == 'failure'
+        run: |
+          echo "⚠️ Chromium download failed — browser suite skipped, deploy not blocked by it." >> "$GITHUB_STEP_SUMMARY"
+      - if: steps.browser.outcome == 'success'
+        run: pnpm playwright test
 
   deploy:
-    needs: test
+    needs: [test, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
