@@ -1,8 +1,3 @@
-import { retryReceiptSubmissions } from "@/core/payments/receipt-submission-service";
+import { runJobFromCli } from "@/jobs/run-job";
 
-void retryReceiptSubmissions()
-  .then((count) => console.log(`Processed ${count} receipt submissions`))
-  .catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+void runJobFromCli("receipt-processing");

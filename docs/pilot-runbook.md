@@ -123,9 +123,11 @@ Webhook URL: `https://<host>/api/webhooks/whatsapp`. GET challenge провер�
 
 ## 7. Jobs
 
-В Docker-образе планировщик (`src/jobs/scheduler.ts`) запускается автоматически вместе с сервером (см. `CMD` в `Dockerfile`) и раз в минуту вызывает expiry, reminders, receipt-processing и business-notifications напрямую в процессе, с защитой от параллельного перекрытия одной и той же задачи. Отдельный cron не нужен.
+В Docker-образе планировщик (`src/jobs/scheduler.ts`) запускается автоматически вместе с сервером (см. `CMD` в `Dockerfile`) и раз в минуту вызывает expiry, reminders, receipt-processing, business-notifications, integration-health-alerts и security-maintenance. Отдельный cron не нужен.
 
-Для локального запуска или ручной диагностики отдельные задачи по-прежнему доступны так:
+Каждая задача выполняется под advisory lock PostgreSQL (`manclient:job:<name>`). Это делает безопасными rolling deploy с двумя живыми контейнерами и ручной запуск рядом с работающим планировщиком: второй процесс видит занятый lock и тихо пропускает задачу. Упавшая задача уходит в exponential backoff от 1 до 15 минут, а не повторяется каждую минуту. На `SIGTERM` планировщик ждёт до 30 секунд завершения текущих задач.
+
+Список задач один и тот же для планировщика и для CLI (`src/jobs/job-registry.ts`), поэтому cron-развёртывание не может «потерять» задачу:
 
 ```bash
 pnpm jobs:expire

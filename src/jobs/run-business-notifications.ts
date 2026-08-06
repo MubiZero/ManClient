@@ -1,6 +1,3 @@
-import { prisma } from "@/core/database/prisma";
-import { sendDueBusinessTelegramNotifications } from "@/jobs/send-business-telegram-notifications";
+import { runJobFromCli } from "@/jobs/run-job";
 
-void sendDueBusinessTelegramNotifications()
-  .then(count => process.stdout.write(`Processed ${count} business Telegram notifications.\n`))
-  .finally(() => prisma.$disconnect());
+void runJobFromCli("business-notifications");

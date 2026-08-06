@@ -1,6 +1,3 @@
-import { prisma } from "@/core/database/prisma";
-import { expirePendingBookings } from "@/jobs/expire-pending-bookings";
+import { runJobFromCli } from "@/jobs/run-job";
 
-void expirePendingBookings()
-  .then(count => process.stdout.write(`Expired ${count} pending bookings.\n`))
-  .finally(() => prisma.$disconnect());
+void runJobFromCli("expire-pending-bookings");
