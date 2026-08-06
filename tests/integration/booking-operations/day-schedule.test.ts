@@ -122,6 +122,34 @@ describe("day schedule", () => {
     expect(own.columns[0].bookings.map((booking) => booking.customerPhone)).toEqual(["+992900004003"]);
   });
 
+  it("lays two visits that share an hour side by side instead of on top of each other", async () => {
+    const context = await setup();
+    // Written straight to the database: the booking commands refuse an overlap, but data from before the
+    // buffer rules — or two bookings taken in the same instant — can still look like this.
+    const customer = await prisma.customer.create({ data: { businessId: context.business.id, name: "Двойник", phone: "+992900004010" } });
+    for (const time of ["10:00", "10:15"]) {
+      await prisma.booking.create({
+        data: {
+          businessId: context.business.id,
+          branchId: context.branch.id,
+          serviceId: context.service.id,
+          staffId: context.staff.id,
+          customerId: customer.id,
+          startsAt: utc(time),
+          endsAt: new Date(utc(time).getTime() + 45 * 60_000),
+          status: "CONFIRMED",
+          payment: { create: { businessId: context.business.id, amountDiram: 5_000, totalDiram: 5_000 } },
+        },
+      });
+    }
+
+    const day = await getDaySchedule({ businessId: context.business.id, actorUserId: context.ownerId, date: DATE });
+
+    const bookings = day.columns[0].bookings;
+    expect(bookings.map((booking) => booking.lane)).toEqual([0, 1]);
+    expect(bookings.every((booking) => booking.laneCount === 2)).toBe(true);
+  });
+
   it("refuses a date it cannot read", async () => {
     const context = await setup();
 

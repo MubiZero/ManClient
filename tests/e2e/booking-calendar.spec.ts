@@ -92,6 +92,42 @@ test("the week shows every day and hands off to the day it is asked about", asyn
   await expect(page.getByRole("link", { name: "Записать на 10:00, Алишер" })).toBeVisible();
 });
 
+test("owner drags a visit to another day in the week", async ({ page }) => {
+  const customerName = `Неделя ${Date.now().toString().slice(-6)}`;
+  await signIn(page);
+
+  await page.goto(`/dashboard/bookings?view=day&date=${DATE}`);
+  await page.getByRole("link", { name: "Записать на 11:00, Алишер" }).click();
+  await page.getByLabel("Услуга").selectOption({ label: "Мужская стрижка" });
+  await page.getByLabel("Имя клиента").fill(customerName);
+  await page.getByLabel("Телефон клиента").fill(`+99293${Date.now().toString().slice(-7)}`);
+  await page.getByRole("button", { name: "Создать запись" }).click();
+  await expect(page.getByRole("heading", { name: customerName })).toBeVisible();
+
+  await page.goto(`/dashboard/bookings?view=week&date=${DATE}`);
+  const block = page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") });
+  await block.scrollIntoViewIfNeeded();
+  const box = (await block.boundingBox())!;
+  const thursday = (await page.getByRole("link", { name: /чт.*17 сент/is }).boundingBox())!;
+
+  // Sideways across two day columns, keeping the same height: only the date should change.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(thursday.x + thursday.width / 2, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  // The grid reloads itself once the server has accepted the move, and the day headers count what each
+  // column holds. Waiting for that count is what keeps the navigation below from outrunning the request.
+  await expect(page.getByRole("link", { name: /чт.*17 сент.*записей: 1/is })).toBeVisible();
+  await expect(page.getByRole("link", { name: /вт.*15 сент.*свободно/is })).toBeVisible();
+
+  await page.goto(`/dashboard/bookings?view=day&date=2026-09-17`);
+  await expect(page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") })).toBeVisible();
+
+  await page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") }).click();
+  await cancelBooking(page);
+});
+
 test("the calendar scrolls inside itself instead of widening the page", async ({ page }) => {
   await signIn(page);
   for (const [width, view] of [[320, "day"], [390, "week"], [768, "day"], [1440, "week"]] as const) {

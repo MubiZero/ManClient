@@ -55,6 +55,13 @@ export type DayScheduleBooking = {
   /** The price of the visit, not the deposit that was asked for up front. */
   totalDiram: number;
   paymentStatus: PaymentStatus | null;
+  /**
+   * Horizontal placement among visits that share an hour. A specialist should never be double-booked, but
+   * data that predates the buffer rules — or two bookings taken in the same instant — can overlap, and a
+   * calendar that draws one on top of the other hides a visit nobody will then prepare for.
+   */
+  lane: number;
+  laneCount: number;
 };
 
 export type DayScheduleColumn = {
@@ -79,8 +86,8 @@ export type DaySchedule = {
   columns: DayScheduleColumn[];
 };
 
-/** A week's day holds every specialist's visits in one column, so overlaps have to be laid out side by side. */
-export type WeekScheduleBooking = DayScheduleBooking & { staffId: string; staffName: string; lane: number; laneCount: number };
+/** A week's day holds every specialist's visits in one column, so its lanes span the whole branch. */
+export type WeekScheduleBooking = DayScheduleBooking & { staffId: string; staffName: string };
 
 export type WeekScheduleDay = {
   date: string;
@@ -251,7 +258,7 @@ function buildDay(context: ScheduleContext, date: string): { dayStartsAt: Date; 
       ...exceptionIntervals(false),
     ]);
 
-    const staffBookings = context.bookings
+    const staffBookings: DayScheduleBooking[] = context.bookings
       .filter((booking) => booking.staffId === staff.id && inThisDay(booking.startsAt))
       .map((booking) => {
         const blocked = blockedWindow(booking.startsAt, booking.endsAt, booking.service);
@@ -269,6 +276,8 @@ function buildDay(context: ScheduleContext, date: string): { dayStartsAt: Date; 
           durationMinutes: booking.service.durationMinutes,
           totalDiram: booking.payment?.totalDiram ?? 0,
           paymentStatus: booking.payment?.status ?? null,
+          lane: 0,
+          laneCount: 1,
         } satisfies DayScheduleBooking;
       });
 
@@ -283,7 +292,7 @@ function buildDay(context: ScheduleContext, date: string): { dayStartsAt: Date; 
         workingIntervals,
         staffBookings.map((booking) => ({ startMinute: booking.blockedStartMinute, endMinute: booking.blockedEndMinute })),
       ),
-      bookings: staffBookings,
+      bookings: assignLanes(staffBookings),
     } satisfies DayScheduleColumn;
   });
 
@@ -296,7 +305,7 @@ function buildDay(context: ScheduleContext, date: string): { dayStartsAt: Date; 
  * width — otherwise two visits at the same time would be drawn on top of each other and one would be
  * invisible.
  */
-function assignLanes(bookings: Array<DayScheduleBooking & { staffId: string; staffName: string }>): WeekScheduleBooking[] {
+function assignLanes<T extends DayScheduleBooking>(bookings: T[]): T[] {
   const ordered = [...bookings].sort((left, right) => left.startMinute - right.startMinute || left.endMinute - right.endMinute);
   const laneEnds: number[] = [];
   const placed = ordered.map((booking) => {

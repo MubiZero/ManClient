@@ -37,7 +37,7 @@ export default async function BookingsPage({ searchParams }: PageProps) {
    * move was refused — "the specialist is already busy then" is the whole point of the gesture — and only
    * reloads on success, which keeps the block where the receptionist dropped it while the answer arrives.
    */
-  async function moveBooking(input: { bookingId: string; startsAt: string; staffId: string }) {
+  async function moveBooking(input: { bookingId: string; startsAt: string; staffId?: string }) {
     "use server";
     const current = await requireBusinessSession();
     try {
@@ -96,7 +96,7 @@ export default async function BookingsPage({ searchParams }: PageProps) {
             </p>
           ) : null}
           {day ? <DayGrid schedule={day} now={new Date()} moveAction={moveBooking} /> : null}
-          {week ? <WeekGrid schedule={week} today={todayInTimeZone(result.timeZone)} /> : null}
+          {week ? <WeekGrid schedule={week} today={todayInTimeZone(week.timeZone)} moveAction={moveBooking} /> : null}
         </section>
       ) : null}
       {calendar ? <h2 className="text-sm font-semibold text-foreground">{day ? "Записи за день" : "Записи за неделю"}</h2> : null}
