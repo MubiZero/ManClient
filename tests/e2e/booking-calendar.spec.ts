@@ -35,15 +35,31 @@ test("owner books a visit from a gap in the day calendar", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Записать на 10:00, Алишер" })).toHaveCount(0);
 });
 
-test("the day calendar scrolls inside itself instead of widening the page", async ({ page }) => {
+test("the week shows every day and hands off to the day it is asked about", async ({ page }) => {
   await signIn(page);
-  for (const width of [320, 390, 768, 1440]) {
+
+  await page.goto(`/dashboard/bookings?view=week&date=${DATE}`);
+  // 2026-09-15 is a Tuesday, so its week runs Monday the 14th to Sunday the 20th.
+  await expect(page.getByRole("link", { name: /вт.*15 сент/is })).toBeVisible();
+  await expect(page.getByRole("link", { name: /пн.*14 сент/is })).toBeVisible();
+  await expect(page.getByRole("link", { name: /вс.*20 сент/is })).toBeVisible();
+  // Demo-barber's branch has one specialist, so the week knows whose gaps these are and offers them.
+  await expect(page.getByRole("link", { name: /Записать на 10:00, 2026-09-15/ })).toBeVisible();
+
+  await page.getByRole("link", { name: /вт.*15 сент/is }).click();
+  await expect(page).toHaveURL(/view=day&date=2026-09-15/);
+  await expect(page.getByRole("link", { name: "Записать на 10:00, Алишер" })).toBeVisible();
+});
+
+test("the calendar scrolls inside itself instead of widening the page", async ({ page }) => {
+  await signIn(page);
+  for (const [width, view] of [[320, "day"], [390, "week"], [768, "day"], [1440, "week"]] as const) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/dashboard/bookings?view=day&date=${DATE}`);
+    await page.goto(`/dashboard/bookings?view=${view}&date=${DATE}`);
     // Exact, because the day view also heads its list section with a name containing this stem.
     await expect(page.getByRole("heading", { name: "Записи", exact: true })).toBeVisible();
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-    expect(scrollWidth, `page horizontal scroll at ${width}px`).toBe(width);
+    expect(scrollWidth, `page horizontal scroll at ${width}px in the ${view} view`).toBe(width);
   }
 });
 

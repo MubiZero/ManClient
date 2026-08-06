@@ -5,7 +5,7 @@ import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
 const bookingStatuses = ["PENDING_PAYMENT", "CONFIRMED", "CANCELLED", "EXPIRED", "NO_SHOW"] as const;
 
 export const bookingFiltersSchema = z.object({
-  view: z.enum(["day", "list"]).default("day"),
+  view: z.enum(["day", "week", "list"]).default("day"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   status: z.enum(bookingStatuses).optional(),
   branchId: z.string().trim().min(1).max(128).optional(),

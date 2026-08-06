@@ -38,6 +38,12 @@ export function BookingFilters({
           День
         </Link>
         <Link
+          href={`/dashboard/bookings?view=week&date=${date}`}
+          className={cn("rounded-sm px-3 py-1.5 text-sm font-medium", view === "week" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}
+        >
+          Неделя
+        </Link>
+        <Link
           href="/dashboard/bookings?view=list"
           className={cn("rounded-sm px-3 py-1.5 text-sm font-medium", view === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}
         >
@@ -47,7 +53,7 @@ export function BookingFilters({
 
       <form className="flex flex-wrap items-end gap-3" method="get">
         <input type="hidden" name="view" value={view} />
-        {view === "day" ? (
+        {view === "day" || view === "week" ? (
           <input type="hidden" name="date" value={date} />
         ) : null}
         <div className="relative">
@@ -98,17 +104,17 @@ export function BookingFilters({
         </Link>
       </form>
 
-      {view === "day" ? (
-        <div className="flex items-center gap-2">
-          <BookingDatePicker date={date} hrefPattern="/dashboard/bookings?view=day&date={date}" />
-          <Link href={`/dashboard/bookings?view=day&date=${addDays(date, -1)}`} className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
-            ← Пред. день
+      {view === "day" || view === "week" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <BookingDatePicker date={date} hrefPattern={`/dashboard/bookings?view=${view}&date={date}`} />
+          <Link href={`/dashboard/bookings?view=${view}&date=${addDays(date, view === "week" ? -7 : -1)}`} className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
+            {view === "week" ? "← Пред. неделя" : "← Пред. день"}
           </Link>
-          <Link href={`/dashboard/bookings?view=day&date=${today}`} className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
-            Сегодня
+          <Link href={`/dashboard/bookings?view=${view}&date=${today}`} className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
+            {view === "week" ? "Эта неделя" : "Сегодня"}
           </Link>
-          <Link href={`/dashboard/bookings?view=day&date=${addDays(date, 1)}`} className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
-            След. день →
+          <Link href={`/dashboard/bookings?view=${view}&date=${addDays(date, view === "week" ? 7 : 1)}`} className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
+            {view === "week" ? "След. неделя →" : "След. день →"}
           </Link>
         </div>
       ) : null}

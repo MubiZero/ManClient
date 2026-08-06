@@ -4,6 +4,7 @@ import { bookingScopeWhere, requireBookingAccess } from "@/core/booking-operatio
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import type { BookingFilters } from "@/core/booking-operations/booking-operation-schemas";
 import { prisma } from "@/core/database/prisma";
+import { shiftDate, startOfWeek } from "@/core/booking-operations/day-schedule-service";
 import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
 
 type ActorInput = { businessId: string; actorUserId: string };
@@ -72,6 +73,12 @@ function bookingWhere(input: ActorInput & { filters: BookingFilters }, staffScop
   };
   if (filters.view === "day") {
     where.startsAt = { gte: localDateTimeToUtc(filters.date, "00:00", timeZone), lt: localDateTimeToUtc(nextDate(filters.date), "00:00", timeZone) };
+  }
+  if (filters.view === "week") {
+    // The list under the week grid covers the same seven days the grid draws, so the two never disagree
+    // about what the period contains.
+    const weekStart = startOfWeek(filters.date);
+    where.startsAt = { gte: localDateTimeToUtc(weekStart, "00:00", timeZone), lt: localDateTimeToUtc(shiftDate(weekStart, 7), "00:00", timeZone) };
   }
   if (filters.search) {
     where.OR = [
