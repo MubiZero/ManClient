@@ -1,5 +1,6 @@
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
+import { assertCustomerMayCancel, getCustomerBookingPolicy } from "@/core/bookings/booking-policy";
 import { notifyWaitlistForFreedSlot } from "@/core/bookings/waitlist-service";
 import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
 import { scheduleSmsCancellation, scheduleWhatsAppCancellation } from "@/core/notifications/notification-service";
@@ -12,6 +13,19 @@ export async function cancelBooking(input: { bookingId: string; actor: BookingAc
   const actorFilter = input.actor.type === "customer"
     ? { customerId: input.actor.customerId }
     : { businessId: input.actor.businessId };
+
+  if (input.actor.type === "customer") {
+    // Read outside the transaction on purpose: it is a policy read, not part of the state change, and
+    // the cancellation window cannot be raced into compliance.
+    const existing = await prisma.booking.findFirst({
+      where: { id: input.bookingId, customerId: input.actor.customerId, status: { in: ["PENDING_PAYMENT", "CONFIRMED"] } },
+      select: { businessId: true, startsAt: true },
+    });
+    if (existing) {
+      assertCustomerMayCancel(await getCustomerBookingPolicy(existing.businessId), existing.startsAt, now);
+    }
+  }
+
   return prisma.$transaction(async (transaction) => {
     const result = await transaction.booking.updateMany({
       where: {

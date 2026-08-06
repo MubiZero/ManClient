@@ -122,6 +122,11 @@ export async function createRecurringBooking(input: CreateRecurringBookingInput,
         resourceIds,
         startsAt: occurrenceStartsAt,
         durationMinutes: service.durationMinutes,
+        // Only the first visit of a customer's series is held to the booking policy. A twelve-week series
+        // deliberately reaches past any sane booking horizon, and refusing week thirteen of a series the
+        // business enabled on purpose would make the feature useless.
+        actor: value.source === "DASHBOARD" || index > 0 ? "staff" : "customer",
+        now,
       });
       const isDashboard = value.source === "DASHBOARD";
       const booking = await reserveAllocation({

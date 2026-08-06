@@ -1,6 +1,5 @@
-import { BookingStatus } from "@/generated/prisma/client";
-
 import { prisma } from "@/core/database/prisma";
+import { blockedWindow, listOccupiedWindows, windowsOverlap } from "@/core/availability/booking-window";
 
 type AvailabilityQuery = {
   branchId: string;
@@ -12,9 +11,17 @@ type AvailabilityQuery = {
   durationMinutes: number;
   intervalMinutes: number;
   excludeBookingId?: string;
+  /**
+   * Whose rules apply. `customer` honours the business's booking policy — minimum notice and how far
+   * ahead bookings are accepted. `staff` ignores both: a receptionist booking the walk-in standing at
+   * the counter must not be told the business requires two hours' notice. Service buffers are physical
+   * and apply to both.
+   */
+  actor?: "customer" | "staff";
+  /** Injected clock, so policy windows are testable without waiting for the day to move. */
+  now?: Date;
 };
 
-const ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED];
 const WEEKDAY_BY_NAME: Record<string, number> = {
   Sun: 0,
   Mon: 1,
@@ -38,18 +45,31 @@ export async function getAvailableStarts(query: AvailabilityQuery): Promise<Date
     prisma.branch.findFirst({
       where: { id: query.branchId, archivedAt: null },
       include: {
+        business: { select: { minLeadTimeMinutes: true, maxAdvanceDays: true } },
         scheduleRules: true,
         scheduleBreaks: { where: { OR: [{ staffId: null }, { staffId: query.staffId }] } },
         scheduleExceptions: { where: { startsAt: { lt: query.rangeEndsAt }, endsAt: { gt: query.rangeStartsAt }, OR: [{ staffId: null }, { staffId: query.staffId }] } },
       },
     }),
-    prisma.service.findFirst({ where: { id: query.serviceId, branchId: query.branchId, archivedAt: null, isPublished: true, staffMembers: { some: { id: query.staffId, archivedAt: null, branches: { some: { branchId: query.branchId } } } } }, select: { id: true } }),
+    prisma.service.findFirst({ where: { id: query.serviceId, branchId: query.branchId, archivedAt: null, isPublished: true, staffMembers: { some: { id: query.staffId, archivedAt: null, branches: { some: { branchId: query.branchId } } } } }, select: { id: true, bufferBeforeMinutes: true, bufferAfterMinutes: true } }),
     prisma.staffMember.findFirst({ where: { id: query.staffId, archivedAt: null, branches: { some: { branchId: query.branchId } } }, include: { scheduleRules: { where: { branchId: query.branchId } } } }),
     query.resourceIds.length ? prisma.resource.count({ where: { id: { in: query.resourceIds }, branchId: query.branchId, archivedAt: null, isAvailable: true } }) : Promise.resolve(0),
   ]);
 
   if (!branch || !service || !staff || resourceCount !== new Set(query.resourceIds).size) return [];
   const effectiveRules = staff.scheduleRules.length ? staff.scheduleRules : branch.scheduleRules;
+  const policy = resolvePolicyBounds(branch.business, query);
+
+  // One query for the whole range instead of one per candidate slot: a nine-hour day at half-hour
+  // intervals used to mean eighteen round trips to answer a single "what is free on Tuesday".
+  const occupied = await listOccupiedWindows({
+    branchId: query.branchId,
+    staffId: query.staffId,
+    resourceIds: query.resourceIds,
+    rangeStartsAt: query.rangeStartsAt,
+    rangeEndsAt: query.rangeEndsAt,
+    excludeBookingId: query.excludeBookingId,
+  });
 
   const availableStarts: Date[] = [];
   const lastStartTime = query.rangeEndsAt.getTime() - query.durationMinutes * 60_000;
@@ -62,6 +82,8 @@ export async function getAvailableStarts(query: AvailabilityQuery): Promise<Date
     const startsAt = new Date(candidateTime);
     const endsAt = new Date(candidateTime + query.durationMinutes * 60_000);
 
+    if (startsAt < policy.earliestStart || (policy.latestStart && startsAt > policy.latestStart)) continue;
+
     const availableException = branch.scheduleExceptions.some(item => item.available && item.startsAt <= startsAt && item.endsAt >= endsAt);
     const unavailableException = branch.scheduleExceptions.some(item => !item.available && item.startsAt < endsAt && item.endsAt > startsAt);
     const withinBreak = isWithinSchedule(startsAt, endsAt, branch.timeZone, branch.scheduleBreaks);
@@ -69,29 +91,32 @@ export async function getAvailableStarts(query: AvailabilityQuery): Promise<Date
       continue;
     }
 
-    const hasConflict = await prisma.booking.findFirst({
-      where: {
-        id: query.excludeBookingId ? { not: query.excludeBookingId } : undefined,
-        branchId: query.branchId,
-        status: { in: ACTIVE_BOOKING_STATUSES },
-        startsAt: { lt: endsAt },
-        endsAt: { gt: startsAt },
-        OR: [
-          { staffId: query.staffId },
-          ...(query.resourceIds.length > 0
-            ? [{ resources: { some: { resourceId: { in: query.resourceIds } } } }]
-            : []),
-        ],
-      },
-      select: { id: true },
-    });
+    // The candidate blocks its own buffers too, so a service needing fifteen minutes of cleaning after
+    // it cannot start fifteen minutes before another visit.
+    const candidateWindow = blockedWindow(startsAt, endsAt, service);
+    if (occupied.some((slot) => windowsOverlap(candidateWindow, slot))) continue;
 
-    if (!hasConflict) {
-      availableStarts.push(startsAt);
-    }
+    availableStarts.push(startsAt);
   }
 
   return availableStarts;
+}
+
+/**
+ * Turns the business's policy into two instants. Kept separate from the loop so the same numbers can be
+ * reported to a caller that needs to explain *why* a slot was refused rather than just omit it.
+ */
+export function resolvePolicyBounds(
+  policy: { minLeadTimeMinutes: number; maxAdvanceDays: number | null },
+  query: { actor?: "customer" | "staff"; now?: Date },
+): { earliestStart: Date; latestStart: Date | null } {
+  const now = query.now ?? new Date();
+  if ((query.actor ?? "customer") === "staff") return { earliestStart: new Date(0), latestStart: null };
+
+  return {
+    earliestStart: new Date(now.getTime() + Math.max(0, policy.minLeadTimeMinutes) * 60_000),
+    latestStart: policy.maxAdvanceDays === null ? null : new Date(now.getTime() + policy.maxAdvanceDays * 24 * 60 * 60_000),
+  };
 }
 
 function isWithinSchedule(

@@ -8,7 +8,6 @@ export async function POST(request: Request) {
     notifyOnNewBooking?: boolean;
     notifyOnPaymentNeedsReview?: boolean;
     notifyOnCancellation?: boolean;
-    cancellationPolicy?: string;
     smsNotificationsEnabled?: boolean;
   };
 
@@ -19,7 +18,6 @@ export async function POST(request: Request) {
       notifyOnNewBooking: Boolean(body.notifyOnNewBooking),
       notifyOnPaymentNeedsReview: Boolean(body.notifyOnPaymentNeedsReview),
       notifyOnCancellation: Boolean(body.notifyOnCancellation),
-      cancellationPolicy: body.cancellationPolicy,
       smsNotificationsEnabled: Boolean(body.smsNotificationsEnabled),
     });
     return Response.json(updated);

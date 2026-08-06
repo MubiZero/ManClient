@@ -69,10 +69,46 @@ describe("getAvailableStarts", () => {
         rangeEndsAt: new Date("2026-08-01T05:00:00.000Z"),
         durationMinutes: 30,
         intervalMinutes: 30,
+        // The fixture's Saturday is a fixed date, so the clock has to be fixed with it: a customer is
+        // never offered a slot that has already passed.
+        now: new Date("2026-08-01T03:00:00.000Z"),
       }),
     ).resolves.toEqual([
       new Date("2026-08-01T04:00:00.000Z"),
       new Date("2026-08-01T04:30:00.000Z"),
     ]);
+  });
+
+  it("does not offer a customer a slot that has already passed", async () => {
+    await expect(
+      getAvailableStarts({
+        branchId,
+        serviceId,
+        staffId,
+        resourceIds: [],
+        rangeStartsAt: new Date("2026-08-01T04:00:00.000Z"),
+        rangeEndsAt: new Date("2026-08-01T05:00:00.000Z"),
+        durationMinutes: 30,
+        intervalMinutes: 30,
+        now: new Date("2026-08-01T04:15:00.000Z"),
+      }),
+    ).resolves.toEqual([new Date("2026-08-01T04:30:00.000Z")]);
+  });
+
+  it("still offers a passed slot to staff, who may be recording a walk-in after the fact", async () => {
+    await expect(
+      getAvailableStarts({
+        branchId,
+        serviceId,
+        staffId,
+        resourceIds: [],
+        rangeStartsAt: new Date("2026-08-01T04:00:00.000Z"),
+        rangeEndsAt: new Date("2026-08-01T05:00:00.000Z"),
+        durationMinutes: 30,
+        intervalMinutes: 30,
+        actor: "staff",
+        now: new Date("2026-08-01T04:15:00.000Z"),
+      }),
+    ).resolves.toEqual([new Date("2026-08-01T04:00:00.000Z"), new Date("2026-08-01T04:30:00.000Z")]);
   });
 });

@@ -12,7 +12,6 @@ export async function getNotificationSettings(businessId: string) {
       notifyOnNewBooking: true,
       notifyOnPaymentNeedsReview: true,
       notifyOnCancellation: true,
-      cancellationPolicy: true,
       smsNotificationsEnabled: true,
       subscriptionPlan: true,
     },
@@ -26,7 +25,6 @@ export async function updateNotificationSettings(input: {
   notifyOnNewBooking: boolean;
   notifyOnPaymentNeedsReview: boolean;
   notifyOnCancellation: boolean;
-  cancellationPolicy?: string;
   smsNotificationsEnabled?: boolean;
 }) {
   const parsed = notificationSettingsSchema.safeParse({
@@ -34,7 +32,6 @@ export async function updateNotificationSettings(input: {
     notifyOnPaymentNeedsReview: input.notifyOnPaymentNeedsReview,
     notifyOnCancellation: input.notifyOnCancellation,
     smsNotificationsEnabled: input.smsNotificationsEnabled ?? false,
-    cancellationPolicy: input.cancellationPolicy,
   });
   if (!parsed.success) throw new SettingsError("INVALID_INPUT");
 
@@ -50,14 +47,12 @@ export async function updateNotificationSettings(input: {
         notifyOnNewBooking: parsed.data.notifyOnNewBooking,
         notifyOnPaymentNeedsReview: parsed.data.notifyOnPaymentNeedsReview,
         notifyOnCancellation: parsed.data.notifyOnCancellation,
-        cancellationPolicy: parsed.data.cancellationPolicy ?? null,
         smsNotificationsEnabled: parsed.data.smsNotificationsEnabled,
       },
       select: {
         notifyOnNewBooking: true,
         notifyOnPaymentNeedsReview: true,
         notifyOnCancellation: true,
-        cancellationPolicy: true,
         smsNotificationsEnabled: true,
       },
     });

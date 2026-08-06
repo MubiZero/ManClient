@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { MAX_BUFFER_MINUTES } from "@/core/availability/booking-window";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
 
 const idSchema = z.string().trim().min(1).max(128);
@@ -36,6 +37,27 @@ export const notificationSettingsSchema = z.object({
   notifyOnPaymentNeedsReview: z.boolean(),
   notifyOnCancellation: z.boolean(),
   smsNotificationsEnabled: z.boolean().default(false),
+}).strict();
+
+/**
+ * The booking rules a business enforces rather than describes. Every ceiling here is a deliberate
+ * guard rail: a 30-day minimum notice or a two-day booking horizon is far more likely to be a typo in
+ * the wrong unit than a real intention, and both would silently empty the public calendar.
+ *
+ * `null` means "no rule" for the horizon and the reschedule limit, and zero means it for notice and the
+ * change window — which is exactly how businesses behaved before these fields existed.
+ */
+export const bookingPolicySchema = z.object({
+  minLeadTimeMinutes: z.coerce.number().int().min(0).max(7 * 24 * 60),
+  maxAdvanceDays: z.preprocess(
+    value => value === "" || value === null ? undefined : value,
+    z.coerce.number().int().min(1).max(365).optional(),
+  ),
+  freeCancellationHours: z.coerce.number().int().min(0).max(14 * 24),
+  maxCustomerReschedules: z.preprocess(
+    value => value === "" || value === null ? undefined : value,
+    z.coerce.number().int().min(0).max(20).optional(),
+  ),
   cancellationPolicy: optionalText(500),
 }).strict();
 
@@ -65,6 +87,10 @@ export const serviceInputSchema = z.object({
   name: nameSchema,
   description: optionalText(1_000),
   durationMinutes: z.coerce.number().int().min(5).max(720),
+  // Capped at MAX_BUFFER_MINUTES: the occupancy query widens its range by exactly that much, so a
+  // larger buffer would be silently ignored by conflict detection.
+  bufferBeforeMinutes: z.coerce.number().int().min(0).max(MAX_BUFFER_MINUTES).default(0),
+  bufferAfterMinutes: z.coerce.number().int().min(0).max(MAX_BUFFER_MINUTES).default(0),
   amountSomoni: z.string().trim().regex(/^\d{1,7}(?:[.,]\d{1,2})?$/),
   staffIds: uniqueIds,
   resourceIds: uniqueIds,

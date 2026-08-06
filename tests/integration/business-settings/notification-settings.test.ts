@@ -33,34 +33,31 @@ describe("business notification settings", () => {
     await prisma.user.deleteMany({ where: { id: { in: userIds.splice(0) } } });
   });
 
-  it("defaults all notification toggles to enabled with no cancellation policy", async () => {
+  it("defaults all notification toggles to enabled", async () => {
     const settings = await getNotificationSettings(businessId);
     expect(settings).toEqual({
       notifyOnNewBooking: true,
       notifyOnPaymentNeedsReview: true,
       notifyOnCancellation: true,
-      cancellationPolicy: null,
       smsNotificationsEnabled: false,
       subscriptionPlan: "START",
       smsFeatureAvailable: false,
     });
   });
 
-  it("saves toggle states and the cancellation policy", async () => {
+  it("saves toggle states", async () => {
     const updated = await updateNotificationSettings({
       businessId,
       actorUserId,
       notifyOnNewBooking: false,
       notifyOnPaymentNeedsReview: true,
       notifyOnCancellation: false,
-      cancellationPolicy: "Отмена бесплатна за 24 часа.",
     });
 
     expect(updated).toEqual({
       notifyOnNewBooking: false,
       notifyOnPaymentNeedsReview: true,
       notifyOnCancellation: false,
-      cancellationPolicy: "Отмена бесплатна за 24 часа.",
       smsNotificationsEnabled: false,
     });
 
@@ -92,38 +89,6 @@ describe("business notification settings", () => {
     });
 
     expect(updated.smsNotificationsEnabled).toBe(true);
-  });
-
-  it("clears the cancellation policy when left blank", async () => {
-    await updateNotificationSettings({
-      businessId,
-      actorUserId,
-      notifyOnNewBooking: true,
-      notifyOnPaymentNeedsReview: true,
-      notifyOnCancellation: true,
-      cancellationPolicy: "Временная политика",
-    });
-    const cleared = await updateNotificationSettings({
-      businessId,
-      actorUserId,
-      notifyOnNewBooking: true,
-      notifyOnPaymentNeedsReview: true,
-      notifyOnCancellation: true,
-      cancellationPolicy: "",
-    });
-
-    expect(cleared.cancellationPolicy).toBeNull();
-  });
-
-  it("rejects a cancellation policy longer than 500 characters", async () => {
-    await expect(updateNotificationSettings({
-      businessId,
-      actorUserId,
-      notifyOnNewBooking: true,
-      notifyOnPaymentNeedsReview: true,
-      notifyOnCancellation: true,
-      cancellationPolicy: "a".repeat(501),
-    })).rejects.toMatchObject({ code: "INVALID_INPUT" } satisfies Partial<SettingsError>);
   });
 
   it("keeps staff from updating notification settings", async () => {

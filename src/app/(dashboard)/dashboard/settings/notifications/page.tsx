@@ -12,14 +12,13 @@ export default async function NotificationSettingsPage() {
       <PageHeader
         eyebrow="Настройки"
         title="Уведомления"
-        description="Выберите, о каких событиях бизнес получает уведомления, и укажите политику отмены записи для клиентов."
+        description="Выберите, о каких событиях бизнес получает уведомления. Правила отмены и переноса живут в разделе «Правила записи»."
       />
       <NotificationSettingsForm
         initial={{
           notifyOnNewBooking: settings.notifyOnNewBooking,
           notifyOnPaymentNeedsReview: settings.notifyOnPaymentNeedsReview,
           notifyOnCancellation: settings.notifyOnCancellation,
-          cancellationPolicy: settings.cancellationPolicy,
           smsNotificationsEnabled: settings.smsNotificationsEnabled,
           smsFeatureAvailable: settings.smsFeatureAvailable,
         }}

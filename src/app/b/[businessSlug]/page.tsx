@@ -8,6 +8,7 @@ import { prisma } from "@/core/database/prisma";
 import { businessHasFeature } from "@/core/platform/subscription-plans";
 import { getAverageRating } from "@/core/reviews/review-service";
 import { BookingForm } from "@/features/public-booking/booking-form";
+import { PolicyNotice } from "@/features/public-booking/policy-notice";
 import { PublicBrandMark } from "@/features/public-booking/public-brand-mark";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { resolveLocale, t } from "@/i18n/translate";
@@ -33,6 +34,10 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
       logoStorageKey: true,
       brandColor: true,
       cancellationPolicy: true,
+      minLeadTimeMinutes: true,
+      maxAdvanceDays: true,
+      freeCancellationHours: true,
+      maxCustomerReschedules: true,
       publicPageLocale: true,
       subscriptionPlan: true,
       branches: {
@@ -131,12 +136,16 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
               canRepeat={businessHasFeature(business.subscriptionPlan, "RECURRING_BOOKINGS")}
               canUsePromoCodes={businessHasFeature(business.subscriptionPlan, "PROMO_CODES")}
             />
-            {business.cancellationPolicy ? (
-              <p className="mt-6 rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                <strong className="font-medium text-foreground">{t(locale, "booking.cancellationPolicyLabel")}</strong>
-                {business.cancellationPolicy}
-              </p>
-            ) : null}
+            <PolicyNotice
+              locale={locale}
+              policy={{
+                minLeadTimeMinutes: business.minLeadTimeMinutes,
+                maxAdvanceDays: business.maxAdvanceDays,
+                freeCancellationHours: business.freeCancellationHours,
+                maxCustomerReschedules: business.maxCustomerReschedules,
+                cancellationPolicy: business.cancellationPolicy,
+              }}
+            />
           </>
         )}
       </div>

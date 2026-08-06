@@ -1,5 +1,6 @@
-import { BookingStatus, Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 
+import { findBlockingBooking } from "@/core/availability/booking-window";
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { redeemPromoCode, validatePromoCode } from "@/core/promotions/promo-code-service";
@@ -7,7 +8,6 @@ import { SettingsError } from "@/core/business-settings/settings-error";
 
 import type { ReserveAllocationInput } from "./booking-types";
 
-const ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED];
 const SERIALIZATION_RETRY_COUNT = 3;
 
 type BookingConflictCode = "RESOURCE_UNAVAILABLE" | "STAFF_UNAVAILABLE";
@@ -49,25 +49,30 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
 
     await assertAllocationBelongsToBranch(transaction, input);
 
-    const existingBooking = await transaction.booking.findFirst({
-      where: {
-        branchId: input.branchId,
-        status: { in: ACTIVE_BOOKING_STATUSES },
-        startsAt: { lt: endsAt },
-        endsAt: { gt: input.startsAt },
-        OR: [
-          { staffId: input.staffId },
-          ...(input.resourceIds.length > 0
-            ? [{ resources: { some: { resourceId: { in: input.resourceIds } } } }]
-            : []),
-        ],
-      },
-      include: { resources: true },
+    // Buffers are checked here and not only during the availability sweep: the sweep is advisory, this
+    // transaction is what actually decides, and a service that blocks cleaning time must not lose it to
+    // two customers submitting at the same moment.
+    const service = await transaction.service.findUniqueOrThrow({
+      where: { id: input.serviceId },
+      select: { bufferBeforeMinutes: true, bufferAfterMinutes: true },
     });
+    const existingBooking = await findBlockingBooking(
+      {
+        branchId: input.branchId,
+        staffId: input.staffId,
+        resourceIds: input.resourceIds,
+        rangeStartsAt: input.startsAt,
+        rangeEndsAt: endsAt,
+        startsAt: input.startsAt,
+        endsAt,
+        buffers: service,
+      },
+      transaction,
+    );
 
     if (existingBooking) {
-      const hasConflictingResource = existingBooking.resources.some((resource) =>
-        input.resourceIds.includes(resource.resourceId),
+      const hasConflictingResource = existingBooking.resourceIds.some((resourceId) =>
+        input.resourceIds.includes(resourceId),
       );
 
       throw new BookingConflictError(hasConflictingResource ? "RESOURCE_UNAVAILABLE" : "STAFF_UNAVAILABLE");

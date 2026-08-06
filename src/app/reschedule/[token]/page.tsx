@@ -37,6 +37,7 @@ export default async function ReschedulePage({ params }: { params: Promise<{ tok
           branchId={booking.branchId}
           serviceId={booking.serviceId}
           staffId={booking.staffId}
+          timeZone={booking.branch.timeZone}
         />
       </div>
     </main>

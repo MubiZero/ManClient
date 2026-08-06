@@ -179,6 +179,16 @@ model Business {
   notifyOnPaymentNeedsReview       Boolean                       @default(true)
   notifyOnCancellation             Boolean                       @default(true)
   cancellationPolicy               String?
+  /// How much notice a customer must give to book at all. Zero keeps same-minute booking, which is
+  /// what every existing business had before these fields existed.
+  minLeadTimeMinutes               Int                           @default(0)
+  /// How far ahead a customer may book. Null means no horizon — the pre-policy behaviour.
+  maxAdvanceDays                   Int?
+  /// Hours before the visit during which a customer may still cancel or reschedule it themselves.
+  /// Zero means always, which is the pre-policy behaviour. Staff are never bound by it.
+  freeCancellationHours            Int                           @default(0)
+  /// How many times one booking may be moved by the customer. Null means unlimited.
+  maxCustomerReschedules           Int?
   subscriptionPlan                 SubscriptionPlan              @default(START)
   smsNotificationsEnabled          Boolean                       @default(false)
   defaultCommissionPercent         Int?
@@ -443,6 +453,11 @@ model Service {
   name            String
   description     String?
   durationMinutes Int
+  /// Minutes of the specialist's and resources' time this service blocks before and after the visit
+  /// itself — setup, cleaning, a car leaving the box. Not shown to the customer as bookable time and
+  /// not charged; the slot simply stops being offered to anyone else.
+  bufferBeforeMinutes Int            @default(0)
+  bufferAfterMinutes  Int            @default(0)
   amountDiram     Int
   isPublished     Boolean           @default(false)
   archivedAt      DateTime?
@@ -494,6 +509,8 @@ model Booking {
   cancellationReason    String?
   seriesId              String?
   seriesIndex           Int?
+  /// Customer-initiated moves only, so a business rearranging its own day never exhausts the limit.
+  rescheduleCount       Int                    @default(0)
   business              Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
   branch                Branch                 @relation(fields: [branchId], references: [id], onDelete: Cascade)
   service               Service                @relation(fields: [serviceId], references: [id], onDelete: Restrict)

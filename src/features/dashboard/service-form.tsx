@@ -6,7 +6,7 @@ import { SubmitButton } from "@/features/ui-kit/submit-button";
 type Option = { id: string; name: string };
 type StaffOption = { id: string; displayName: string; branchNames: string[] };
 type ResourceOption = { id: string; name: string; branchId: string };
-type ServiceValue = { id: string; branchId: string; name: string; description: string | null; durationMinutes: number; amountDiram: number; isPublished: boolean; staffIds: string[]; resourceIds: string[] };
+type ServiceValue = { id: string; branchId: string; name: string; description: string | null; durationMinutes: number; bufferBeforeMinutes: number; bufferAfterMinutes: number; amountDiram: number; isPublished: boolean; staffIds: string[]; resourceIds: string[] };
 
 export function ServiceForm({ action, branches, staff, resources, service, error }: { action: (formData: FormData) => void | Promise<void>; branches: Option[]; staff: StaffOption[]; resources: ResourceOption[]; service?: ServiceValue; error?: string }) {
   const editing = Boolean(service);
@@ -27,6 +27,12 @@ export function ServiceForm({ action, branches, staff, resources, service, error
         </Field>
         <Field label="Длительность, минут"><Input name="durationMinutes" type="number" min={5} max={720} step={5} required defaultValue={service?.durationMinutes ?? 45} /></Field>
         <Field label="Стоимость, сомони"><Input name="amountSomoni" inputMode="decimal" required defaultValue={service ? (service.amountDiram / 100).toFixed(2) : ""} placeholder="50,00" /></Field>
+        <Field label="Подготовка до визита, минут" hint="Время занято у специалиста и ресурса, но клиенту не показывается и не оплачивается.">
+          <Input name="bufferBeforeMinutes" type="number" min={0} max={240} step={5} defaultValue={service?.bufferBeforeMinutes ?? 0} />
+        </Field>
+        <Field label="Уборка после визита, минут" hint="Например, мойка кресла или выезд машины из бокса.">
+          <Input name="bufferAfterMinutes" type="number" min={0} max={240} step={5} defaultValue={service?.bufferAfterMinutes ?? 0} />
+        </Field>
         <div className="sm:col-span-2">
           <Field label="Описание"><Textarea name="description" maxLength={1000} defaultValue={service?.description ?? ""} /></Field>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Bell, Building2, Calendar, Contact, CreditCard, Hourglass, LayoutDashboard, Menu, MessageCircle, Package, Palette, Percent, Plug, Receipt, Settings, Star, Ticket, Users } from "lucide-react";
+import { BarChart3, Bell, Building2, Calendar, Contact, CreditCard, Hourglass, LayoutDashboard, Menu, MessageCircle, Package, Palette, Percent, Plug, Receipt, Settings, Star, Ticket, Timer, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -27,6 +27,7 @@ const allItems: NavigationItem[] = [
   { href: "/dashboard/settings/staff", label: "Команда", group: "settings", icon: Users, mobile: "more" },
   { href: "/dashboard/settings/resources", label: "Ресурсы", group: "settings", icon: Package, mobile: "more" },
   { href: "/dashboard/settings/schedule", label: "Расписание", group: "settings", icon: Calendar, mobile: "more" },
+  { href: "/dashboard/settings/policies", label: "Правила записи", group: "settings", icon: Timer, mobile: "more", adminOnly: true },
   { href: "/dashboard/settings/integrations", label: "Интеграции", group: "settings", icon: Plug, mobile: "more" },
   { href: "/dashboard/settings/whatsapp", label: "WhatsApp", group: "settings", icon: MessageCircle, mobile: "more" },
   { href: "/dashboard/settings/notifications", label: "Уведомления", group: "settings", icon: Bell, mobile: "more" },

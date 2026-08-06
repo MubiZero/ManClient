@@ -98,4 +98,9 @@
   "booking.verification.expired": "Код истёк. Запросите новый.",
   "booking.verification.sendFailed": "Не удалось отправить код. Попробуйте ещё раз позже.",
   "booking.errors.rateLimited": "Слишком много попыток. Подождите немного и попробуйте снова.",
+  "booking.policy.title": "Правила записи",
+  "booking.policy.leadTime": "Запись открыта не позднее чем за {value} до визита.",
+  "booking.policy.horizon": "Записаться можно на срок до {days} дней вперёд.",
+  "booking.policy.cancellation": "Отменить или перенести визит самостоятельно можно не позднее чем за {hours} ч.",
+  "booking.policy.rescheduleLimit": "Перенести одну запись можно не более {count} раз(а).",
 }

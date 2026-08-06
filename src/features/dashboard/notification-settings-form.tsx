@@ -5,13 +5,11 @@ import { useState } from "react";
 import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Checkbox } from "@/features/ui-kit/checkbox";
-import { Field, Textarea } from "@/features/ui-kit/field";
 
 export type NotificationSettingsValue = {
   notifyOnNewBooking: boolean;
   notifyOnPaymentNeedsReview: boolean;
   notifyOnCancellation: boolean;
-  cancellationPolicy: string | null;
   smsNotificationsEnabled: boolean;
   smsFeatureAvailable: boolean;
 };
@@ -20,7 +18,6 @@ export function NotificationSettingsForm({ initial }: { initial: NotificationSet
   const [notifyOnNewBooking, setNotifyOnNewBooking] = useState(initial.notifyOnNewBooking);
   const [notifyOnPaymentNeedsReview, setNotifyOnPaymentNeedsReview] = useState(initial.notifyOnPaymentNeedsReview);
   const [notifyOnCancellation, setNotifyOnCancellation] = useState(initial.notifyOnCancellation);
-  const [cancellationPolicy, setCancellationPolicy] = useState(initial.cancellationPolicy ?? "");
   const [smsNotificationsEnabled, setSmsNotificationsEnabled] = useState(initial.smsNotificationsEnabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -38,7 +35,6 @@ export function NotificationSettingsForm({ initial }: { initial: NotificationSet
           notifyOnNewBooking,
           notifyOnPaymentNeedsReview,
           notifyOnCancellation,
-          cancellationPolicy,
           smsNotificationsEnabled,
         }),
       });
@@ -99,19 +95,6 @@ export function NotificationSettingsForm({ initial }: { initial: NotificationSet
           </label>
         </fieldset>
 
-        <Field
-          label="Политика отмены"
-          hint="Отображается клиентам на странице онлайн-записи. Оставьте пустым, чтобы не показывать."
-          htmlFor="cancellation-policy"
-        >
-          <Textarea
-            id="cancellation-policy"
-            value={cancellationPolicy}
-            onChange={(event) => setCancellationPolicy(event.target.value)}
-            maxLength={500}
-            placeholder="Например: отмена бесплатна не позднее чем за 24 часа до визита."
-          />
-        </Field>
 
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
         {notice ? <p className="text-sm text-primary" role="status">{notice}</p> : null}

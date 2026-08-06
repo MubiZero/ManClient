@@ -12,6 +12,8 @@ type ServiceInput = {
   name: string;
   description?: string;
   durationMinutes: string | number;
+  bufferBeforeMinutes?: string | number;
+  bufferAfterMinutes?: string | number;
   amountSomoni: string;
   staffIds: string[];
   resourceIds: string[];
@@ -39,12 +41,12 @@ async function saveService(input: ServiceInput & { serviceId?: string }) {
 
     let serviceId = input.serviceId;
     if (serviceId) {
-      const result = await transaction.service.updateMany({ where: { id: serviceId, branch: { businessId: input.businessId } }, data: { branchId: value.branchId, name: value.name, description: value.description, durationMinutes: value.durationMinutes, amountDiram, isPublished: value.isPublished } });
+      const result = await transaction.service.updateMany({ where: { id: serviceId, branch: { businessId: input.businessId } }, data: { branchId: value.branchId, name: value.name, description: value.description, durationMinutes: value.durationMinutes, bufferBeforeMinutes: value.bufferBeforeMinutes, bufferAfterMinutes: value.bufferAfterMinutes, amountDiram, isPublished: value.isPublished } });
       if (result.count !== 1) throw new SettingsError("NOT_FOUND");
       await transaction.service.update({ where: { id: serviceId }, data: { staffMembers: { set: value.staffIds.map(id => ({ id })) } } });
       await transaction.serviceResource.deleteMany({ where: { serviceId } });
     } else {
-      serviceId = (await transaction.service.create({ data: { branchId: value.branchId, name: value.name, description: value.description, durationMinutes: value.durationMinutes, amountDiram, isPublished: value.isPublished, staffMembers: { connect: value.staffIds.map(id => ({ id })) } }, select: { id: true } })).id;
+      serviceId = (await transaction.service.create({ data: { branchId: value.branchId, name: value.name, description: value.description, durationMinutes: value.durationMinutes, bufferBeforeMinutes: value.bufferBeforeMinutes, bufferAfterMinutes: value.bufferAfterMinutes, amountDiram, isPublished: value.isPublished, staffMembers: { connect: value.staffIds.map(id => ({ id })) } }, select: { id: true } })).id;
     }
     if (value.resourceIds.length) await transaction.serviceResource.createMany({ data: value.resourceIds.map(resourceId => ({ serviceId: serviceId!, resourceId })) });
     await writeAuditEvent({ businessId: input.businessId, type: input.serviceId ? "service.updated" : "service.created", actorType: "USER", actorId: input.actorUserId, metadata: { serviceId } }, transaction);
@@ -55,7 +57,7 @@ async function saveService(input: ServiceInput & { serviceId?: string }) {
 export async function duplicateService(input: { businessId: string; actorUserId: string; serviceId: string }) {
   const source = await prisma.service.findFirst({ where: { id: input.serviceId, branch: { businessId: input.businessId }, archivedAt: null }, include: { staffMembers: true, resources: true } });
   if (!source) throw new SettingsError("NOT_FOUND");
-  return createService({ businessId: input.businessId, actorUserId: input.actorUserId, branchId: source.branchId, name: `${source.name}, копия`, description: source.description ?? undefined, durationMinutes: source.durationMinutes, amountSomoni: (source.amountDiram / 100).toFixed(2), staffIds: source.staffMembers.map(item => item.id), resourceIds: source.resources.map(item => item.resourceId), isPublished: false });
+  return createService({ businessId: input.businessId, actorUserId: input.actorUserId, branchId: source.branchId, name: `${source.name}, копия`, description: source.description ?? undefined, durationMinutes: source.durationMinutes, bufferBeforeMinutes: source.bufferBeforeMinutes, bufferAfterMinutes: source.bufferAfterMinutes, amountSomoni: (source.amountDiram / 100).toFixed(2), staffIds: source.staffMembers.map(item => item.id), resourceIds: source.resources.map(item => item.resourceId), isPublished: false });
 }
 
 export function archiveService(input: { businessId: string; actorUserId: string; serviceId: string }) { return setArchived(input, true); }
@@ -77,5 +79,5 @@ async function setArchived(input: { businessId: string; actorUserId: string; ser
 }
 
 function pickInput(input: ServiceInput) {
-  return { branchId: input.branchId, name: input.name, description: input.description, durationMinutes: input.durationMinutes, amountSomoni: input.amountSomoni, staffIds: input.staffIds, resourceIds: input.resourceIds, isPublished: input.isPublished };
+  return { branchId: input.branchId, name: input.name, description: input.description, durationMinutes: input.durationMinutes, bufferBeforeMinutes: input.bufferBeforeMinutes ?? 0, bufferAfterMinutes: input.bufferAfterMinutes ?? 0, amountSomoni: input.amountSomoni, staffIds: input.staffIds, resourceIds: input.resourceIds, isPublished: input.isPublished };
 }

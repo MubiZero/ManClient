@@ -63,7 +63,10 @@ export default async function ServicesPage({ searchParams }: PageProps) {
               <TableRow key={item.id}>
                 <TableCell className="font-medium text-foreground">{item.name}</TableCell>
                 <TableCell className="text-muted-foreground">
-                  {item.branch.name} · {item.durationMinutes} мин · {formatSomoni(item.amountDiram)}
+                  {item.branch.name} · {item.durationMinutes} мин
+                  {item.bufferBeforeMinutes || item.bufferAfterMinutes
+                    ? ` (+${item.bufferBeforeMinutes + item.bufferAfterMinutes} мин на подготовку)`
+                    : ""} · {formatSomoni(item.amountDiram)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {item.staffMembers.length ? item.staffMembers.map((person) => person.displayName).join(", ") : "Специалист не назначен"}
@@ -124,7 +127,7 @@ export default async function ServicesPage({ searchParams }: PageProps) {
             branches={branches}
             staff={formStaff}
             resources={resources}
-            service={{ id: editing.id, branchId: editing.branchId, name: editing.name, description: editing.description, durationMinutes: editing.durationMinutes, amountDiram: editing.amountDiram, isPublished: editing.isPublished, staffIds: editing.staffMembers.map((item) => item.id), resourceIds: editing.resources.map((item) => item.resourceId) }}
+            service={{ id: editing.id, branchId: editing.branchId, name: editing.name, description: editing.description, durationMinutes: editing.durationMinutes, bufferBeforeMinutes: editing.bufferBeforeMinutes, bufferAfterMinutes: editing.bufferAfterMinutes, amountDiram: editing.amountDiram, isPublished: editing.isPublished, staffIds: editing.staffMembers.map((item) => item.id), resourceIds: editing.resources.map((item) => item.resourceId) }}
             error={errorMessage(query.error)}
           />
         ) : null}
@@ -144,7 +147,7 @@ export default async function ServicesPage({ searchParams }: PageProps) {
   );
 }
 
-function serviceValues(formData: FormData) { return { branchId: String(formData.get("branchId") ?? ""), name: String(formData.get("name") ?? ""), description: String(formData.get("description") ?? ""), durationMinutes: String(formData.get("durationMinutes") ?? ""), amountSomoni: String(formData.get("amountSomoni") ?? ""), staffIds: formData.getAll("staffIds").map(String), resourceIds: formData.getAll("resourceIds").map(String), isPublished: formData.get("isPublished") === "true" }; }
+function serviceValues(formData: FormData) { return { branchId: String(formData.get("branchId") ?? ""), name: String(formData.get("name") ?? ""), description: String(formData.get("description") ?? ""), durationMinutes: String(formData.get("durationMinutes") ?? ""), bufferBeforeMinutes: String(formData.get("bufferBeforeMinutes") ?? "0"), bufferAfterMinutes: String(formData.get("bufferAfterMinutes") ?? "0"), amountSomoni: String(formData.get("amountSomoni") ?? ""), staffIds: formData.getAll("staffIds").map(String), resourceIds: formData.getAll("resourceIds").map(String), isPublished: formData.get("isPublished") === "true" }; }
 function errorCode(error: unknown) { return error instanceof SettingsError ? error.code : "INVALID_INPUT"; }
 function errorMessage(code?: string) { return ({ INVALID_INPUT: "Проверьте поля и выбирайте сотрудников и ресурсы из филиала услуги.", CANNOT_PUBLISH: "Для публикации назначьте специалиста и настройте рабочий график.", FUTURE_BOOKINGS: "Сначала перенесите или отмените будущие записи на эту услугу.", NOT_FOUND: "Услуга не найдена или уже недоступна." } as Record<string, string>)[code ?? ""]; }
 function noticeMessage(code?: string) { return ({ created: "Услуга создана", updated: "Изменения сохранены", archived: "Услуга архивирована", restored: "Услуга восстановлена", duplicated: "Создана копия услуги" } as Record<string, string>)[code ?? ""]; }

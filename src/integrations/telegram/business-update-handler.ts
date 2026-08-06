@@ -1,4 +1,5 @@
 import { createPendingBooking } from "@/core/bookings/booking-service";
+import { BookingPolicyError } from "@/core/bookings/booking-policy";
 import {
   conversationMessage,
   getActiveConversationSession,
@@ -294,6 +295,9 @@ async function renderState(
       rangeEndsAt: localDateTimeToUtc(nextDate(date), "00:00", branch.timeZone),
       durationMinutes: service.durationMinutes,
       intervalMinutes: 30,
+      // The handler's clock is injected; passing it on is what makes the booking policy — and the rule
+      // that a customer is never offered a time that has already passed — measured against the same now.
+      now: dependencies.now(),
     });
     await sendOptions(chatId, locale, "SLOT", starts.map(startsAt => ({ text: formatVisitTime(startsAt, branch.timeZone), kind: "SELECT_SLOT", payload: { startsAt: startsAt.toISOString() } })), businessId, conversationId, expiresAt, dependencies, page, 3);
     return;
@@ -530,7 +534,18 @@ async function handleCustomerAction(
   if (kind === "CLIENT_CANCEL_CONFIRM") {
     const booking = await prisma.booking.findFirst({ where: { id: payload.bookingId, businessId, customer: { telegramChatId: chatId } }, select: { customerId: true } });
     if (!booking) throw new Error("Booking is unavailable");
-    await cancelBooking({ bookingId: payload.bookingId, actor: { type: "customer", customerId: booking.customerId } }, dependencies.now());
+    try {
+      await cancelBooking({ bookingId: payload.bookingId, actor: { type: "customer", customerId: booking.customerId } }, dependencies.now());
+    } catch (error) {
+      if (!(error instanceof BookingPolicyError)) throw error;
+      await dependencies.sendMessage(
+        chatId,
+        locale === "tg"
+          ? `Сабтро камтар аз ${error.limit ?? 0} соат пеш аз ташриф бекор кардан мумкин нест. Лутфан бо мо тамос гиред.`
+          : `Отменить запись можно не позднее чем за ${error.limit ?? 0} ч до визита. Свяжитесь с бизнесом напрямую.`,
+      );
+      return true;
+    }
     await dependencies.sendMessage(chatId, locale === "tg" ? "Сабт бекор шуд. Вақт боз дастрас аст." : "Запись отменена. Время снова доступно.");
     return true;
   }
@@ -555,7 +570,7 @@ async function handleCustomerAction(
     if (!booking) throw new Error("Booking is unavailable");
     const date = required(payload.date);
     const rangeStartsAt = localDateTimeToUtc(date, "00:00", booking.branch.timeZone);
-    const starts = await getAvailableStarts({ branchId: booking.branchId, serviceId: booking.serviceId, staffId: booking.staffId, resourceIds: booking.resources.map(item => item.resourceId), rangeStartsAt, rangeEndsAt: localDateTimeToUtc(nextDate(date), "00:00", booking.branch.timeZone), durationMinutes: booking.service.durationMinutes, intervalMinutes: 30, excludeBookingId: booking.id });
+    const starts = await getAvailableStarts({ branchId: booking.branchId, serviceId: booking.serviceId, staffId: booking.staffId, resourceIds: booking.resources.map(item => item.resourceId), rangeStartsAt, rangeEndsAt: localDateTimeToUtc(nextDate(date), "00:00", booking.branch.timeZone), durationMinutes: booking.service.durationMinutes, intervalMinutes: 30, excludeBookingId: booking.id, now: dependencies.now() });
     if (!starts.length) {
       const actions = await actionButtons(businessId, conversationId, session.expiresAt, [
         { text: locale === "tg" ? "Интихоби рӯзи дигар" : "Выбрать другой день", kind: "CLIENT_RESCHEDULE_BEGIN", payload: { bookingId: booking.id } },
@@ -580,12 +595,30 @@ async function handleCustomerAction(
   if (kind === "CLIENT_RESCHEDULE_SLOT") {
     const booking = await prisma.booking.findFirst({ where: { id: payload.bookingId, businessId, customer: { telegramChatId: chatId } }, select: { customerId: true } });
     if (!booking) throw new Error("Booking is unavailable");
-    await rescheduleBooking({ bookingId: payload.bookingId, customerId: booking.customerId, startsAt: new Date(required(payload.startsAt)) });
+    try {
+      await rescheduleBooking({ bookingId: payload.bookingId, customerId: booking.customerId, startsAt: new Date(required(payload.startsAt)) }, dependencies.now());
+    } catch (error) {
+      if (!(error instanceof BookingPolicyError)) throw error;
+      await dependencies.sendMessage(chatId, reschedulePolicyText(error, locale));
+      return true;
+    }
     await dependencies.sendMessage(chatId, locale === "tg" ? "Вақти сабт иваз шуд." : "Запись перенесена на новое время.");
     await renderCustomerBookingCard(businessId, conversationId, chatId, payload.bookingId, dependencies);
     return true;
   }
   return false;
+}
+
+/** Names the rule that refused the move, so the customer knows to call rather than tap again. */
+function reschedulePolicyText(error: BookingPolicyError, locale: ConversationLocale): string {
+  if (error.code === "RESCHEDULE_LIMIT_REACHED") {
+    return locale === "tg"
+      ? `Ин сабт аллакай ${error.limit ?? 0} бор иваз шудааст. Лутфан бо мо тамос гиред.`
+      : `Эту запись уже переносили ${error.limit ?? 0} раз(а). Свяжитесь с бизнесом, если время не подходит.`;
+  }
+  return locale === "tg"
+    ? `Сабтро камтар аз ${error.limit ?? 0} соат пеш аз ташриф иваз кардан мумкин нест. Лутфан бо мо тамос гиред.`
+    : `Перенести запись можно не позднее чем за ${error.limit ?? 0} ч до визита. Свяжитесь с бизнесом напрямую.`;
 }
 
 function selectedService(businessId: string, data: ConversationData) {

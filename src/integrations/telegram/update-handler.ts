@@ -4,6 +4,7 @@ import {
   verifyCustomerBookingToken,
 } from "@/core/bookings/booking-action-token";
 import { cancelBooking } from "@/core/bookings/cancel-booking";
+import { BookingPolicyError } from "@/core/bookings/booking-policy";
 import { prisma } from "@/core/database/prisma";
 import { recognizeDushanbeCityReceipt } from "@/core/payments/dushanbe-city-receipt-recognizer";
 import { ReceiptSubmissionError, submitReceiptImage } from "@/core/payments/receipt-submission-service";
@@ -48,7 +49,13 @@ export async function handleTelegramUpdate(businessId: string, update: TelegramU
       });
       await cancelBooking({ bookingId: action.bookingId, actor: { type: "customer", customerId: booking.customerId } }, dependencies.now());
       await dependencies.sendMessage(chatId, "Запись отменена. Освободившееся время снова доступно.");
-    } catch {
+    } catch (error) {
+      // A closed cancellation window is not a broken link, and telling the customer it is would send
+      // them to press the button again instead of calling the business.
+      if (error instanceof BookingPolicyError) {
+        await dependencies.sendMessage(chatId, `Отменить запись можно не позднее чем за ${error.limit ?? 0} ч до визита. Свяжитесь с бизнесом напрямую.`);
+        return;
+      }
       await dependencies.sendMessage(chatId, "Не удалось отменить запись по этой кнопке. Возможно, ссылка истекла.");
     }
     return;

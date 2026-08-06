@@ -94,6 +94,8 @@ describe("editable business schedules", () => {
       rangeEndsAt: new Date("2026-08-03T19:00:00.000Z"),
       durationMinutes: 30,
       intervalMinutes: 30,
+      // Fixed dates need a fixed clock now that the booking policy refuses slots behind "now".
+      now: new Date("2026-08-02T18:00:00.000Z"),
     });
   }
 });

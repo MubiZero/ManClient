@@ -98,4 +98,9 @@
   "booking.verification.expired": "Мӯҳлати код гузашт. Коди нав дархост кунед.",
   "booking.verification.sendFailed": "Код фиристода нашуд. Баъдтар бори дигар кӯшиш кунед.",
   "booking.errors.rateLimited": "Кӯшишҳо аз ҳад зиёд. Каме интизор шавед ва аз нав кӯшиш кунед.",
+  "booking.policy.title": "Қоидаҳои сабт",
+  "booking.policy.leadTime": "Сабт то {value} пеш аз ташриф кушода аст.",
+  "booking.policy.horizon": "То {days} рӯз пеш сабт кардан мумкин аст.",
+  "booking.policy.cancellation": "Бекор кардан ё иваз кардани ташриф то {hours} соат пеш имконпазир аст.",
+  "booking.policy.rescheduleLimit": "Як сабтро на бештар аз {count} бор иваз кардан мумкин аст.",
 }

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Field, Input } from "@/features/ui-kit/field";
 
-export function RescheduleForm({ token, branchId, serviceId, staffId }: { token: string; branchId: string; serviceId: string; staffId: string }) {
+export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone }: { token: string; branchId: string; serviceId: string; staffId: string; timeZone: string }) {
   const [starts, setStarts] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const requestRef = useRef<AbortController | null>(null);
@@ -36,7 +36,14 @@ export function RescheduleForm({ token, branchId, serviceId, staffId }: { token:
   async function select(startsAt: string) {
     const response = await fetch("/api/bookings/reschedule", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, startsAt }) });
     if (response.ok) { setStarts([]); setMessage("Запись перенесена. Новое время сохранено."); return; }
-    setMessage(response.status === 409 ? "Это время только что заняли. Выберите другой слот." : "Ссылка истекла или запись уже недоступна для переноса.");
+    if (response.status === 409) { setMessage("Это время только что заняли. Выберите другой слот."); return; }
+    if (response.status === 422) {
+      const data = (await response.json()) as { error?: string; limit?: number };
+      setStarts([]);
+      setMessage(policyMessage(data.error, data.limit));
+      return;
+    }
+    setMessage("Ссылка истекла или запись уже недоступна для переноса.");
   }
 
   return (
@@ -61,7 +68,7 @@ export function RescheduleForm({ token, branchId, serviceId, staffId }: { token:
                 onClick={() => void select(value)}
                 className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/50 hover:bg-secondary"
               >
-                {new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Dushanbe", hour: "2-digit", minute: "2-digit" }).format(new Date(value))}
+                {new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(value))}
               </button>
             ))}
           </div>
@@ -74,4 +81,18 @@ export function RescheduleForm({ token, branchId, serviceId, staffId }: { token:
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * The refusal has to name the rule. "Перенос недоступен" sends the customer to the phone; "не позднее
+ * чем за 4 часа" tells them what happened and that the business can still help.
+ */
+function policyMessage(code: string | undefined, limit: number | undefined): string {
+  if (code === "RESCHEDULE_LIMIT_REACHED") {
+    return `Эту запись уже переносили ${limit ?? 0} раз(а) — больше переносов бизнес не разрешает. Свяжитесь с бизнесом, если время не подходит.`;
+  }
+  if (code === "RESCHEDULE_WINDOW_CLOSED") {
+    return `Перенести запись можно не позднее чем за ${limit ?? 0} ч до визита. Свяжитесь с бизнесом напрямую.`;
+  }
+  return "Перенос этой записи сейчас недоступен. Свяжитесь с бизнесом напрямую.";
 }

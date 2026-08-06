@@ -80,6 +80,10 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
     rangeEndsAt: new Date(validatedInput.startsAt.getTime() + service.durationMinutes * 60_000),
     durationMinutes: service.durationMinutes,
     intervalMinutes: service.durationMinutes,
+    // Public and Telegram bookings are the customer's own: minimum notice, booking horizon and service
+    // buffers all apply, and the injected clock is what the policy is measured against.
+    actor: "customer",
+    now,
   });
   if (availableStarts.length !== 1) {
     throw new BookingValidationError("Selected slot is outside working hours or unavailable");

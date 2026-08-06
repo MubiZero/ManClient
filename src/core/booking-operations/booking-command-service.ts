@@ -190,12 +190,19 @@ export async function getBusinessBookingAvailableStarts(
     durationMinutes: booking.service.durationMinutes,
     intervalMinutes: 30,
     excludeBookingId: booking.id,
+    // The dashboard is staff acting on their own calendar: the minimum-notice and booking-horizon rules
+    // exist to shape what customers may do, not to stop a receptionist moving today's visit by an hour.
+    actor: "staff",
   });
   return { starts, timeZone: booking.branch.timeZone };
 }
 
-export async function assertAvailable(input: { branchId: string; serviceId: string; staffId: string; resourceIds: string[]; startsAt: Date; durationMinutes: number; excludeBookingId?: string }) {
-  const starts = await getAvailableStarts({ ...input, rangeStartsAt: input.startsAt, rangeEndsAt: new Date(input.startsAt.getTime() + input.durationMinutes * 60_000), intervalMinutes: input.durationMinutes });
+/**
+ * `actor` defaults to staff because the dashboard is this function's main caller. A public caller must
+ * pass `"customer"` explicitly so the business's minimum-notice and horizon rules apply.
+ */
+export async function assertAvailable(input: { branchId: string; serviceId: string; staffId: string; resourceIds: string[]; startsAt: Date; durationMinutes: number; excludeBookingId?: string; actor?: "customer" | "staff"; now?: Date }) {
+  const starts = await getAvailableStarts({ ...input, rangeStartsAt: input.startsAt, rangeEndsAt: new Date(input.startsAt.getTime() + input.durationMinutes * 60_000), intervalMinutes: input.durationMinutes, actor: input.actor ?? "staff" });
   if (starts.length !== 1) throw new BookingOperationError("SLOT_UNAVAILABLE");
 }
 

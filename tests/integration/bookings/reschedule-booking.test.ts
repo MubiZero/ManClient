@@ -25,7 +25,9 @@ describe("rescheduleBooking", () => {
       bookingId: booking.bookingId,
       customerId: customer.id,
       startsAt: new Date("2026-08-02T06:00:00.000Z"),
-    })).resolves.toMatchObject({ startsAt: new Date("2026-08-02T06:00:00.000Z") });
+      // The clock is injected because the booking policy is measured against it: without it the fixture's
+      // fixed dates sit in the past and the move is refused, correctly, as a booking behind "now".
+    }, new Date("2026-08-01T04:00:00.000Z"))).resolves.toMatchObject({ startsAt: new Date("2026-08-02T06:00:00.000Z") });
   });
 
   it("allows only one of two concurrent moves into the same slot", async () => {
@@ -38,8 +40,8 @@ describe("rescheduleBooking", () => {
     ]);
 
     const results = await Promise.allSettled([
-      rescheduleBooking({ bookingId: first.bookingId, customerId: firstCustomer.id, startsAt: new Date("2026-08-02T07:00:00.000Z") }),
-      rescheduleBooking({ bookingId: second.bookingId, customerId: secondCustomer.id, startsAt: new Date("2026-08-02T07:00:00.000Z") }),
+      rescheduleBooking({ bookingId: first.bookingId, customerId: firstCustomer.id, startsAt: new Date("2026-08-02T07:00:00.000Z") }, new Date("2026-08-01T04:00:00.000Z")),
+      rescheduleBooking({ bookingId: second.bookingId, customerId: secondCustomer.id, startsAt: new Date("2026-08-02T07:00:00.000Z") }, new Date("2026-08-01T04:00:00.000Z")),
     ]);
 
     expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
