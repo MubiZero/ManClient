@@ -12,7 +12,7 @@ export default async function BookingPolicyPage() {
       <PageHeader
         eyebrow="Настройки"
         title="Правила записи"
-        description="Насколько заранее клиенты записываются, на сколько дней открыт календарь и когда клиент ещё может отменить визит сам. Правила действуют на публичной странице и в клиентском боте; сотрудники в кабинете ими не ограничены."
+        description="Насколько заранее клиенты записываются, на сколько дней открыт календарь, сколько нужно оплатить при записи и когда клиент ещё может отменить визит сам. Правила действуют на публичной странице и в клиентском боте; сотрудники в кабинете ими не ограничены."
       />
       <BookingPolicyForm
         initial={{
@@ -21,6 +21,9 @@ export default async function BookingPolicyPage() {
           freeCancellationHours: settings.freeCancellationHours,
           maxCustomerReschedules: settings.maxCustomerReschedules,
           cancellationPolicy: settings.cancellationPolicy,
+          prepaymentMode: settings.prepaymentMode,
+          depositPercent: settings.depositPercent,
+          depositAmountDiram: settings.depositAmountDiram,
         }}
       />
     </>

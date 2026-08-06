@@ -38,6 +38,9 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
       maxAdvanceDays: true,
       freeCancellationHours: true,
       maxCustomerReschedules: true,
+      prepaymentMode: true,
+      depositPercent: true,
+      depositAmountDiram: true,
       publicPageLocale: true,
       subscriptionPlan: true,
       branches: {
@@ -145,6 +148,9 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
                 freeCancellationHours: business.freeCancellationHours,
                 maxCustomerReschedules: business.maxCustomerReschedules,
                 cancellationPolicy: business.cancellationPolicy,
+                prepaymentMode: business.prepaymentMode,
+                depositPercent: business.depositPercent,
+                depositAmountDiram: business.depositAmountDiram,
               }}
             />
           </>

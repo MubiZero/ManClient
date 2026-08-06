@@ -6,7 +6,7 @@ import { SubmitButton } from "@/features/ui-kit/submit-button";
 type Option = { id: string; name: string };
 type StaffOption = { id: string; displayName: string; branchNames: string[] };
 type ResourceOption = { id: string; name: string; branchId: string };
-type ServiceValue = { id: string; branchId: string; name: string; description: string | null; durationMinutes: number; bufferBeforeMinutes: number; bufferAfterMinutes: number; amountDiram: number; isPublished: boolean; staffIds: string[]; resourceIds: string[] };
+type ServiceValue = { id: string; branchId: string; name: string; description: string | null; durationMinutes: number; bufferBeforeMinutes: number; bufferAfterMinutes: number; amountDiram: number; prepaymentMode: "FULL" | "DEPOSIT" | "NONE" | null; depositPercent: number | null; depositAmountDiram: number | null; isPublished: boolean; staffIds: string[]; resourceIds: string[] };
 
 export function ServiceForm({ action, branches, staff, resources, service, error }: { action: (formData: FormData) => void | Promise<void>; branches: Option[]; staff: StaffOption[]; resources: ResourceOption[]; service?: ServiceValue; error?: string }) {
   const editing = Boolean(service);
@@ -33,6 +33,25 @@ export function ServiceForm({ action, branches, staff, resources, service, error
         <Field label="Уборка после визита, минут" hint="Например, мойка кресла или выезд машины из бокса.">
           <Input name="bufferAfterMinutes" type="number" min={0} max={240} step={5} defaultValue={service?.bufferAfterMinutes ?? 0} />
         </Field>
+        <div className="sm:col-span-2">
+          <fieldset className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-3">
+            <legend className="px-1.5 text-sm font-semibold text-foreground">Предоплата этой услуги</legend>
+            <Field label="Правило" hint="По умолчанию — как настроено для всего бизнеса.">
+              <Select name="prepaymentMode" defaultValue={service?.prepaymentMode ?? ""}>
+                <option value="">По правилам бизнеса</option>
+                <option value="FULL">Полная стоимость</option>
+                <option value="DEPOSIT">Депозит</option>
+                <option value="NONE">Оплата на месте</option>
+              </Select>
+            </Field>
+            <Field label="Депозит, %" hint="Учитывается только при правиле «Депозит».">
+              <Input name="depositPercent" type="number" min={1} max={100} defaultValue={service?.depositPercent ?? ""} placeholder="30" />
+            </Field>
+            <Field label="Депозит, сомони" hint="Если заполнено, используется вместо процента.">
+              <Input name="depositSomoni" inputMode="decimal" defaultValue={service?.depositAmountDiram === null || service?.depositAmountDiram === undefined ? "" : (service.depositAmountDiram / 100).toFixed(2)} placeholder="50,00" />
+            </Field>
+          </fieldset>
+        </div>
         <div className="sm:col-span-2">
           <Field label="Описание"><Textarea name="description" maxLength={1000} defaultValue={service?.description ?? ""} /></Field>
         </div>

@@ -13,6 +13,7 @@ import { intlLocale, moneyLocale, t } from "@/i18n/translate";
 
 type PaymentView = {
   amountDiram: number;
+  totalDiram: number;
   status: string;
   reviewDeadline: Date | string | null;
   booking: {
@@ -37,7 +38,8 @@ export function PaymentPage({
 }: {
   token: string;
   initialPayment: PaymentView;
-  paymentUrl: string;
+  /** Absent when nothing is due: a business paid on the premises has no card to transfer to. */
+  paymentUrl: string | null;
   locale: SupportedLocale;
 }) {
   const [payment, setPayment] = useState(initialPayment);
@@ -46,6 +48,10 @@ export function PaymentPage({
   const [now, setNow] = useState(() => Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
   const complete = payment.status === "RECEIPT_ACCEPTED" || payment.booking.status === "CONFIRMED";
+  const prepaymentSkipped = payment.status === "NOT_REQUIRED";
+  // What the business collects at the visit: the whole price when no deposit was taken, the remainder
+  // when one was. Zero once the price has been transferred in full.
+  const balanceDiram = Math.max(0, payment.totalDiram - payment.amountDiram);
   const reviewing = ["RECEIPT_PROCESSING", "NEEDS_ATTENTION"].includes(payment.status);
   const rejected = payment.status === "REJECTED";
   const remainingHold = getRemainingHold(payment.booking.expiresAt, now);
@@ -143,7 +149,7 @@ export function PaymentPage({
                   <>
                     <span className="line-through">
                       {formatSomoni(
-                        payment.amountDiram + payment.booking.promoRedemption.discountAppliedDiram,
+                        payment.totalDiram + payment.booking.promoRedemption.discountAppliedDiram,
                         moneyLocale(locale),
                       )}
                     </span>
@@ -153,11 +159,18 @@ export function PaymentPage({
                         amount: formatSomoni(payment.booking.promoRedemption.discountAppliedDiram, moneyLocale(locale)),
                       })}
                     </span>
-                    <span className="font-medium text-foreground">{formatSomoni(payment.amountDiram, moneyLocale(locale))}</span>
+                    <span className="font-medium text-foreground">{formatSomoni(payment.totalDiram, moneyLocale(locale))}</span>
                   </>
                 ) : (
-                  <span className="font-medium text-foreground">{formatSomoni(payment.amountDiram, moneyLocale(locale))}</span>
+                  <span className="font-medium text-foreground">{formatSomoni(payment.totalDiram, moneyLocale(locale))}</span>
                 )}
+                {balanceDiram > 0 ? (
+                  <span>
+                    {payment.amountDiram > 0
+                      ? t(locale, "payment.depositLine", { due: formatSomoni(payment.amountDiram, moneyLocale(locale)), balance: formatSomoni(balanceDiram, moneyLocale(locale)) })
+                      : t(locale, "payment.onSiteLine", { balance: formatSomoni(balanceDiram, moneyLocale(locale)) })}
+                  </span>
+                ) : null}
               </div>
             </div>
 
@@ -166,7 +179,7 @@ export function PaymentPage({
                 role="status"
                 tone="success"
                 title={t(locale, "payment.completeTitle")}
-                description={t(locale, "payment.completeDescription")}
+                description={t(locale, prepaymentSkipped ? "payment.notRequiredDescription" : "payment.completeDescription")}
               />
             ) : reviewing ? (
               <StatusPanel
@@ -205,9 +218,11 @@ export function PaymentPage({
                   <li>{t(locale, "payment.steps.return")}</li>
                   <li>{t(locale, "payment.steps.attach")}</li>
                 </ol>
-                <ButtonLink href={paymentUrl} target="_blank" rel="noreferrer" size="lg">
-                  {t(locale, "payment.payCta", { amount: formatSomoni(payment.amountDiram, moneyLocale(locale)) })}
-                </ButtonLink>
+                {paymentUrl ? (
+                  <ButtonLink href={paymentUrl} target="_blank" rel="noreferrer" size="lg">
+                    {t(locale, "payment.payCta", { amount: formatSomoni(payment.amountDiram, moneyLocale(locale)) })}
+                  </ButtonLink>
+                ) : null}
                 <label className="flex cursor-pointer flex-col gap-1 rounded-md border border-dashed border-border p-4 text-sm transition-colors hover:border-primary/50">
                   <span className="font-medium text-foreground">
                     {uploading ? t(locale, "payment.checkingImage") : t(locale, "payment.attachReceipt")}

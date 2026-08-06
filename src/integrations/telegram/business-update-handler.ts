@@ -208,7 +208,21 @@ async function handleAction(
     if (await handleCustomerAction(businessId, conversationId, chatId, action.kind, action.payload as Record<string, string>, dependencies)) return;
     let payload = action.payload;
     if (action.kind === "CONFIRM_BOOKING") {
-      payload = await createBookingForConversation(businessId, conversationId, chatId, dependencies.now());
+      const created = await createBookingForConversation(businessId, conversationId, chatId, dependencies.now());
+      // A business that takes payment on the premises has nothing to wait for, so the conversation skips
+      // the "pay, then send the receipt" leg entirely instead of asking for a transfer of nothing.
+      if (created.dueDiram === 0) {
+        await replaceConversationSession(
+          businessId,
+          conversationId,
+          "COMPLETE",
+          { ...created.data, bookingId: created.bookingId, paymentId: created.paymentId },
+          sessionExpiry(dependencies.now()),
+        );
+        await renderState(businessId, conversationId, chatId, dependencies);
+        return;
+      }
+      payload = { bookingId: created.bookingId, paymentId: created.paymentId };
     }
     await advanceAndRender(businessId, conversationId, chatId, action.kind, payload, dependencies);
   } catch {
@@ -328,7 +342,23 @@ async function renderState(
     ]));
     return;
   }
+  if (session.state === "COMPLETE" && session.data.paymentId) {
+    await dependencies.sendMessage(chatId, `${conversationMessage(locale, "COMPLETE")}${await balanceNotice(session.data.paymentId, locale)}`);
+    return;
+  }
   await dependencies.sendMessage(chatId, conversationMessage(locale, session.state));
+}
+
+/**
+ * What the customer still owes when the visit happens. Silent when the whole price has already been
+ * transferred — a "0 сомони to pay" line reads as a mistake.
+ */
+async function balanceNotice(paymentId: string, locale: ConversationLocale): Promise<string> {
+  const payment = await prisma.payment.findUnique({ where: { id: paymentId }, select: { amountDiram: true, totalDiram: true } });
+  const balanceDiram = Math.max(0, (payment?.totalDiram ?? 0) - (payment?.amountDiram ?? 0));
+  if (balanceDiram === 0) return "";
+  const amount = (balanceDiram / 100).toFixed(2);
+  return locale === "tg" ? `\nДар ҷои қабул: ${amount} сомонӣ.` : `\nК оплате на месте: ${amount} сомони.`;
 }
 
 async function sendOptions(
@@ -393,7 +423,6 @@ async function createBookingForConversation(
   const session = await getActiveConversationSession(businessId, conversationId);
   const service = await selectedService(businessId, session.data);
   const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { slug: true } });
-  await assertPaymentCardConfigured(required(session.data.branchId));
   const booking = await createPendingBooking({
     source: "TELEGRAM",
     businessSlug: business.slug,
@@ -406,7 +435,7 @@ async function createBookingForConversation(
   }, now);
   const stored = await prisma.booking.findFirstOrThrow({ where: { id: booking.bookingId, businessId }, select: { customerId: true } });
   await prisma.customer.update({ where: { id: stored.customerId }, data: { telegramChatId: chatId, telegramLocale: localeOf(session.data) } });
-  return { bookingId: booking.bookingId, paymentId: booking.paymentId };
+  return { bookingId: booking.bookingId, paymentId: booking.paymentId, dueDiram: booking.prepayment.dueDiram, data: session.data };
 }
 
 async function renderCustomerBookings(

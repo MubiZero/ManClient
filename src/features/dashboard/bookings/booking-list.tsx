@@ -15,7 +15,7 @@ type BookingItem = {
   customer: { name: string; phone: string };
   service: { name: string; amountDiram: number };
   staff: { displayName: string };
-  payment: { status: string; amountDiram: number } | null;
+  payment: { status: string; amountDiram: number; totalDiram: number } | null;
   resources?: Array<{ resource: { name: string } }>;
 };
 
@@ -63,7 +63,7 @@ export function BookingList({ items, filtered }: { items: BookingItem[]; filtere
             </TableCell>
             <TableCell>
               <div className="flex flex-col gap-1">
-                <strong className="text-foreground">{formatSomoni(booking.payment?.amountDiram ?? booking.service.amountDiram)}</strong>
+                <strong className="text-foreground">{formatSomoni(booking.payment?.totalDiram || booking.service.amountDiram)}</strong>
                 <PaymentStatus status={booking.payment?.status} />
               </div>
             </TableCell>

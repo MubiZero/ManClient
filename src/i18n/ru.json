@@ -114,5 +114,11 @@
   "booking.waitlist.submitting": "Отправляем…",
   "booking.waitlist.doneTitle": "Вы в листе ожидания",
   "booking.waitlist.doneText": "Мы сообщим, как только время освободится.",
-  "booking.waitlist.close": "Закрыть"
+  "booking.waitlist.close": "Закрыть",
+  "payment.depositLine": "Сейчас депозит: {due} · На месте: {balance}",
+  "payment.onSiteLine": "Оплата на месте: {balance}",
+  "payment.notRequiredDescription": "Предоплата не нужна — расчёт на месте. Бизнес видит подтверждённую запись.",
+  "booking.policy.prepaymentDeposit": "При записи вносится депозит {amount}, остаток — на месте.",
+  "booking.policy.prepaymentDepositPercent": "При записи вносится депозит — {percent}% стоимости, остаток на месте.",
+  "booking.policy.prepaymentNone": "Предоплата не нужна — оплата на месте."
 }

@@ -36,8 +36,10 @@ async function loadPayment(token: string) {
     const action = verifyBookingActionToken(token, new Date(), "view_payment");
     const payment = await getPublicPayment(action.paymentId);
     if (!payment) return null;
-    const paymentUrl = await getPaymentUrl(payment.id);
-    return { payment, paymentUrl: paymentUrl.toString() };
+    // A booking that asked for no money has no payment link, and demanding one here would 404 the page
+    // that is supposed to confirm the visit.
+    const paymentUrl = payment.amountDiram > 0 ? (await getPaymentUrl(payment.id)).toString() : null;
+    return { payment, paymentUrl };
   } catch {
     return null;
   }

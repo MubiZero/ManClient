@@ -39,7 +39,8 @@ export type DayScheduleBooking = {
   customerPhone: string;
   serviceName: string;
   durationMinutes: number;
-  amountDiram: number;
+  /** The price of the visit, not the deposit that was asked for up front. */
+  totalDiram: number;
   paymentStatus: PaymentStatus | null;
 };
 
@@ -129,7 +130,7 @@ export async function getDaySchedule(input: {
         status: true,
         customer: { select: { name: true, phone: true } },
         service: { select: { name: true, durationMinutes: true, bufferBeforeMinutes: true, bufferAfterMinutes: true } },
-        payment: { select: { status: true, amountDiram: true } },
+        payment: { select: { status: true, totalDiram: true } },
       },
       orderBy: { startsAt: "asc" },
     }),
@@ -170,7 +171,7 @@ export async function getDaySchedule(input: {
           customerPhone: booking.customer.phone,
           serviceName: booking.service.name,
           durationMinutes: booking.service.durationMinutes,
-          amountDiram: booking.payment?.amountDiram ?? 0,
+          totalDiram: booking.payment?.totalDiram ?? 0,
           paymentStatus: booking.payment?.status ?? null,
         } satisfies DayScheduleBooking;
       });

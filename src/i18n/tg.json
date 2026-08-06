@@ -114,5 +114,11 @@
   "booking.waitlist.submitting": "Фиристода мешавад…",
   "booking.waitlist.doneTitle": "Шумо дар рӯйхати интизорӣ",
   "booking.waitlist.doneText": "Ҳамин ки вақт озод шавад, хабар медиҳем.",
-  "booking.waitlist.close": "Пӯшидан"
+  "booking.waitlist.close": "Пӯшидан",
+  "payment.depositLine": "Ҳозир пешпардохт: {due} · Дар ҷои қабул: {balance}",
+  "payment.onSiteLine": "Дар ҷои қабул: {balance}",
+  "payment.notRequiredDescription": "Пешпардохт лозим нест — ҳисоб дар ҷои қабул. Бизнес сабти тасдиқшударо мебинад.",
+  "booking.policy.prepaymentDeposit": "Ҳангоми сабт пешпардохти {amount} супорида мешавад, боқимонда — дар ҷои қабул.",
+  "booking.policy.prepaymentDepositPercent": "Ҳангоми сабт пешпардохт — {percent}% арзиш, боқимонда дар ҷои қабул.",
+  "booking.policy.prepaymentNone": "Пешпардохт лозим нест — пардохт дар ҷои қабул."
 }

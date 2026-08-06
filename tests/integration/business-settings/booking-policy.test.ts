@@ -44,6 +44,9 @@ describe("booking policy settings", () => {
       freeCancellationHours: 0,
       maxCustomerReschedules: null,
       cancellationPolicy: null,
+      prepaymentMode: "FULL",
+      depositPercent: null,
+      depositAmountDiram: null,
     });
   });
 
@@ -56,6 +59,8 @@ describe("booking policy settings", () => {
       freeCancellationHours: 24,
       maxCustomerReschedules: 2,
       cancellationPolicy: "При опоздании больше чем на 15 минут визит переносится.",
+      prepaymentMode: "DEPOSIT",
+      depositPercent: 30,
     });
 
     expect(updated).toEqual({
@@ -64,6 +69,9 @@ describe("booking policy settings", () => {
       freeCancellationHours: 24,
       maxCustomerReschedules: 2,
       cancellationPolicy: "При опоздании больше чем на 15 минут визит переносится.",
+      prepaymentMode: "DEPOSIT",
+      depositPercent: 30,
+      depositAmountDiram: null,
     });
     await expect(getBookingPolicySettings(businessId)).resolves.toEqual(updated);
   });
@@ -87,7 +95,26 @@ describe("booking policy settings", () => {
       freeCancellationHours: 0,
       maxCustomerReschedules: null,
       cancellationPolicy: null,
+      prepaymentMode: "FULL",
+      depositPercent: null,
+      depositAmountDiram: null,
     });
+  });
+
+  it("keeps a deposit amount only while the deposit mode is set", async () => {
+    await updateBookingPolicySettings({ businessId, actorUserId, minLeadTimeMinutes: 0, freeCancellationHours: 0, prepaymentMode: "DEPOSIT", depositSomoni: "50,00" });
+    await expect(getBookingPolicySettings(businessId)).resolves.toMatchObject({ prepaymentMode: "DEPOSIT", depositAmountDiram: 5_000, depositPercent: null });
+
+    // Switching away must not leave the amount behind: it would spring back to life the next time
+    // somebody chose "deposit" again, with a number nobody had looked at.
+    const cleared = await updateBookingPolicySettings({ businessId, actorUserId, minLeadTimeMinutes: 0, freeCancellationHours: 0, prepaymentMode: "NONE", depositSomoni: "50,00" });
+    expect(cleared).toMatchObject({ prepaymentMode: "NONE", depositAmountDiram: null, depositPercent: null });
+  });
+
+  it("refuses a deposit with no amount to charge", async () => {
+    await expect(
+      updateBookingPolicySettings({ businessId, actorUserId, minLeadTimeMinutes: 0, freeCancellationHours: 0, prepaymentMode: "DEPOSIT" }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" } satisfies Partial<SettingsError>);
   });
 
   it("refuses values that would empty the calendar or are obviously the wrong unit", async () => {

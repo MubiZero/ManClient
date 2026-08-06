@@ -2,11 +2,11 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
-import { scheduleBookingReminders, scheduleReviewRequest, scheduleSmsConfirmation, scheduleWhatsAppConfirmation } from "@/core/notifications/notification-service";
+import { scheduleConfirmationEffects } from "@/core/bookings/confirm-booking-effects";
 import { decryptCardNumber } from "@/core/payments/card-encryption";
 import { receiptInputSchema, type ReceiptInput } from "@/core/payments/receipt-recognizer";
 import { createPaymentUrl } from "@/integrations/dushanbe-city/payment-link";
-import { scheduleBusinessNotification, scheduleUpcomingBusinessVisit } from "@/core/notifications/business-notification-service";
+import { scheduleBusinessNotification } from "@/core/notifications/business-notification-service";
 import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
 
 export class DuplicateOperationError extends Error {
@@ -139,12 +139,13 @@ export async function confirmFromReceipt(input: ReceiptInput) {
           isBankVerified: false,
         },
       }, transaction);
-      await scheduleBookingReminders(payment.bookingId, transaction);
-      await scheduleReviewRequest(payment.bookingId, transaction);
-      await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
-      await scheduleSmsConfirmation(payment.bookingId, transaction);
-      await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: new Date() }, transaction);
-      await scheduleUpcomingBusinessVisit({ businessId: payment.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
+      await scheduleConfirmationEffects({
+        businessId: payment.businessId,
+        bookingId: payment.bookingId,
+        startsAt: payment.booking.startsAt,
+        notificationKind: "PAYMENT_APPROVED",
+        deduplicationKey: `payment:${payment.id}:approved`,
+      }, transaction);
       await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED" }, transaction);
 
       return confirmedPayment;

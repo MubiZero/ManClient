@@ -1,4 +1,5 @@
-import { t, type SupportedLocale } from "@/i18n/translate";
+import { formatSomoni } from "@/core/formatting/money";
+import { moneyLocale, t, type SupportedLocale } from "@/i18n/translate";
 
 /**
  * The rules the customer is actually held to, in the same box as the paragraph the business wrote. The
@@ -16,6 +17,9 @@ export function PolicyNotice({
     freeCancellationHours: number;
     maxCustomerReschedules: number | null;
     cancellationPolicy: string | null;
+    prepaymentMode: "FULL" | "DEPOSIT" | "NONE";
+    depositPercent: number | null;
+    depositAmountDiram: number | null;
   };
 }) {
   const rules = [
@@ -23,6 +27,9 @@ export function PolicyNotice({
     policy.maxAdvanceDays !== null ? t(locale, "booking.policy.horizon", { days: policy.maxAdvanceDays }) : null,
     policy.freeCancellationHours > 0 ? t(locale, "booking.policy.cancellation", { hours: policy.freeCancellationHours }) : null,
     policy.maxCustomerReschedules !== null ? t(locale, "booking.policy.rescheduleLimit", { count: policy.maxCustomerReschedules }) : null,
+    // Full prepayment is stated by the payment page the customer is taken to next, and it is what every
+    // business did before the setting existed. Only the two surprising answers are worth a line here.
+    prepaymentRule(locale, policy),
   ].filter((value): value is string => value !== null);
 
   if (rules.length === 0 && !policy.cancellationPolicy) return null;
@@ -40,6 +47,18 @@ export function PolicyNotice({
       {policy.cancellationPolicy ? <p>{policy.cancellationPolicy}</p> : null}
     </div>
   );
+}
+
+function prepaymentRule(
+  locale: SupportedLocale,
+  policy: { prepaymentMode: "FULL" | "DEPOSIT" | "NONE"; depositPercent: number | null; depositAmountDiram: number | null },
+): string | null {
+  if (policy.prepaymentMode === "NONE") return t(locale, "booking.policy.prepaymentNone");
+  if (policy.prepaymentMode !== "DEPOSIT") return null;
+  if (policy.depositAmountDiram !== null) {
+    return t(locale, "booking.policy.prepaymentDeposit", { amount: formatSomoni(policy.depositAmountDiram, moneyLocale(locale)) });
+  }
+  return policy.depositPercent !== null ? t(locale, "booking.policy.prepaymentDepositPercent", { percent: policy.depositPercent }) : null;
 }
 
 function formatLeadTime(locale: SupportedLocale, minutes: number): string {

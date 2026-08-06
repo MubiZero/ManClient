@@ -12,6 +12,9 @@ export type BookingPolicyValue = {
   freeCancellationHours: number;
   maxCustomerReschedules: number | null;
   cancellationPolicy: string | null;
+  prepaymentMode: "FULL" | "DEPOSIT" | "NONE";
+  depositPercent: number | null;
+  depositAmountDiram: number | null;
 };
 
 /**
@@ -48,6 +51,9 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
     initial.maxCustomerReschedules === null ? "" : String(initial.maxCustomerReschedules),
   );
   const [cancellationPolicy, setCancellationPolicy] = useState(initial.cancellationPolicy ?? "");
+  const [prepaymentMode, setPrepaymentMode] = useState(initial.prepaymentMode);
+  const [depositPercent, setDepositPercent] = useState(initial.depositPercent === null ? "" : String(initial.depositPercent));
+  const [depositSomoni, setDepositSomoni] = useState(initial.depositAmountDiram === null ? "" : (initial.depositAmountDiram / 100).toFixed(2));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -66,6 +72,9 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
           freeCancellationHours,
           maxCustomerReschedules: maxCustomerReschedules.trim() === "" ? null : Number(maxCustomerReschedules),
           cancellationPolicy,
+          prepaymentMode,
+          depositPercent: depositPercent.trim() === "" ? null : Number(depositPercent),
+          depositSomoni: depositSomoni.trim() === "" ? null : depositSomoni,
         }),
       });
       const result = (await response.json()) as { error?: string };
@@ -117,6 +126,27 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
             />
           </Field>
         </div>
+
+        <fieldset className="flex flex-col gap-4 rounded-md border border-border bg-secondary/40 p-4">
+          <legend className="px-1 text-sm font-semibold text-foreground">Предоплата</legend>
+          <Field label="Что клиент оплачивает при записи" hint="«Ничего» подтверждает запись сразу, оплата — на месте.">
+            <Select value={prepaymentMode} onChange={(event) => setPrepaymentMode(event.target.value as BookingPolicyValue["prepaymentMode"])}>
+              <option value="FULL">Полную стоимость услуги</option>
+              <option value="DEPOSIT">Депозит, остаток на месте</option>
+              <option value="NONE">Ничего — оплата на месте</option>
+            </Select>
+          </Field>
+          {prepaymentMode === "DEPOSIT" ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Депозит, % от стоимости" hint="Округляется вверх до целых сомони.">
+                <Input type="number" min={1} max={100} value={depositPercent} placeholder="30" onChange={(event) => setDepositPercent(event.target.value)} />
+              </Field>
+              <Field label="Или фиксированный депозит, сомони" hint="Если заполнено, используется вместо процента.">
+                <Input value={depositSomoni} placeholder="50.00" onChange={(event) => setDepositSomoni(event.target.value)} />
+              </Field>
+            </div>
+          ) : null}
+        </fieldset>
 
         <Field
           label="Текст правил для клиентов"

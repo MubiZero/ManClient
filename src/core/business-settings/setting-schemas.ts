@@ -40,6 +40,23 @@ export const notificationSettingsSchema = z.object({
 }).strict();
 
 /**
+ * How much of the price must arrive before a slot is held. Shared by the business-wide setting and the
+ * per-service override so a service cannot express a rule the business could not, and money is entered in
+ * somoni everywhere a person types it — diram exists for arithmetic, not for forms.
+ */
+const prepaymentFields = {
+  prepaymentMode: z.enum(["FULL", "DEPOSIT", "NONE"]).default("FULL"),
+  depositPercent: z.preprocess(
+    value => value === "" || value === null ? undefined : value,
+    z.coerce.number().int().min(1).max(100).optional(),
+  ),
+  depositSomoni: z.preprocess(
+    value => typeof value === "string" && value.trim() === "" || value === null ? undefined : value,
+    z.string().trim().regex(/^\d{1,7}(?:[.,]\d{1,2})?$/).optional(),
+  ),
+};
+
+/**
  * The booking rules a business enforces rather than describes. Every ceiling here is a deliberate
  * guard rail: a 30-day minimum notice or a two-day booking horizon is far more likely to be a typo in
  * the wrong unit than a real intention, and both would silently empty the public calendar.
@@ -59,7 +76,14 @@ export const bookingPolicySchema = z.object({
     z.coerce.number().int().min(0).max(20).optional(),
   ),
   cancellationPolicy: optionalText(500),
-}).strict();
+  ...prepaymentFields,
+}).strict().superRefine((value, context) => {
+  if (value.prepaymentMode === "DEPOSIT" && value.depositPercent === undefined && value.depositSomoni === undefined) {
+    // Saving "deposit" without saying how much would charge the whole price, which is the opposite of
+    // what the business just asked for. Better to refuse the form than to surprise its customers.
+    context.addIssue({ code: "custom", path: ["depositPercent"], message: "DEPOSIT_AMOUNT_REQUIRED" });
+  }
+});
 
 export const promoCodeInputSchema = z.object({
   code: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9_-]+$/, "INVALID_CODE_FORMAT"),
@@ -92,6 +116,14 @@ export const serviceInputSchema = z.object({
   bufferBeforeMinutes: z.coerce.number().int().min(0).max(MAX_BUFFER_MINUTES).default(0),
   bufferAfterMinutes: z.coerce.number().int().min(0).max(MAX_BUFFER_MINUTES).default(0),
   amountSomoni: z.string().trim().regex(/^\d{1,7}(?:[.,]\d{1,2})?$/),
+  // Optional here, unlike on the business: an empty mode means "follow the business", which is what
+  // every service should say until somebody deliberately decides this one is different.
+  prepaymentMode: z.preprocess(
+    value => value === "" || value === null ? undefined : value,
+    z.enum(["FULL", "DEPOSIT", "NONE"]).optional(),
+  ),
+  depositPercent: prepaymentFields.depositPercent,
+  depositSomoni: prepaymentFields.depositSomoni,
   staffIds: uniqueIds,
   resourceIds: uniqueIds,
   isPublished: z.boolean(),

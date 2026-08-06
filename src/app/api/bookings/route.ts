@@ -4,11 +4,7 @@ import { BookingConflictError, PromoCodeInvalidError } from "@/core/bookings/boo
 import { createBookingActionToken } from "@/core/bookings/booking-action-token";
 import { BookingValidationError, createPendingBooking } from "@/core/bookings/booking-service";
 import { prisma } from "@/core/database/prisma";
-import {
-  assertPaymentCardConfigured,
-  getPaymentUrl,
-  PaymentConfigurationError,
-} from "@/core/payments/payment-service";
+import { getPaymentUrl, PaymentConfigurationError } from "@/core/payments/payment-service";
 import { assertPhoneVerified, spendPhoneVerification } from "@/core/security/phone-verification-gate";
 import { PhoneVerificationError } from "@/core/security/phone-verification-service";
 import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
@@ -26,21 +22,20 @@ export async function POST(request: Request): Promise<Response> {
     if (phone) await assertRateLimit("booking.create", `phone:${phone}`);
     await assertPhoneVerified({ phone, verificationId });
 
-    if (typeof payload.branchId === "string") {
-      await assertPaymentCardConfigured(payload.branchId);
-    }
     const booking = await createPendingBooking({
       ...payload,
       startsAt: new Date(String(payload.startsAt)),
     } as Parameters<typeof createPendingBooking>[0]);
     await spendPhoneVerification({ phone, verificationId });
-    const paymentUrl = await getPaymentUrl(booking.paymentId);
-    const telegramUrl = await createTelegramStartUrl(booking.paymentId, booking.expiresAt);
-    const paymentTokenExpiresAt = new Date(Math.max(booking.expiresAt.getTime(), new Date(String(payload.startsAt)).getTime() + 24 * 60 * 60_000));
+    // Nothing due means no card to transfer to and no reservation to race: the booking is already
+    // confirmed, and the page the customer lands on says so instead of asking for a receipt.
+    const paymentUrl = booking.prepayment.dueDiram > 0 ? (await getPaymentUrl(booking.paymentId)).toString() : null;
+    const paymentTokenExpiresAt = new Date(Math.max(booking.expiresAt?.getTime() ?? 0, new Date(String(payload.startsAt)).getTime() + 24 * 60 * 60_000));
+    const telegramUrl = await createTelegramStartUrl(booking.paymentId, booking.expiresAt ?? paymentTokenExpiresAt);
     const paymentToken = createBookingActionToken({ paymentId: booking.paymentId, action: "view_payment", expiresAt: paymentTokenExpiresAt });
 
     return Response.json(
-      { ...booking, expiresAt: booking.expiresAt.toISOString(), paymentUrl: paymentUrl.toString(), telegramUrl, paymentPath: `/pay/${paymentToken}` },
+      { ...booking, expiresAt: booking.expiresAt?.toISOString() ?? null, paymentUrl, telegramUrl, paymentPath: `/pay/${paymentToken}` },
       { status: 201 },
     );
   } catch (error) {

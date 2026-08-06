@@ -5,11 +5,7 @@ import { createBookingActionToken } from "@/core/bookings/booking-action-token";
 import { createRecurringBooking } from "@/core/bookings/recurring-booking-service";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
-import {
-  assertPaymentCardConfigured,
-  getPaymentUrl,
-  PaymentConfigurationError,
-} from "@/core/payments/payment-service";
+import { getPaymentUrl, PaymentConfigurationError } from "@/core/payments/payment-service";
 import { assertPhoneVerified, spendPhoneVerification } from "@/core/security/phone-verification-gate";
 import { PhoneVerificationError } from "@/core/security/phone-verification-service";
 import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
@@ -25,9 +21,6 @@ export async function POST(request: Request): Promise<Response> {
     if (phone) await assertRateLimit("booking.recurring", `phone:${phone}`);
     await assertPhoneVerified({ phone, verificationId });
 
-    if (typeof payload.branchId === "string") {
-      await assertPaymentCardConfigured(payload.branchId);
-    }
     if (typeof payload.businessSlug !== "string") {
       return Response.json({ error: "INVALID_BOOKING" }, { status: 400 });
     }
@@ -60,7 +53,8 @@ export async function POST(request: Request): Promise<Response> {
     if (!payment) {
       throw new Error("Payment was not created with the first recurring booking");
     }
-    const paymentUrl = await getPaymentUrl(payment.id);
+    // Nothing due leaves no card to transfer to, and the series is already confirmed.
+    const paymentUrl = payment.amountDiram > 0 ? (await getPaymentUrl(payment.id)).toString() : null;
     const paymentTokenExpiresAt = new Date(Math.max(firstBooking.expiresAt?.getTime() ?? 0, firstBooking.startsAt.getTime() + 24 * 60 * 60_000));
     const paymentToken = createBookingActionToken({ paymentId: payment.id, action: "view_payment", expiresAt: paymentTokenExpiresAt });
 
@@ -69,7 +63,7 @@ export async function POST(request: Request): Promise<Response> {
         seriesId: result.seriesId,
         createdCount: result.created.length,
         skippedCount: result.skipped,
-        paymentUrl: paymentUrl.toString(),
+        paymentUrl,
         paymentPath: `/pay/${paymentToken}`,
       },
       { status: 201 },

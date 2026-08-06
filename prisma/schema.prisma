@@ -32,6 +32,19 @@ enum PaymentStatus {
   RECEIPT_ACCEPTED
   NEEDS_ATTENTION
   REJECTED
+  /// Nothing was due before the visit: the business takes payment on the premises. The row still exists
+  /// so the price of the visit is recorded and every query that joins a booking to its payment holds.
+  NOT_REQUIRED
+}
+
+/// What a customer must transfer before a slot is held for them.
+enum PrepaymentMode {
+  /// The whole price, or the reservation expires. The behaviour that predates this setting.
+  FULL
+  /// Part of the price, by percentage or as a fixed sum; the rest is paid at the visit.
+  DEPOSIT
+  /// Nothing. The booking is confirmed the moment it is made and paid for on the premises.
+  NONE
 }
 
 enum ReceiptSubmissionStatus {
@@ -189,6 +202,13 @@ model Business {
   freeCancellationHours            Int                           @default(0)
   /// How many times one booking may be moved by the customer. Null means unlimited.
   maxCustomerReschedules           Int?
+  /// How much of the price a customer must transfer before the slot is theirs. FULL is what every
+  /// business had before deposits existed: the whole price up front, or the reservation expires.
+  prepaymentMode                   PrepaymentMode                @default(FULL)
+  /// Share of the price taken as a deposit, 1–100. Ignored when `depositAmountDiram` is set.
+  depositPercent                   Int?
+  /// Fixed deposit in diram. Wins over the percentage, and is capped at the price of the visit.
+  depositAmountDiram               Int?
   subscriptionPlan                 SubscriptionPlan              @default(START)
   smsNotificationsEnabled          Boolean                       @default(false)
   defaultCommissionPercent         Int?
@@ -459,6 +479,12 @@ model Service {
   bufferBeforeMinutes Int            @default(0)
   bufferAfterMinutes  Int            @default(0)
   amountDiram     Int
+  /// Overrides the business's prepayment rule for this service alone — the reason deposits exist is that
+  /// an expensive, long service is the one worth protecting, while a fringe trim is not. Null follows
+  /// the business, and the two deposit fields are read only when this one is set.
+  prepaymentMode     PrepaymentMode?
+  depositPercent     Int?
+  depositAmountDiram Int?
   isPublished     Boolean           @default(false)
   archivedAt      DateTime?
   branch          Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
@@ -754,7 +780,12 @@ model Payment {
   id                  String              @id @default(cuid())
   businessId          String
   bookingId           String              @unique
+  /// What the customer had to transfer before the visit — the whole price, a deposit, or nothing.
+  /// The receipt is matched against this, so it must stay the amount that was actually asked for.
   amountDiram         Int
+  /// The price of the visit after discounts. Equal to `amountDiram` unless a deposit was taken, in which
+  /// case the difference is what the business still collects on the premises.
+  totalDiram          Int                 @default(0)
   status              PaymentStatus       @default(PENDING)
   operationNumber     String?
   receiptAmountDiram  Int?

@@ -3,6 +3,7 @@ import { bookingPolicySchema } from "@/core/business-settings/setting-schemas";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
+import { parseSomoniToDiram } from "@/core/formatting/money";
 
 /**
  * `cancellationPolicy` — the free-text paragraph — lives here rather than with the notification
@@ -16,6 +17,9 @@ const POLICY_SELECTION = {
   freeCancellationHours: true,
   maxCustomerReschedules: true,
   cancellationPolicy: true,
+  prepaymentMode: true,
+  depositPercent: true,
+  depositAmountDiram: true,
 } as const;
 
 export async function getBookingPolicySettings(businessId: string) {
@@ -30,6 +34,9 @@ export async function updateBookingPolicySettings(input: {
   freeCancellationHours: number | string;
   maxCustomerReschedules?: number | string | null;
   cancellationPolicy?: string;
+  prepaymentMode?: "FULL" | "DEPOSIT" | "NONE";
+  depositPercent?: number | string | null;
+  depositSomoni?: string | null;
 }) {
   const parsed = bookingPolicySchema.safeParse({
     minLeadTimeMinutes: input.minLeadTimeMinutes,
@@ -37,6 +44,9 @@ export async function updateBookingPolicySettings(input: {
     freeCancellationHours: input.freeCancellationHours,
     maxCustomerReschedules: input.maxCustomerReschedules,
     cancellationPolicy: input.cancellationPolicy,
+    prepaymentMode: input.prepaymentMode,
+    depositPercent: input.depositPercent,
+    depositSomoni: input.depositSomoni,
   });
   if (!parsed.success) throw new SettingsError("INVALID_INPUT");
 
@@ -50,6 +60,11 @@ export async function updateBookingPolicySettings(input: {
         freeCancellationHours: parsed.data.freeCancellationHours,
         maxCustomerReschedules: parsed.data.maxCustomerReschedules ?? null,
         cancellationPolicy: parsed.data.cancellationPolicy ?? null,
+        prepaymentMode: parsed.data.prepaymentMode,
+        // Cleared together with the mode: leaving a stale deposit amount behind would resurrect it the
+        // next time somebody switched the mode back, with a number nobody had looked at in months.
+        depositPercent: parsed.data.prepaymentMode === "DEPOSIT" ? parsed.data.depositPercent ?? null : null,
+        depositAmountDiram: parsed.data.prepaymentMode === "DEPOSIT" && parsed.data.depositSomoni ? parseSomoniToDiram(parsed.data.depositSomoni) : null,
       },
       select: POLICY_SELECTION,
     });

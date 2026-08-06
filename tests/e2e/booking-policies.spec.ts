@@ -14,6 +14,8 @@ test("owner sets booking rules and the public page states them to customers", as
   await page.getByLabel("Горизонт записи, дней").fill("30");
   await page.getByLabel("Клиент может отменить или перенести").selectOption("24");
   await page.getByLabel("Лимит переносов одной записи").fill("2");
+  await page.getByLabel("Что клиент оплачивает при записи").selectOption("DEPOSIT");
+  await page.getByLabel("Депозит, % от стоимости").fill("20");
   await page.getByLabel("Текст правил для клиентов").fill("Опоздание больше 15 минут — визит переносится.");
   await page.getByRole("button", { name: "Сохранить" }).click();
   await expect(page.getByText("Правила записи сохранены")).toBeVisible();
@@ -22,6 +24,7 @@ test("owner sets booking rules and the public page states them to customers", as
   await page.reload();
   await expect(page.getByLabel("Горизонт записи, дней")).toHaveValue("30");
   await expect(page.getByLabel("Лимит переносов одной записи")).toHaveValue("2");
+  await expect(page.getByLabel("Депозит, % от стоимости")).toHaveValue("20");
 
   await page.goto("/b/demo-barber");
   const policy = page.getByText("Правила записи", { exact: true }).locator("..");
@@ -30,6 +33,7 @@ test("owner sets booking rules and the public page states them to customers", as
   await expect(policy).toContainText("не позднее чем за 24 ч");
   await expect(policy).toContainText("не более 2 раз");
   await expect(policy).toContainText("Опоздание больше 15 минут");
+  await expect(policy).toContainText("депозит — 20% стоимости");
 
   // Left as the demo data found them, so the other specs keep booking against an unrestricted business.
   await page.goto("/dashboard/settings/policies");
@@ -37,6 +41,7 @@ test("owner sets booking rules and the public page states them to customers", as
   await page.getByLabel("Горизонт записи, дней").fill("");
   await page.getByLabel("Клиент может отменить или перенести").selectOption("0");
   await page.getByLabel("Лимит переносов одной записи").fill("");
+  await page.getByLabel("Что клиент оплачивает при записи").selectOption("FULL");
   await page.getByLabel("Текст правил для клиентов").fill("");
   await page.getByRole("button", { name: "Сохранить" }).click();
   await expect(page.getByText("Правила записи сохранены")).toBeVisible();

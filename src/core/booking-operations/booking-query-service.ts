@@ -19,7 +19,7 @@ export async function listBusinessBookings(input: ActorInput & { filters: Bookin
       customer: { select: { id: true, name: true, phone: true } },
       service: { select: { id: true, name: true, durationMinutes: true, amountDiram: true } },
       staff: { select: { id: true, displayName: true } },
-      payment: { select: { id: true, status: true, amountDiram: true, isBankVerified: true } },
+      payment: { select: { id: true, status: true, amountDiram: true, totalDiram: true, isBankVerified: true } },
       resources: { include: { resource: { select: { id: true, name: true } } } },
     },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],

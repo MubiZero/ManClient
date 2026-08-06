@@ -6,6 +6,7 @@ import { BookingOperationError } from "@/core/booking-operations/booking-operati
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { BookingConflictError, reserveAllocation } from "@/core/bookings/booking-allocation";
 import { cancelBooking, type BookingActor } from "@/core/bookings/cancel-booking";
+import { scheduleConfirmationEffects } from "@/core/bookings/confirm-booking-effects";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import type { Booking, RecurrenceFrequency } from "@/generated/prisma/client";
 import { prisma } from "@/core/database/prisma";
@@ -53,7 +54,7 @@ export async function createRecurringBooking(input: CreateRecurringBookingInput,
 
   const business = await prisma.business.findUnique({
     where: { id: input.businessId },
-    select: { id: true, subscriptionPlan: true },
+    select: { id: true, subscriptionPlan: true, prepaymentMode: true, depositPercent: true, depositAmountDiram: true },
   });
   if (!business) throw new SettingsError("NOT_FOUND");
   requirePlanFeature(business.subscriptionPlan, "RECURRING_BOOKINGS");
@@ -84,7 +85,7 @@ export async function createRecurringBooking(input: CreateRecurringBookingInput,
       isPublished: true,
       staffMembers: { some: { id: value.staffId, businessId: input.businessId, archivedAt: null, branches: { some: { branchId: value.branchId } } } },
     },
-    select: { id: true, durationMinutes: true, amountDiram: true, resources: { where: { resource: { archivedAt: null, isAvailable: true } }, select: { resourceId: true } } },
+    select: { id: true, durationMinutes: true, amountDiram: true, prepaymentMode: true, depositPercent: true, depositAmountDiram: true, resources: { where: { resource: { archivedAt: null, isAvailable: true } }, select: { resourceId: true } } },
   });
   if (!service) throw new SettingsError("NOT_FOUND");
   const resourceIds = service.resources.map((item) => item.resourceId);
@@ -140,6 +141,9 @@ export async function createRecurringBooking(input: CreateRecurringBookingInput,
         expiresAt: isDashboard ? null : new Date(now.getTime() + RESERVATION_MINUTES * 60_000),
         createdAt: now,
         amountDiram: service.amountDiram,
+        // Dashboard series are confirmed by the receptionist creating them; a customer's own series is
+        // held to the business's prepayment rule, occurrence by occurrence.
+        prepayment: isDashboard ? undefined : { business, service },
         status: isDashboard ? "CONFIRMED" : undefined,
         source: isDashboard ? "DASHBOARD" : "WEB",
         actor: isDashboard ? { type: "membership", id: membershipId! } : { type: "customer", id: customer.id },
@@ -158,6 +162,15 @@ export async function createRecurringBooking(input: CreateRecurringBookingInput,
         await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id, startsAt: occurrenceStartsAt });
       } else {
         await scheduleBusinessNotificationSafely({ businessId: input.businessId, bookingId: booking.id, kind: "NEW_BOOKING", deduplicationKey: `booking:${booking.id}:created`, scheduledAt: now });
+        if (booking.status === "CONFIRMED") {
+          await prisma.$transaction((transaction) => scheduleConfirmationEffects({
+            businessId: input.businessId,
+            bookingId: booking.id,
+            startsAt: occurrenceStartsAt,
+            notificationKind: "BOOKING_CONFIRMED",
+            deduplicationKey: `booking:${booking.id}:confirmed`,
+          }, transaction, now));
+        }
       }
     } catch (error) {
       if (error instanceof BookingConflictError || (error instanceof Error && error.message === "SLOT_UNAVAILABLE")) {

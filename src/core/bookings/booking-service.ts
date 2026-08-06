@@ -2,8 +2,11 @@ import { z } from "zod";
 
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { reserveAllocation } from "@/core/bookings/booking-allocation";
+import { scheduleConfirmationEffects } from "@/core/bookings/confirm-booking-effects";
 import { prisma } from "@/core/database/prisma";
 import { scheduleBusinessNotificationSafely } from "@/core/notifications/business-notification-service";
+import { assertPaymentCardConfigured } from "@/core/payments/payment-service";
+import { resolvePrepayment } from "@/core/payments/prepayment-policy";
 
 const RESERVATION_MINUTES = 15;
 
@@ -38,6 +41,9 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
     select: {
       id: true,
       status: true,
+      prepaymentMode: true,
+      depositPercent: true,
+      depositAmountDiram: true,
       branches: {
         where: { id: validatedInput.branchId },
         select: {
@@ -48,6 +54,9 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
               id: true,
               amountDiram: true,
               durationMinutes: true,
+              prepaymentMode: true,
+              depositPercent: true,
+              depositAmountDiram: true,
               staffMembers: { where: { id: validatedInput.staffId }, select: { id: true } },
               resources: { select: { resourceId: true } },
             },
@@ -69,6 +78,14 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
   const selectedResourceIds = [...new Set(validatedInput.resourceIds)].sort();
   if (requiredResourceIds.join(":") !== selectedResourceIds.join(":")) {
     throw new BookingValidationError("Selected resources do not satisfy the service");
+  }
+
+  // Whether a recipient card is required is a consequence of the prepayment rule, not a constant: a
+  // business that takes payment on the premises has no card to configure and must not be blocked by the
+  // check. The amount can still shrink under a promo code inside the transaction, but whether money is
+  // asked for at all is already decided here.
+  if (resolvePrepayment(service.amountDiram, configuration, service).dueDiram > 0) {
+    await assertPaymentCardConfigured(validatedInput.branchId);
   }
 
   const availableStarts = await getAvailableStarts({
@@ -108,6 +125,7 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
     expiresAt,
     createdAt: now,
     amountDiram: service.amountDiram,
+    prepayment: { business: configuration, service },
     promoCode: validatedInput.promoCode,
     source: validatedInput.source,
     actor: { type: "customer", id: customer.id },
@@ -125,5 +143,23 @@ export async function createPendingBooking(input: CreateBookingInput, now = new 
     scheduledAt: now,
   });
 
-  return { bookingId: booking.id, paymentId: booking.payment.id, expiresAt };
+  // A business that asks for nothing up front has already got everything it needs, so the visit is
+  // confirmed here rather than when a receipt arrives — and it earns the same reminders and confirmation
+  // messages an accepted receipt would have earned.
+  if (booking.status === "CONFIRMED") {
+    await prisma.$transaction((transaction) => scheduleConfirmationEffects({
+      businessId: configuration.id,
+      bookingId: booking.id,
+      startsAt: booking.startsAt,
+      notificationKind: "BOOKING_CONFIRMED",
+      deduplicationKey: `booking:${booking.id}:confirmed`,
+    }, transaction, now));
+  }
+
+  return {
+    bookingId: booking.id,
+    paymentId: booking.payment.id,
+    expiresAt: booking.expiresAt,
+    prepayment: booking.prepayment,
+  };
 }

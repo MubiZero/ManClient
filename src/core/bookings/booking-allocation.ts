@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { findBlockingBooking } from "@/core/availability/booking-window";
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
+import { resolvePrepayment } from "@/core/payments/prepayment-policy";
 import { redeemPromoCode, validatePromoCode } from "@/core/promotions/promo-code-service";
 import { SettingsError } from "@/core/business-settings/settings-error";
 
@@ -90,6 +91,13 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
       amountDiram = validation.finalAmountDiram;
     }
 
+    const prepayment = input.prepayment
+      ? resolvePrepayment(amountDiram, input.prepayment.business, input.prepayment.service)
+      : { mode: "FULL" as const, dueDiram: amountDiram, totalDiram: amountDiram, balanceDiram: 0 };
+    // Nothing to wait for means nothing to expire: a booking that asks for no money is settled the moment
+    // it is made, and leaving it PENDING_PAYMENT would have the sweeper cancel it fifteen minutes later.
+    const settledOnCreation = prepayment.dueDiram === 0 && input.status !== "CONFIRMED";
+
     const booking = await transaction.booking.create({
       data: {
         businessId: branch.businessId,
@@ -99,19 +107,21 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
         customerId: input.customerId,
         startsAt: input.startsAt,
         endsAt,
-        expiresAt: input.expiresAt,
+        expiresAt: settledOnCreation ? null : input.expiresAt,
         createdAt: input.createdAt,
-        status: input.status,
+        status: settledOnCreation ? "CONFIRMED" : input.status,
         source: input.source ?? "WEB",
-        confirmedAt: input.confirmedAt,
-        confirmedBy: input.confirmedBy,
+        confirmedAt: settledOnCreation ? input.createdAt : input.confirmedAt,
+        confirmedBy: settledOnCreation ? "prepayment_not_required" : input.confirmedBy,
         resources: {
           create: input.resourceIds.map((resourceId) => ({ resourceId })),
         },
         payment: {
           create: {
             businessId: branch.businessId,
-            amountDiram,
+            amountDiram: prepayment.dueDiram,
+            totalDiram: prepayment.totalDiram,
+            status: prepayment.dueDiram === 0 ? "NOT_REQUIRED" : "PENDING",
           },
         },
       },
@@ -141,7 +151,7 @@ export async function reserveAllocation(input: ReserveAllocationInput) {
       actorId: input.actor?.id ?? input.customerId,
       metadata: { startsAt: input.startsAt.toISOString(), staffId: input.staffId, source: input.source ?? "WEB" },
     }, transaction);
-    return booking;
+    return { ...booking, prepayment };
   });
 }
 

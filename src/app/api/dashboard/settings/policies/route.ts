@@ -10,6 +10,9 @@ export async function POST(request: Request) {
     freeCancellationHours?: number | string;
     maxCustomerReschedules?: number | string | null;
     cancellationPolicy?: string;
+    prepaymentMode?: "FULL" | "DEPOSIT" | "NONE";
+    depositPercent?: number | string | null;
+    depositSomoni?: string | null;
   };
 
   try {
@@ -21,6 +24,9 @@ export async function POST(request: Request) {
       freeCancellationHours: body.freeCancellationHours ?? 0,
       maxCustomerReschedules: body.maxCustomerReschedules,
       cancellationPolicy: body.cancellationPolicy,
+      prepaymentMode: body.prepaymentMode,
+      depositPercent: body.depositPercent,
+      depositSomoni: body.depositSomoni,
     });
     return Response.json(updated);
   } catch (error) {

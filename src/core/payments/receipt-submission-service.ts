@@ -154,7 +154,7 @@ export async function getPublicPayment(paymentId: string) {
   return prisma.payment.findUnique({
     where: { id: paymentId },
     select: {
-      id: true, amountDiram: true, status: true, reviewDeadline: true,
+      id: true, amountDiram: true, totalDiram: true, status: true, reviewDeadline: true,
       booking: {
         select: {
           status: true, expiresAt: true, startsAt: true,
