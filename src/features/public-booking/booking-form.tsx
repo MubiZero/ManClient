@@ -9,6 +9,7 @@ import {
   formatTajikPhoneInput,
   normalizeTajikPhone,
 } from "@/core/formatting/tajik-phone";
+import { PhoneVerificationPanel } from "@/features/public-booking/phone-verification-panel";
 import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Checkbox } from "@/features/ui-kit/checkbox";
@@ -98,6 +99,10 @@ export function BookingForm({
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistError, setWaitlistError] = useState("");
   const [waitlistDone, setWaitlistDone] = useState(false);
+  // Verification is discovered, not configured: the form submits as before and only asks for a code
+  // when the server refuses with VERIFICATION_REQUIRED. That keeps this component correct both before
+  // and after the moderated SMS template goes live.
+  const [pendingVerification, setPendingVerification] = useState<"booking" | "waitlist" | null>(null);
   const requestRef = useRef<AbortController | null>(null);
 
   const branch = branches.find(({ id }) => id === branchId);
@@ -217,8 +222,13 @@ export function BookingForm({
     setPhoneError(validateBookingPhone(phone, locale));
   }
 
+
   async function submitWaitlist(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await joinWaitlist();
+  }
+
+  async function joinWaitlist(phoneVerificationId?: string) {
     setWaitlistError("");
     if (!branch || !service || !staffId) return;
     const normalizedPhone = normalizeTajikPhone(waitlistPhone);
@@ -262,9 +272,22 @@ export function BookingForm({
           desiredFrom: desiredFrom.toISOString(),
           desiredTo: desiredTo.toISOString(),
           customer: { name: waitlistName.trim(), phone: normalizedPhone },
+          ...(phoneVerificationId ? { phoneVerificationId } : {}),
         }),
       });
+      if (response.status === 403) {
+        const data = (await response.json()) as { error?: string };
+        if (data.error === "VERIFICATION_REQUIRED") {
+          setPendingVerification("waitlist");
+          return;
+        }
+      }
+      if (response.status === 429) {
+        setWaitlistError(t(locale, "booking.errors.rateLimited"));
+        return;
+      }
       if (!response.ok) throw new Error("waitlist");
+      setPendingVerification(null);
       setWaitlistDone(true);
     } catch {
       setWaitlistError(t(locale, "booking.waitlist.submitFailed"));
@@ -315,6 +338,10 @@ export function BookingForm({
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await createBooking();
+  }
+
+  async function createBooking(phoneVerificationId?: string) {
     setError("");
     const normalizedPhone = normalizeTajikPhone(phone);
     if (!service || !staffId || !startsAt) {
@@ -349,6 +376,7 @@ export function BookingForm({
                 customer: { name: name.trim(), phone: normalizedPhone },
                 frequency: repeatFrequency,
                 occurrencesTotal: repeatCount,
+                ...(phoneVerificationId ? { phoneVerificationId } : {}),
               }
             : {
                 businessSlug,
@@ -359,9 +387,21 @@ export function BookingForm({
                 startsAt,
                 customer: { name: name.trim(), phone: normalizedPhone },
                 ...(appliedPromoCode ? { promoCode: appliedPromoCode } : {}),
+                ...(phoneVerificationId ? { phoneVerificationId } : {}),
               },
         ),
       });
+      if (response.status === 403) {
+        const data = (await response.json()) as { error?: string };
+        if (data.error === "VERIFICATION_REQUIRED") {
+          setPendingVerification("booking");
+          return;
+        }
+      }
+      if (response.status === 429) {
+        setError(t(locale, "booking.errors.rateLimited"));
+        return;
+      }
       if (response.status === 409) {
         setStarts((values) => values.filter((value) => value !== startsAt));
         setStartsAt("");
@@ -668,9 +708,20 @@ export function BookingForm({
               <p className="text-sm text-muted-foreground">
                 {t(locale, "booking.holdNotice")}
               </p>
-              <Button type="submit" size="lg" disabled={isSubmitting} loading={isSubmitting}>
-                {isSubmitting ? t(locale, "booking.submitting") : t(locale, "booking.submitCta")}
-              </Button>
+              {pendingVerification === "booking" ? (
+                <PhoneVerificationPanel
+                  locale={locale}
+                  phone={normalizeTajikPhone(phone) ?? phone}
+                  onVerified={(verificationId) => {
+                    setPendingVerification(null);
+                    void createBooking(verificationId);
+                  }}
+                />
+              ) : (
+                <Button type="submit" size="lg" disabled={isSubmitting} loading={isSubmitting}>
+                  {isSubmitting ? t(locale, "booking.submitting") : t(locale, "booking.submitCta")}
+                </Button>
+              )}
             </>
           ) : null}
         </CardContent>

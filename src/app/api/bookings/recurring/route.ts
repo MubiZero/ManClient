@@ -10,10 +10,21 @@ import {
   getPaymentUrl,
   PaymentConfigurationError,
 } from "@/core/payments/payment-service";
+import { assertPhoneVerified, spendPhoneVerification } from "@/core/security/phone-verification-gate";
+import { PhoneVerificationError } from "@/core/security/phone-verification-service";
+import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
   try {
     const payload = (await request.json()) as Record<string, unknown>;
+    const customerPayload = (payload.customer ?? {}) as { phone?: unknown };
+    const phone = typeof customerPayload.phone === "string" ? customerPayload.phone : "";
+    const verificationId = typeof payload.phoneVerificationId === "string" ? payload.phoneVerificationId : null;
+
+    await assertRateLimit("booking.recurring", `ip:${clientIdentifier(request)}`);
+    if (phone) await assertRateLimit("booking.recurring", `phone:${phone}`);
+    await assertPhoneVerified({ phone, verificationId });
+
     if (typeof payload.branchId === "string") {
       await assertPaymentCardConfigured(payload.branchId);
     }
@@ -44,6 +55,7 @@ export async function POST(request: Request): Promise<Response> {
     if (!firstBooking) {
       return Response.json({ error: "SLOT_UNAVAILABLE" }, { status: 409 });
     }
+    await spendPhoneVerification({ phone, verificationId });
     const payment = await prisma.payment.findUnique({ where: { bookingId: firstBooking.id } });
     if (!payment) {
       throw new Error("Payment was not created with the first recurring booking");
@@ -63,6 +75,12 @@ export async function POST(request: Request): Promise<Response> {
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof RateLimitedError) {
+      return rateLimitedResponse(error);
+    }
+    if (error instanceof PhoneVerificationError) {
+      return Response.json({ error: error.code }, { status: 403 });
+    }
     if (error instanceof PaymentConfigurationError) {
       return Response.json({ error: error.code }, { status: 503 });
     }

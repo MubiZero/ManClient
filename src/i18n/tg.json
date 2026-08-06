@@ -86,5 +86,16 @@
   "booking.waitlist.periodRequired": "Давраи мувофиқро барои сабт нишон диҳед.",
   "booking.waitlist.datesInvalid": "Санаҳои интихобшударо санҷед.",
   "booking.waitlist.rangeInvalid": "Санаи анҷом бояд аз санаи оғоз дертар бошад.",
-  "booking.waitlist.submitFailed": "Ба навбати интизорӣ дохил шудан нашуд. Бори дигар кӯшиш кунед."
+  "booking.waitlist.submitFailed": "Ба навбати интизорӣ дохил шудан нашуд. Бори дигар кӯшиш кунед.",
+  "booking.verification.title": "Рақамро тасдиқ кунед",
+  "booking.verification.hint": "Мо ба {phone} бо SMS код фиристодем. 6 рақамро ворид кунед, то сабт анҷом ёбад.",
+  "booking.verification.codeLabel": "Код аз SMS",
+  "booking.verification.confirmCta": "Тасдиқ ва сабт",
+  "booking.verification.resendCta": "Кодро аз нав фиристед",
+  "booking.verification.sending": "Код фиристода мешавад…",
+  "booking.verification.invalidCode": "Код мувофиқат накард. Рақамҳои SMS-ро санҷед.",
+  "booking.verification.tooManyAttempts": "Кӯшишҳо аз ҳад зиёд. Коди нав дархост кунед.",
+  "booking.verification.expired": "Мӯҳлати код гузашт. Коди нав дархост кунед.",
+  "booking.verification.sendFailed": "Код фиристода нашуд. Баъдтар бори дигар кӯшиш кунед.",
+  "booking.errors.rateLimited": "Кӯшишҳо аз ҳад зиёд. Каме интизор шавед ва аз нав кӯшиш кунед.",
 }

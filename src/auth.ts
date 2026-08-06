@@ -2,8 +2,9 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
-import { authenticateCredentials } from "@/core/auth/credential-identity";
+import { authenticateWithThrottle } from "@/core/auth/login-throttle";
 import { prisma } from "@/core/database/prisma";
+import { clientIdentifier } from "@/core/security/rate-limit";
 
 const credentialsSchema = z.object({
   identifier: z.string().min(1),
@@ -19,11 +20,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         identifier: { label: "Phone or email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        return authenticateCredentials(parsed.data.identifier, parsed.data.password);
+        // The throttling rule itself lives in core/auth/login-throttle.ts, where it can be tested
+        // without booting NextAuth — see the note there on why only failures are counted.
+        return authenticateWithThrottle({
+          identifier: parsed.data.identifier,
+          password: parsed.data.password,
+          address: clientIdentifier(request),
+        });
       },
     }),
   ],

@@ -1,7 +1,9 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth, signIn } from "@/auth";
 import { registerBusiness, RegistrationError } from "@/core/onboarding/register-business";
+import { assertRateLimit, RateLimitedError } from "@/core/security/rate-limit";
 import { RegistrationForm } from "@/features/onboarding/registration-form";
 import { normalizeTajikPhone } from "@/features/onboarding/tajik-phone";
 import { Card, CardContent } from "@/features/ui-kit/card";
@@ -17,6 +19,10 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
     const phone = normalizeTajikPhone(String(formData.get("phone") ?? "")) ?? "";
     const password = String(formData.get("password") ?? "");
     try {
+      // Registration creates a business, a user and an audit trail; five per hour per address is far
+      // above any real signup rate and far below what a script needs to be worth writing.
+      const forwardedFor = (await headers()).get("x-forwarded-for");
+      await assertRateLimit("auth.register", `ip:${forwardedFor?.split(",")[0]?.trim() || "unknown"}`);
       await registerBusiness({
         ownerName: String(formData.get("ownerName") ?? ""),
         phone,
@@ -24,6 +30,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         businessName: String(formData.get("businessName") ?? ""),
       });
     } catch (caught) {
+      if (caught instanceof RateLimitedError) {
+        redirect("/register?error=throttled");
+      }
       if (caught instanceof RegistrationError) {
         redirect(`/register?error=${caught.code === "PHONE_ALREADY_USED" ? "phone" : "input"}`);
       }
@@ -36,7 +45,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
     ? "Этот номер уже используется. Войдите в существующий кабинет или укажите другой."
     : error === "input"
       ? "Проверьте заполненные поля. Пароль должен содержать минимум 8 символов."
-      : undefined;
+      : error === "throttled"
+        ? "Слишком много попыток регистрации. Попробуйте снова через час."
+        : undefined;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-secondary/30 px-4 py-12">

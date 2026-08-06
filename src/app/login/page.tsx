@@ -7,11 +7,11 @@ import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Field, Input } from "@/features/ui-kit/field";
 
-type LoginPageProps = { searchParams: Promise<{ error?: string }> };
+type LoginPageProps = { searchParams: Promise<{ error?: string; reset?: string }> };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   if (await auth()) redirect("/dashboard");
-  const { error } = await searchParams;
+  const { error, reset } = await searchParams;
 
   async function login(formData: FormData) {
     "use server";
@@ -56,9 +56,17 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 Почта или пароль не подошли. Проверьте данные и попробуйте ещё раз.
               </p>
             ) : null}
+            {reset === "done" ? (
+              <p className="text-[13px] text-muted-foreground" role="status">
+                Пароль изменён. Войдите с новым паролем.
+              </p>
+            ) : null}
             <Button type="submit" size="lg">
               Войти в кабинет
             </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              <Link className="font-medium text-primary hover:underline" href="/reset-password">Забыли пароль?</Link>
+            </p>
             <p className="text-center text-sm text-muted-foreground">
               Ещё нет кабинета? <Link className="font-medium text-primary hover:underline" href="/register">Создать бизнес</Link>
             </p>

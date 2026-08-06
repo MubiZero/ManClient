@@ -86,5 +86,16 @@
   "booking.waitlist.periodRequired": "Укажите период, когда вам удобно записаться.",
   "booking.waitlist.datesInvalid": "Проверьте выбранные даты.",
   "booking.waitlist.rangeInvalid": "Дата окончания должна быть позже даты начала.",
-  "booking.waitlist.submitFailed": "Не удалось встать в лист ожидания. Попробуйте ещё раз."
+  "booking.waitlist.submitFailed": "Не удалось встать в лист ожидания. Попробуйте ещё раз.",
+  "booking.verification.title": "Подтвердите номер",
+  "booking.verification.hint": "Мы отправили код в SMS на {phone}. Введите 6 цифр, чтобы завершить запись.",
+  "booking.verification.codeLabel": "Код из SMS",
+  "booking.verification.confirmCta": "Подтвердить и записаться",
+  "booking.verification.resendCta": "Отправить код снова",
+  "booking.verification.sending": "Отправляем код…",
+  "booking.verification.invalidCode": "Код не подошёл. Проверьте цифры из SMS.",
+  "booking.verification.tooManyAttempts": "Слишком много попыток. Запросите новый код.",
+  "booking.verification.expired": "Код истёк. Запросите новый.",
+  "booking.verification.sendFailed": "Не удалось отправить код. Попробуйте ещё раз позже.",
+  "booking.errors.rateLimited": "Слишком много попыток. Подождите немного и попробуйте снова.",
 }

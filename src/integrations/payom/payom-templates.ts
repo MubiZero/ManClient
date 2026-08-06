@@ -88,6 +88,26 @@ const TEMPLATES: Record<PayomTemplateKind, Record<"ru" | "tg", PayomTemplate>> =
 };
 
 /**
+ * The verification code template is the one entry whose ID is not hardcoded above. Every other
+ * template was approved before this table was written; this one is created per payom account and its
+ * moderation is the gate on turning phone verification on at all — so it is read from
+ * `PAYOM_PHONE_VERIFICATION_TEMPLATE_ID` and its absence is what keeps the feature switched off.
+ *
+ * The approved wording must carry the code in `text-1`, e.g. "ManClient: код подтверждения {text-1}".
+ * Payom's `date-1`/`time-1` validators make any other placeholder useless for a numeric code.
+ */
+export function findPhoneVerificationTemplateId(): string | null {
+  const id = process.env.PAYOM_PHONE_VERIFICATION_TEMPLATE_ID?.trim();
+  return id ? id : null;
+}
+
+export function buildPhoneVerificationSms(code: string): { templateId: string; variables: Record<string, string> } {
+  const templateId = findPhoneVerificationTemplateId();
+  if (!templateId) throw new Error("PAYOM_PHONE_VERIFICATION_TEMPLATE_ID is not configured");
+  return { templateId, variables: { "text-1": code } };
+}
+
+/**
  * Not every notification we send has an SMS template. Review requests can never have one — payom
  * forbids links in template text — and payment reminders and receipt-received notices simply have
  * none yet. Callers must treat `null` as "this kind does not go out over SMS" rather than an error.

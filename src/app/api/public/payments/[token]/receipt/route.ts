@@ -1,9 +1,19 @@
 import { verifyBookingActionToken } from "@/core/bookings/booking-action-token";
 import { ReceiptSubmissionError, submitReceipt } from "@/core/payments/receipt-submission-service";
+import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
 export async function POST(request: Request, context: RouteContext) {
+  // Per-payment cooldowns already exist inside the service; this bounds the OCR work one caller can
+  // trigger across many payments, which is the expensive part.
+  try {
+    await assertRateLimit("receipt.upload", `ip:${clientIdentifier(request)}`);
+  } catch (error) {
+    if (error instanceof RateLimitedError) return rateLimitedResponse(error);
+    throw error;
+  }
+
   const { token } = await context.params;
   let paymentId: string;
   try {

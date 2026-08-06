@@ -869,3 +869,61 @@ model ScheduleException {
   @@index([branchId, startsAt, endsAt])
   @@index([staffId, startsAt, endsAt])
 }
+
+/**
+ * Fixed-window request counters. Postgres rather than Redis because the platform already depends on
+ * Postgres being up, and a limiter that needs a second datastore to work is a limiter that is off
+ * during the incident it exists for. One row per (scope, subject, window); rows are deleted by the
+ * expiry job rather than kept for analytics.
+ */
+model RateLimitCounter {
+  id             String   @id @default(cuid())
+  scope          String
+  subject        String
+  windowStartsAt DateTime
+  count          Int      @default(0)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([scope, subject, windowStartsAt])
+  @@index([expiresAt])
+}
+
+enum PhoneVerificationPurpose {
+  BOOKING
+  PASSWORD_RESET
+}
+
+enum PhoneVerificationStatus {
+  PENDING
+  VERIFIED
+  CONSUMED
+  EXPIRED
+}
+
+/**
+ * A one-time code sent over SMS. Two flows share it: proving that whoever is booking controls the
+ * phone number they typed, and letting a business owner back into an account whose password is gone.
+ *
+ * The code itself is never stored — only a hash — because this table is inside the same database an
+ * SQL injection or a leaked dump would expose, and a plaintext code is a live session.
+ */
+model PhoneVerification {
+  id          String                   @id @default(cuid())
+  phone       String
+  purpose     PhoneVerificationPurpose
+  codeHash    String
+  status      PhoneVerificationStatus  @default(PENDING)
+  attempts    Int                      @default(0)
+  maxAttempts Int                      @default(5)
+  expiresAt   DateTime
+  lastSentAt  DateTime
+  verifiedAt  DateTime?
+  consumedAt  DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([phone, purpose, status])
+  @@index([status, expiresAt])
+}

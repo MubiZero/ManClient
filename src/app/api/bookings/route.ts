@@ -9,10 +9,23 @@ import {
   getPaymentUrl,
   PaymentConfigurationError,
 } from "@/core/payments/payment-service";
+import { assertPhoneVerified, spendPhoneVerification } from "@/core/security/phone-verification-gate";
+import { PhoneVerificationError } from "@/core/security/phone-verification-service";
+import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
   try {
     const payload = (await request.json()) as Record<string, unknown>;
+    const customer = (payload.customer ?? {}) as { phone?: unknown };
+    const phone = typeof customer.phone === "string" ? customer.phone : "";
+    const verificationId = typeof payload.phoneVerificationId === "string" ? payload.phoneVerificationId : null;
+
+    await assertRateLimit("booking.create", `ip:${clientIdentifier(request)}`);
+    // Also per phone: one script rotating through proxies still cannot fill a calendar under a single
+    // number, and a customer who legitimately rebooks four times in ten minutes is unaffected.
+    if (phone) await assertRateLimit("booking.create", `phone:${phone}`);
+    await assertPhoneVerified({ phone, verificationId });
+
     if (typeof payload.branchId === "string") {
       await assertPaymentCardConfigured(payload.branchId);
     }
@@ -20,6 +33,7 @@ export async function POST(request: Request): Promise<Response> {
       ...payload,
       startsAt: new Date(String(payload.startsAt)),
     } as Parameters<typeof createPendingBooking>[0]);
+    await spendPhoneVerification({ phone, verificationId });
     const paymentUrl = await getPaymentUrl(booking.paymentId);
     const telegramUrl = await createTelegramStartUrl(booking.paymentId, booking.expiresAt);
     const paymentTokenExpiresAt = new Date(Math.max(booking.expiresAt.getTime(), new Date(String(payload.startsAt)).getTime() + 24 * 60 * 60_000));
@@ -30,6 +44,14 @@ export async function POST(request: Request): Promise<Response> {
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof RateLimitedError) {
+      return rateLimitedResponse(error);
+    }
+
+    if (error instanceof PhoneVerificationError) {
+      return Response.json({ error: error.code }, { status: 403 });
+    }
+
     if (error instanceof PaymentConfigurationError) {
       return Response.json({ error: error.code }, { status: 503 });
     }

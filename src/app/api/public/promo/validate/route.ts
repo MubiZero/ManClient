@@ -1,7 +1,16 @@
 import { prisma } from "@/core/database/prisma";
 import { validatePromoCode } from "@/core/promotions/promo-code-service";
+import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
+  // Without a limit this endpoint is a free oracle for guessing a business's promo codes.
+  try {
+    await assertRateLimit("promo.validate", `ip:${clientIdentifier(request)}`);
+  } catch (error) {
+    if (error instanceof RateLimitedError) return rateLimitedResponse(error);
+    throw error;
+  }
+
   const payload = (await request.json()) as Record<string, unknown>;
   const businessSlug = typeof payload.businessSlug === "string" ? payload.businessSlug : "";
   const code = typeof payload.code === "string" ? payload.code : "";
