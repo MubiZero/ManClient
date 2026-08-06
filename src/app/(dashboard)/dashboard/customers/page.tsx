@@ -53,6 +53,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
               <TableHead>Телефон</TableHead>
               <TableHead>Telegram</TableHead>
               <TableHead>Записей</TableHead>
+              <TableHead>Неявок</TableHead>
               <TableHead>Потрачено</TableHead>
               <TableHead>Последний визит</TableHead>
             </TableRow>
@@ -66,6 +67,9 @@ export default async function CustomersPage({ searchParams }: PageProps) {
                   <Badge variant={customer.telegramLinked ? "success" : "neutral"}>{customer.telegramLinked ? "Подключён" : "Не подключён"}</Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{customer.totalBookings}</TableCell>
+                <TableCell>
+                  {customer.noShowCount > 0 ? <Badge variant="danger">{customer.noShowCount}</Badge> : <span className="text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell className="text-muted-foreground">{formatSomoni(customer.totalSpentDiram)}</TableCell>
                 <TableCell className="text-muted-foreground">{customer.lastVisit ? dateFormatter.format(customer.lastVisit) : "—"}</TableCell>
               </TableRow>

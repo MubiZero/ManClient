@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { requireBusinessSession } from "@/core/auth/business-session";
-import { cancelBusinessBooking, confirmBusinessBooking, rescheduleBusinessBooking } from "@/core/booking-operations/booking-command-service";
+import { cancelBusinessBooking, confirmBusinessBooking, markBusinessBookingNoShow, rescheduleBusinessBooking } from "@/core/booking-operations/booking-command-service";
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { getBusinessBooking } from "@/core/booking-operations/booking-query-service";
 import { cancelBookingSeries } from "@/core/bookings/recurring-booking-service";
@@ -50,6 +50,16 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
       redirect(`/dashboard/bookings/${bookingId}?error=${errorCode(error)}`);
     }
     redirect(`/dashboard/bookings/${bookingId}?notice=cancelled`);
+  }
+  async function markNoShow() {
+    "use server";
+    const current = await requireBusinessSession();
+    try {
+      await markBusinessBookingNoShow({ businessId: current.businessId, actorUserId: current.userId, bookingId });
+    } catch (error) {
+      redirect(`/dashboard/bookings/${bookingId}?error=${errorCode(error)}`);
+    }
+    redirect(`/dashboard/bookings/${bookingId}?notice=no_show`);
   }
   async function reschedule(formData: FormData) {
     "use server";
@@ -136,7 +146,16 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
                 </a>
               </dd>
               <dt className="text-muted-foreground">Стоимость</dt>
-              <dd className="text-foreground">{formatSomoni(booking.payment?.amountDiram ?? booking.service.amountDiram)}</dd>
+              <dd className="text-foreground">{formatSomoni(booking.payment?.totalDiram || booking.service.amountDiram)}</dd>
+              {booking.payment && booking.payment.totalDiram > booking.payment.amountDiram ? (
+                <>
+                  <dt className="text-muted-foreground">К оплате на месте</dt>
+                  <dd className="text-foreground">
+                    {formatSomoni(booking.payment.totalDiram - booking.payment.amountDiram)}
+                    {booking.payment.amountDiram > 0 ? ` · депозит ${formatSomoni(booking.payment.amountDiram)}` : ""}
+                  </dd>
+                </>
+              ) : null}
               <dt className="text-muted-foreground">Статус оплаты</dt>
               <dd>
                 <PaymentStatus status={booking.payment?.status} />
@@ -155,6 +174,7 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
       {active ? (
         <BookingActionsPanel
           canConfirm={booking.status === "PENDING_PAYMENT"}
+          canMarkNoShow={booking.status === "CONFIRMED" && booking.startsAt <= new Date()}
           branchId={booking.branchId}
           serviceId={booking.serviceId}
           staffId={booking.staffId}
@@ -163,6 +183,7 @@ export default async function BookingDetailsPage({ params, searchParams }: PageP
           confirmAction={confirm}
           rescheduleAction={reschedule}
           cancelAction={cancel}
+          noShowAction={markNoShow}
         />
       ) : null}
 
@@ -210,7 +231,7 @@ function errorCode(error: unknown) {
   return error instanceof BookingOperationError ? error.code : "INVALID_INPUT";
 }
 function noticeMessage(code?: string) {
-  return ({ created: "Запись создана", confirmed: "Запись подтверждена вручную", rescheduled: "Запись перенесена", cancelled: "Запись отменена", series_cancelled: "Серия повторяющихся записей отменена" } as Record<string, string>)[code ?? ""];
+  return ({ created: "Запись создана", confirmed: "Запись подтверждена вручную", rescheduled: "Запись перенесена", cancelled: "Запись отменена", no_show: "Отмечена неявка клиента", series_cancelled: "Серия повторяющихся записей отменена" } as Record<string, string>)[code ?? ""];
 }
 function errorMessage(code?: string) {
   return (

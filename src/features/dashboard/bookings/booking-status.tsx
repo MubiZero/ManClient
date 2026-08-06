@@ -1,7 +1,7 @@
 import { Badge } from "@/features/ui-kit/badge";
 
 export function BookingStatus({ status }: { status: string }) {
-  const value = ({ CONFIRMED: ["Подтверждена", "success"], PENDING_PAYMENT: ["Ждёт оплаты", "warning"], CANCELLED: ["Отменена", "neutral"], EXPIRED: ["Истекла", "neutral"] } as const)[status as "CONFIRMED"] ?? [status, "neutral"];
+  const value = ({ CONFIRMED: ["Подтверждена", "success"], PENDING_PAYMENT: ["Ждёт оплаты", "warning"], CANCELLED: ["Отменена", "neutral"], EXPIRED: ["Истекла", "neutral"], NO_SHOW: ["Неявка", "danger"] } as const)[status as "CONFIRMED"] ?? [status, "neutral"];
   return <Badge variant={value[1]}>{value[0]}</Badge>;
 }
 

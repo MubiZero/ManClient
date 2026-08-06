@@ -18,6 +18,7 @@ type Confirmation = {
 
 export function BookingActionsPanel({
   canConfirm,
+  canMarkNoShow,
   branchId,
   serviceId,
   staffId,
@@ -26,8 +27,11 @@ export function BookingActionsPanel({
   confirmAction,
   rescheduleAction,
   cancelAction,
+  noShowAction,
 }: {
   canConfirm: boolean;
+  /** Only a confirmed visit whose time has already passed can have been missed. */
+  canMarkNoShow: boolean;
   branchId: string;
   serviceId: string;
   staffId: string;
@@ -36,6 +40,7 @@ export function BookingActionsPanel({
   confirmAction: ServerAction;
   rescheduleAction: ServerAction;
   cancelAction: ServerAction;
+  noShowAction: ServerAction;
 }) {
   const [rescheduleReady, setRescheduleReady] = useState(false);
 
@@ -64,6 +69,15 @@ export function BookingActionsPanel({
             Перенести запись
           </Button>
         </ConfirmedBookingForm>
+        {canMarkNoShow ? (
+          <ConfirmedBookingForm
+            action={noShowAction}
+            confirmation={{ title: "Отметить неявку?", description: `Время визита останется занятым в истории, а внесённая предоплата — у бизнеса. Запись: ${bookingLabel}.`, confirmLabel: "Отметить неявку" }}
+          >
+            <p className="text-sm text-muted-foreground">Клиент не пришёл. Напоминания и запрос отзыва по этой записи отправлены не будут.</p>
+            <Button type="submit" variant="secondary">Отметить неявку</Button>
+          </ConfirmedBookingForm>
+        ) : null}
         <ConfirmedBookingForm
           action={cancelAction}
           confirmation={{ title: "Отменить запись?", description: `Действие нельзя отменить. Будет отменена запись: ${bookingLabel}.`, confirmLabel: "Отменить запись" }}

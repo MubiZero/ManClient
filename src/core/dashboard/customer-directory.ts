@@ -50,6 +50,7 @@ export async function listCustomers(input: { businessId: string; search?: string
       name: customer.name,
       phone: customer.phone,
       telegramLinked: Boolean(customer.telegramChatId),
+      noShowCount: customer.noShowCount,
       totalBookings,
       totalSpentDiram,
       lastVisit,

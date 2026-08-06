@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
 
-const bookingStatuses = ["PENDING_PAYMENT", "CONFIRMED", "CANCELLED", "EXPIRED"] as const;
+const bookingStatuses = ["PENDING_PAYMENT", "CONFIRMED", "CANCELLED", "EXPIRED", "NO_SHOW"] as const;
 
 export const bookingFiltersSchema = z.object({
   view: z.enum(["day", "list"]).default("day"),

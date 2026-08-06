@@ -123,6 +123,45 @@ export async function cancelBusinessBooking(input: ActorInput & { bookingId: str
   });
 }
 
+/**
+ * The customer did not come. Not a cancellation: nobody freed the slot, the specialist waited, and the
+ * business needs that difference in its own numbers rather than a day of "cancelled" visits that hides
+ * which hours were actually lost. Any prepayment that had already arrived is recorded as kept — that is
+ * what a deposit exists for — and the count on the customer is what a receptionist looks at next time.
+ */
+export async function markBusinessBookingNoShow(input: ActorInput & { bookingId: string }, now = new Date()) {
+  return prisma.$transaction(async (transaction) => {
+    const scope = await requireBookingAccess(input, transaction);
+    const booking = await transaction.booking.findFirst({ where: { id: input.bookingId, ...bookingScopeWhere(scope) }, include: { payment: true } });
+    if (!booking) throw new BookingOperationError("NOT_FOUND");
+    if (booking.status === "NO_SHOW") return { bookingId: booking.id };
+    if (booking.status !== "CONFIRMED") throw new BookingOperationError("INVALID_STATUS");
+    // Only after the visit was due: marking a future booking as a no-show would be a mistake, not a
+    // decision, and it would silently free a slot the customer still intends to use.
+    if (booking.startsAt > now) throw new BookingOperationError("INVALID_STATUS");
+
+    await transaction.booking.update({ where: { id: booking.id }, data: { status: "NO_SHOW" } });
+    await transaction.customer.update({ where: { id: booking.customerId }, data: { noShowCount: { increment: 1 } } });
+    // Reminders and the review request are for visits that happen. Skipping them here is what stops a
+    // customer who never arrived being asked how it went.
+    await transaction.message.updateMany({ where: { bookingId: booking.id, status: "SCHEDULED" }, data: { status: "SKIPPED", lastError: "BOOKING_NO_SHOW" } });
+    await skipUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id }, transaction);
+    const forfeitedDiram = booking.payment?.status === "RECEIPT_ACCEPTED" ? booking.payment.amountDiram : 0;
+    if (forfeitedDiram > 0) {
+      await transaction.payment.update({ where: { id: booking.payment!.id }, data: { forfeitedAt: now } });
+    }
+    await writeAuditEvent({
+      businessId: input.businessId,
+      bookingId: booking.id,
+      type: "booking.no_show",
+      actorType: "membership",
+      actorId: scope.id,
+      metadata: { startsAt: booking.startsAt.toISOString(), forfeitedDiram },
+    }, transaction);
+    return { bookingId: booking.id, forfeitedDiram };
+  });
+}
+
 export async function remindBusinessBookingPayment(input: ActorInput & { bookingId: string }, now = new Date()) {
   return prisma.$transaction(async (transaction) => {
     const scope = await requireBookingAccess(input, transaction);

@@ -66,6 +66,7 @@ export function BookingFilters({
           <option value="PENDING_PAYMENT">Ждут оплаты</option>
           <option value="CANCELLED">Отменённые</option>
           <option value="EXPIRED">Истёкшие</option>
+          <option value="NO_SHOW">Неявки</option>
         </Select>
         <label htmlFor="booking-branch" className="sr-only">
           Филиал

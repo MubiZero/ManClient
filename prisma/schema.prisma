@@ -18,6 +18,9 @@ enum BookingStatus {
   CONFIRMED
   CANCELLED
   EXPIRED
+  /// The customer never arrived. Distinct from CANCELLED because nobody freed the slot: the specialist
+  /// waited, the time was lost, and that is the difference a business needs to see in its own numbers.
+  NO_SHOW
 }
 
 enum BookingSource {
@@ -763,6 +766,10 @@ model Customer {
   phone           String
   telegramChatId  String?
   telegramLocale  String          @default("ru")
+  /// How many times this customer has failed to turn up. Kept on the customer rather than counted on
+  /// demand so the number survives the bookings being archived, and so a receptionist can see it while
+  /// deciding whether to ask this one for a deposit.
+  noShowCount     Int             @default(0)
   business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   bookings        Booking[]
   bookingSeries   BookingSeries[]
@@ -793,6 +800,9 @@ model Payment {
   operationAt         DateTime?
   receiptStorageKey   String?
   receiptAcceptedAt   DateTime?
+  /// When money that had already arrived was kept because the customer did not come. This is what a
+  /// deposit is for, and recording it is what lets a business answer "was I compensated for that hour".
+  forfeitedAt         DateTime?
   isBankVerified      Boolean             @default(false)
   attentionReason     String?
   reviewReason        String?

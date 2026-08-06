@@ -1,4 +1,4 @@
-import { ACTIVE_BOOKING_STATUSES, blockedWindow } from "@/core/availability/booking-window";
+import { blockedWindow } from "@/core/availability/booking-window";
 import {
   clampInterval,
   intersectIntervals,
@@ -11,7 +11,7 @@ import { bookingScopeWhere, requireBookingAccess } from "@/core/booking-operatio
 import { BookingOperationError } from "@/core/booking-operations/booking-operation-error";
 import { prisma } from "@/core/database/prisma";
 import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
-import type { BookingStatus, PaymentStatus } from "@/generated/prisma/client";
+import { BookingStatus, type PaymentStatus } from "@/generated/prisma/client";
 
 /**
  * One day of one branch, shaped for drawing rather than for listing. The list view answers "which
@@ -23,6 +23,13 @@ import type { BookingStatus, PaymentStatus } from "@/generated/prisma/client";
 /** Fallback bounds for a day with nothing in it at all, so the grid still renders a recognisable day. */
 const EMPTY_DAY_START_MINUTE = 9 * 60;
 const EMPTY_DAY_END_MINUTE = 18 * 60;
+
+/**
+ * Cancelled and expired bookings are left out — they never happened and would clutter today's picture.
+ * A no-show did happen: the specialist waited, and a day reviewed later must show that hour as spent
+ * rather than as time that was quietly free.
+ */
+const DRAWN_BOOKING_STATUSES = [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.NO_SHOW];
 
 const WEEKDAY_BY_NAME: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
@@ -103,7 +110,7 @@ export async function getDaySchedule(input: {
         businessId: input.businessId,
         branches: { some: { branchId: branch.id } },
         ...(staffScope ? { id: staffScope } : {}),
-        OR: [{ archivedAt: null }, { bookings: { some: { branchId: branch.id, status: { in: ACTIVE_BOOKING_STATUSES }, startsAt: { lt: dayEndsAt }, endsAt: { gt: dayStartsAt } } } }],
+        OR: [{ archivedAt: null }, { bookings: { some: { branchId: branch.id, status: { in: DRAWN_BOOKING_STATUSES }, startsAt: { lt: dayEndsAt }, endsAt: { gt: dayStartsAt } } } }],
       },
       select: { id: true, displayName: true, archivedAt: true, scheduleRules: { where: { branchId: branch.id } } },
       orderBy: { displayName: "asc" },
@@ -118,7 +125,7 @@ export async function getDaySchedule(input: {
         ...bookingScopeWhere(scope),
         branchId: branch.id,
         ...(input.staffId ? { staffId: input.staffId } : {}),
-        status: { in: ACTIVE_BOOKING_STATUSES },
+        status: { in: DRAWN_BOOKING_STATUSES },
         startsAt: { lt: dayEndsAt },
         endsAt: { gt: dayStartsAt },
       },

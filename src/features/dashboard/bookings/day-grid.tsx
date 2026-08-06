@@ -19,6 +19,7 @@ const SLOT_MINUTES = 30;
 const STATUS_STYLE: Record<string, string> = {
   CONFIRMED: "border-success/40 bg-success/12 text-foreground",
   PENDING_PAYMENT: "border-warning/50 bg-warning/12 text-foreground",
+  NO_SHOW: "border-destructive/40 bg-destructive/10 text-foreground line-through",
 };
 
 export function DayGrid({ schedule, now }: { schedule: DaySchedule; now?: Date }) {
