@@ -24,13 +24,22 @@ export default async function BookingsPage({ searchParams }: PageProps) {
   const baseTimeZone = branches.find((item) => item.id === query.branchId)?.timeZone ?? branches[0]?.timeZone ?? "Asia/Dushanbe";
   const filters = parseBookingFilters(compactQuery(query), baseTimeZone);
   const calendarInput = { businessId: membership.businessId, actorUserId: membership.userId, branchId: filters.branchId, staffId: filters.staffId, date: filters.date };
-  const [result, staff, day, week] = await Promise.all([
-    listBusinessBookings({ businessId: membership.businessId, actorUserId: membership.userId, filters }),
-    prisma.staffMember.findMany({ where: { businessId: membership.businessId, archivedAt: null, ...(membership.role === "STAFF" ? { id: membership.staff?.id ?? "__none__" } : {}) }, select: { id: true, displayName: true }, orderBy: { displayName: "asc" } }),
+  const [day, week] = await Promise.all([
     filters.view === "day" ? getDaySchedule(calendarInput) : null,
     filters.view === "week" ? getWeekSchedule(calendarInput) : null,
   ]);
   const calendar = day ?? week;
+  // The list sits under the calendar and describes the same period, so it describes the same branch too —
+  // including the one the calendar chose when the URL named none. Two sections disagreeing about which
+  // floor they are talking about is worse than either of them being narrow.
+  const [result, staff] = await Promise.all([
+    listBusinessBookings({
+      businessId: membership.businessId,
+      actorUserId: membership.userId,
+      filters: calendar ? { ...filters, branchId: calendar.branchId } : filters,
+    }),
+    prisma.staffMember.findMany({ where: { businessId: membership.businessId, archivedAt: null, ...(membership.role === "STAFF" ? { id: membership.staff?.id ?? "__none__" } : {}) }, select: { id: true, displayName: true }, orderBy: { displayName: "asc" } }),
+  ]);
 
   /**
    * Dragging a visit in the grid. Returns the failure instead of throwing so the calendar can say why a
@@ -74,7 +83,7 @@ export default async function BookingsPage({ searchParams }: PageProps) {
       />
       <BookingFilters
         date={filters.date}
-        today={todayInTimeZone(result.timeZone)}
+        today={todayInTimeZone(calendar?.timeZone ?? result.timeZone)}
         view={filters.view}
         search={filters.search}
         status={filters.status}
@@ -85,10 +94,23 @@ export default async function BookingsPage({ searchParams }: PageProps) {
       />
       {calendar ? (
         <section className="flex flex-col gap-2">
-          {branches.length > 1 && !filters.branchId ? (
-            <p className="text-sm text-muted-foreground">
-              Календарь показывает филиал «{calendar.branchName}». Чтобы увидеть другой, выберите его в фильтре.
-            </p>
+          {branches.length > 1 ? (
+            // A calendar draws one branch. Saying which one in a sentence left the reader to work out that
+            // the filter was where they change it; tabs say it and change it in the same place.
+            <nav className="flex flex-wrap items-center gap-1 rounded-md bg-secondary p-1 w-fit" aria-label="Филиал календаря">
+              {branches.map((branch) => (
+                <Link
+                  key={branch.id}
+                  href={`/dashboard/bookings?${new URLSearchParams({ view: filters.view, date: filters.date, branchId: branch.id, ...(filters.staffId ? { staffId: filters.staffId } : {}) }).toString()}`}
+                  aria-current={branch.id === calendar.branchId ? "page" : undefined}
+                  className={branch.id === calendar.branchId
+                    ? "rounded-sm bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-sm"
+                    : "rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"}
+                >
+                  {branch.name}
+                </Link>
+              ))}
+            </nav>
           ) : null}
           {week && !week.staffId ? (
             <p className="text-sm text-muted-foreground">

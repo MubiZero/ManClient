@@ -150,6 +150,30 @@ describe("day schedule", () => {
     expect(bookings.every((booking) => booking.laneCount === 2)).toBe(true);
   });
 
+  it("opens on the specialist's own branch rather than the oldest one", async () => {
+    const context = await setup();
+    const second = await prisma.branch.create({
+      data: {
+        businessId: context.business.id,
+        name: "Вторая",
+        slug: `second-${context.branch.id}`,
+        scheduleRules: { create: { dayOfWeek: 0, startsAt: "10:00", endsAt: "16:00" } },
+      },
+    });
+    const zafar = await prisma.staffMember.create({
+      data: { businessId: context.business.id, displayName: "Зафар", branches: { create: { branchId: second.id, isPrimary: true } } },
+    });
+    const user = await prisma.user.create({ data: { email: `zafar-${context.business.id}@test.local`, displayName: "Зафар" } });
+    userIds.push(user.id);
+    const membership = await prisma.membership.create({ data: { businessId: context.business.id, userId: user.id, role: "STAFF" } });
+    await prisma.staffMember.update({ where: { id: zafar.id }, data: { membershipId: membership.id } });
+
+    // The owner still lands on the oldest branch, which is the one the tabs will show as active.
+    await expect(getDaySchedule({ businessId: context.business.id, actorUserId: context.ownerId, date: DATE })).resolves.toMatchObject({ branchId: context.branch.id });
+    // Zafar works in the second branch, so his own calendar opens there instead of on a colleague's floor.
+    await expect(getDaySchedule({ businessId: context.business.id, actorUserId: user.id, date: DATE })).resolves.toMatchObject({ branchId: second.id, branchName: "Вторая" });
+  });
+
   it("refuses a date it cannot read", async () => {
     const context = await setup();
 

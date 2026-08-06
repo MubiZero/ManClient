@@ -173,8 +173,17 @@ type ScheduleContext = Awaited<ReturnType<typeof loadScheduleContext>>;
  */
 async function loadScheduleContext(input: ScheduleInput, fromDate: string, toDate: string) {
   const scope = await requireBookingAccess(input);
+  // Without an explicit choice a calendar has to pick a branch, and "the oldest one" is the wrong guess for
+  // a specialist who works in the second: they would open their own calendar and see somebody else's floor.
+  const defaultBranchId = input.branchId ?? (scope.staffId
+    ? (await prisma.staffBranch.findFirst({
+        where: { staffId: scope.staffId, branch: { businessId: input.businessId, archivedAt: null } },
+        orderBy: { isPrimary: "desc" },
+        select: { branchId: true },
+      }))?.branchId
+    : undefined);
   const branch = await prisma.branch.findFirst({
-    where: { businessId: input.businessId, archivedAt: null, ...(input.branchId ? { id: input.branchId } : {}) },
+    where: { businessId: input.businessId, archivedAt: null, ...(defaultBranchId ? { id: defaultBranchId } : {}) },
     select: { id: true, name: true, timeZone: true, scheduleRules: true },
     orderBy: { createdAt: "asc" },
   });
