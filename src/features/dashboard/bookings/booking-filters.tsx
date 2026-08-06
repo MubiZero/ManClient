@@ -99,7 +99,7 @@ export function BookingFilters({
 
       {view === "day" ? (
         <div className="flex items-center gap-2">
-          <BookingDatePicker date={date} buildHref={(value) => `/dashboard/bookings?view=day&date=${value}`} />
+          <BookingDatePicker date={date} hrefPattern="/dashboard/bookings?view=day&date={date}" />
           <Link href={`/dashboard/bookings?view=day&date=${addDays(date, -1)}`} className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
             ← Пред. день
           </Link>

@@ -8,7 +8,14 @@ import { Button } from "@/features/ui-kit/button";
 import { Calendar } from "@/features/ui-kit/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/features/ui-kit/popover";
 
-export function BookingDatePicker({ date, buildHref }: { date: string; buildHref: (date: string) => string }) {
+/**
+ * The href is a pattern rather than a callback: this is a client component, and a server component that
+ * passed it a closure crashed the whole page on render ("Functions cannot be passed directly to Client
+ * Components"). A string crosses the boundary; a function cannot.
+ */
+const DATE_PLACEHOLDER = "{date}";
+
+export function BookingDatePicker({ date, hrefPattern }: { date: string; hrefPattern: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const selected = new Date(`${date}T00:00:00`);
@@ -29,7 +36,7 @@ export function BookingDatePicker({ date, buildHref }: { date: string; buildHref
             if (!value) return;
             setOpen(false);
             const isoDate = `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-            router.push(buildHref(isoDate));
+            router.push(hrefPattern.replace(DATE_PLACEHOLDER, isoDate));
           }}
         />
       </PopoverContent>
