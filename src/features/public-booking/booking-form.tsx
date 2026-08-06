@@ -732,7 +732,6 @@ export function BookingForm({
                 <PhoneVerificationPanel
                   locale={locale}
                   phone={normalizeTajikPhone(phone) ?? phone}
-                  businessSlug={businessSlug}
                   onVerified={(verificationId) => {
                     setPendingVerification(null);
                     void createBooking(verificationId);
@@ -819,7 +818,6 @@ export function BookingForm({
                 <PhoneVerificationPanel
                   locale={locale}
                   phone={normalizeTajikPhone(waitlistPhone) ?? waitlistPhone}
-                  businessSlug={businessSlug}
                   onVerified={(verificationId) => {
                     setPendingVerification(null);
                     void joinWaitlist(verificationId);

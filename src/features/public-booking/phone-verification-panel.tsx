@@ -18,14 +18,11 @@ export function PhoneVerificationPanel({
   locale,
   phone,
   purpose = "BOOKING",
-  businessSlug,
   onVerified,
 }: {
   locale: SupportedLocale;
   phone: string;
   purpose?: "BOOKING" | "PASSWORD_RESET";
-  /** Absent for account recovery, where the code is from the platform rather than from a salon. */
-  businessSlug?: string;
   onVerified: (verificationId: string) => void;
 }) {
   const [verificationId, setVerificationId] = useState<string | null>(null);
@@ -42,7 +39,7 @@ export function PhoneVerificationPanel({
       const response = await fetch("/api/public/phone/request", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phone, purpose, ...(businessSlug ? { businessSlug } : {}) }),
+        body: JSON.stringify({ phone, purpose }),
       });
       const payload = (await response.json()) as { verificationId?: string; error?: string; retryAfterSeconds?: number };
       if (!response.ok || !payload.verificationId) {
@@ -56,7 +53,7 @@ export function PhoneVerificationPanel({
     } finally {
       setIsSending(false);
     }
-  }, [businessSlug, locale, phone, purpose]);
+  }, [locale, phone, purpose]);
 
   useEffect(() => {
     if (requestedRef.current) return;

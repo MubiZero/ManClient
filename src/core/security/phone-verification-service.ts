@@ -6,7 +6,7 @@ import { logger, maskPhone } from "@/core/observability/logger";
 import { assertRateLimit } from "@/core/security/rate-limit";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
 import { sendSms } from "@/integrations/payom/payom-client";
-import { buildPhoneVerificationSms, findPhoneVerificationTemplateId, PLATFORM_SMS_LABEL } from "@/integrations/payom/payom-templates";
+import { buildPhoneVerificationSms, findPhoneVerificationTemplateId } from "@/integrations/payom/payom-templates";
 
 /**
  * Proof that whoever typed a phone number can receive SMS on it. Two things depended on this being
@@ -45,23 +45,6 @@ export class PhoneVerificationError extends Error {
   }
 }
 
-/**
- * Who the code says it is from. A booking names the salon the customer is booking with — that is what
- * makes the SMS make sense to them. Account recovery has no single business to name: the owner may have
- * several, and signing a login code with one salon's name would be both wrong and a phishing pattern.
- */
-async function resolveSmsLabel(businessSlug: string | null | undefined): Promise<string> {
-  if (!businessSlug) return PLATFORM_SMS_LABEL;
-  const business = await prisma.business.findUnique({ where: { slug: businessSlug }, select: { name: true } });
-  if (!business) {
-    // An unknown slug falls back to the platform rather than failing: the customer still gets their code,
-    // and no SMS goes out under a name nobody verified.
-    logger.warn("phone_verification.unknown_business", { businessSlug });
-    return PLATFORM_SMS_LABEL;
-  }
-  return business.name;
-}
-
 export function isPhoneVerificationConfigured(): boolean {
   return Boolean(findPhoneVerificationTemplateId() && process.env.PAYOM_API_TOKEN);
 }
@@ -92,7 +75,7 @@ function matchesHash(code: string, expected: string): boolean {
 export type PhoneVerificationSendDependencies = { sendSms: typeof sendSms };
 
 export async function requestPhoneVerification(
-  input: { phone: string; purpose: PhoneVerificationPurpose; businessSlug?: string | null },
+  input: { phone: string; purpose: PhoneVerificationPurpose },
   now = new Date(),
   dependencies: PhoneVerificationSendDependencies = { sendSms },
 ): Promise<{ verificationId: string; expiresAt: Date; resendAvailableInSeconds: number }> {
@@ -119,9 +102,6 @@ export async function requestPhoneVerification(
     data: { status: "EXPIRED" },
   });
 
-  // Resolved from the database by slug, never taken as text from the caller: the name goes into an SMS,
-  // and accepting it verbatim would let anyone send codes signed with somebody else's salon.
-  const label = await resolveSmsLabel(input.businessSlug);
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const verification = await prisma.phoneVerification.create({
     data: {
@@ -136,7 +116,7 @@ export async function requestPhoneVerification(
   });
 
   try {
-    await dependencies.sendSms({ telephone: phone, ...buildPhoneVerificationSms(code, label) });
+    await dependencies.sendSms({ telephone: phone, ...buildPhoneVerificationSms(code) });
   } catch (error) {
     // The row is expired rather than left PENDING: an undelivered code must not consume the user's
     // one live code and make the next request look like a resend.

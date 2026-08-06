@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/core/database/prisma";
@@ -21,7 +19,6 @@ import type { PayomSmsMessage } from "@/integrations/payom/payom-client";
  * used, a code accepted for a different number, or guessing without a cap.
  */
 describe("phone verification", () => {
-  const businessIds: string[] = [];
   const sent: PayomSmsMessage[] = [];
   const sendSms = async (input: PayomSmsMessage) => {
     sent.push(input);
@@ -36,8 +33,7 @@ describe("phone verification", () => {
     delete process.env.PHONE_VERIFICATION_REQUIRED;
   });
 
-  afterEach(async () => {
-    await prisma.business.deleteMany({ where: { id: { in: businessIds.splice(0) } } });
+  afterEach(() => {
     delete process.env.PAYOM_API_TOKEN;
     delete process.env.PAYOM_PHONE_VERIFICATION_TEMPLATE_ID;
     delete process.env.PHONE_VERIFICATION_REQUIRED;
@@ -55,26 +51,6 @@ describe("phone verification", () => {
     });
   });
 
-  it("names the salon the customer is booking with, read from the database", async () => {
-    const business = await prisma.business.create({ data: { name: "Барбершоп Алиф", slug: `alif-${randomUUID()}` } });
-    businessIds.push(business.id);
-
-    await requestPhoneVerification({ phone: uniquePhone(), purpose: "BOOKING", businessSlug: business.slug }, new Date(), { sendSms });
-
-    expect(sent[0]?.variables["text-1"]).toBe("Барбершоп Алиф");
-  });
-
-  it("signs a code from the platform when no salon is asking", async () => {
-    // Account recovery: the owner may have several businesses, so naming one of them would be a guess.
-    await requestPhoneVerification({ phone: uniquePhone(), purpose: "PASSWORD_RESET" }, new Date(), { sendSms });
-    expect(sent[0]?.variables["text-1"]).toBe("ManClient");
-
-    // An unknown slug is somebody probing, not a salon: the code still goes out, unsigned by any business.
-    sent.length = 0;
-    await requestPhoneVerification({ phone: uniquePhone(), purpose: "BOOKING", businessSlug: "no-such-salon" }, new Date(), { sendSms });
-    expect(sent[0]?.variables["text-1"]).toBe("ManClient");
-  });
-
   it("can send codes without enforcing them, for a two-step rollout", () => {
     process.env.PHONE_VERIFICATION_REQUIRED = "false";
     expect(isPhoneVerificationConfigured()).toBe(true);
@@ -87,7 +63,7 @@ describe("phone verification", () => {
 
     expect(sent).toHaveLength(1);
     expect(sent[0]?.templateId).toBe("template-code-id");
-    const code = sent[0]?.variables["text-2"] ?? "";
+    const code = sent[0]?.variables["code-1"] ?? "";
     expect(code).toMatch(/^\d{6}$/);
 
     const stored = await prisma.phoneVerification.findUniqueOrThrow({ where: { id: requested.verificationId } });
@@ -99,7 +75,7 @@ describe("phone verification", () => {
     const phone = uniquePhone();
     const now = new Date("2026-08-04T10:00:00.000Z");
     const requested = await requestPhoneVerification({ phone, purpose: "BOOKING" }, now, { sendSms });
-    const code = sent[0]?.variables["text-2"] ?? "";
+    const code = sent[0]?.variables["code-1"] ?? "";
 
     await expect(confirmPhoneVerification({ verificationId: requested.verificationId, phone, code }, now)).resolves.toMatchObject({
       phone,
@@ -122,7 +98,7 @@ describe("phone verification", () => {
     const other = uniquePhone();
     const now = new Date("2026-08-04T10:00:00.000Z");
     const requested = await requestPhoneVerification({ phone, purpose: "BOOKING" }, now, { sendSms });
-    const code = sent[0]?.variables["text-2"] ?? "";
+    const code = sent[0]?.variables["code-1"] ?? "";
 
     await expect(confirmPhoneVerification({ verificationId: requested.verificationId, phone: other, code }, now)).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -133,7 +109,7 @@ describe("phone verification", () => {
     const phone = uniquePhone();
     const now = new Date("2026-08-04T10:00:00.000Z");
     const requested = await requestPhoneVerification({ phone, purpose: "BOOKING" }, now, { sendSms });
-    const actual = sent[0]?.variables["text-2"] ?? "";
+    const actual = sent[0]?.variables["code-1"] ?? "";
     const wrong = actual === "000000" ? "111111" : "000000";
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -153,7 +129,7 @@ describe("phone verification", () => {
   it("refuses an expired code and lets maintenance clean it up", async () => {
     const phone = uniquePhone();
     const requested = await requestPhoneVerification({ phone, purpose: "BOOKING" }, new Date("2026-08-04T10:00:00.000Z"), { sendSms });
-    const code = sent[0]?.variables["text-2"] ?? "";
+    const code = sent[0]?.variables["code-1"] ?? "";
 
     // Codes live ten minutes.
     await expect(
