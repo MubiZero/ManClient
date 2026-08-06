@@ -3,10 +3,12 @@ import Link from "next/link";
 import { requireBusinessSession } from "@/core/auth/business-session";
 import { parseBookingFilters } from "@/core/booking-operations/booking-operation-schemas";
 import { listBusinessBookings } from "@/core/booking-operations/booking-query-service";
+import { getDaySchedule } from "@/core/booking-operations/day-schedule-service";
 import { prisma } from "@/core/database/prisma";
 import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
 import { BookingFilters } from "@/features/dashboard/bookings/booking-filters";
 import { BookingList } from "@/features/dashboard/bookings/booking-list";
+import { DayGrid } from "@/features/dashboard/bookings/day-grid";
 import { ButtonLink } from "@/features/ui-kit/button";
 import { PageHeader } from "@/features/ui-kit/page-header";
 
@@ -18,9 +20,12 @@ export default async function BookingsPage({ searchParams }: PageProps) {
   const branches = await prisma.branch.findMany({ where: { businessId: membership.businessId, archivedAt: null }, select: { id: true, name: true, timeZone: true }, orderBy: { name: "asc" } });
   const baseTimeZone = branches.find((item) => item.id === query.branchId)?.timeZone ?? branches[0]?.timeZone ?? "Asia/Dushanbe";
   const filters = parseBookingFilters(compactQuery(query), baseTimeZone);
-  const [result, staff] = await Promise.all([
+  const [result, staff, schedule] = await Promise.all([
     listBusinessBookings({ businessId: membership.businessId, actorUserId: membership.userId, filters }),
     prisma.staffMember.findMany({ where: { businessId: membership.businessId, archivedAt: null, ...(membership.role === "STAFF" ? { id: membership.staff?.id ?? "__none__" } : {}) }, select: { id: true, displayName: true }, orderBy: { displayName: "asc" } }),
+    filters.view === "day"
+      ? getDaySchedule({ businessId: membership.businessId, actorUserId: membership.userId, branchId: filters.branchId, staffId: filters.staffId, date: filters.date })
+      : null,
   ]);
   const filtered = Boolean(filters.search || filters.status || filters.branchId || filters.staffId);
 
@@ -50,6 +55,17 @@ export default async function BookingsPage({ searchParams }: PageProps) {
         branches={branches}
         staff={staff}
       />
+      {schedule ? (
+        <section className="flex flex-col gap-2">
+          {branches.length > 1 && !filters.branchId ? (
+            <p className="text-sm text-muted-foreground">
+              Календарь показывает филиал «{schedule.branchName}». Чтобы увидеть другой, выберите его в фильтре.
+            </p>
+          ) : null}
+          <DayGrid schedule={schedule} now={new Date()} />
+        </section>
+      ) : null}
+      {schedule ? <h2 className="text-sm font-semibold text-foreground">Записи за день</h2> : null}
       <BookingList items={result.items} filtered={filtered} />
       {result.nextCursor ? (
         <Link

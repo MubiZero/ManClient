@@ -16,19 +16,23 @@ type Staff = { id: string; displayName: string };
 type Service = { id: string; name: string; branchId: string; staffMembers: Staff[] };
 type Branch = { id: string; name: string; timeZone: string };
 
-export function ManualBookingForm({ action, branches, services, error, canRepeat = false }: { action: (formData: FormData) => void | Promise<void>; branches: Branch[]; services: Service[]; error?: string; canRepeat?: boolean }) {
+/** What a slot clicked in the day calendar carries over, so only the service is left to pick. */
+type Prefill = { branchId?: string; staffId?: string; date?: string; startsAt?: string };
+
+export function ManualBookingForm({ action, branches, services, error, canRepeat = false, initial }: { action: (formData: FormData) => void | Promise<void>; branches: Branch[]; services: Service[]; error?: string; canRepeat?: boolean; initial?: Prefill }) {
   const [repeatEnabled, setRepeatEnabled] = useState(false);
-  const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
+  const [branchId, setBranchId] = useState(initial?.branchId ?? branches[0]?.id ?? "");
   const branchServices = useMemo(() => services.filter((item) => item.branchId === branchId), [services, branchId]);
   const timeZone = branches.find((item) => item.id === branchId)?.timeZone ?? "Asia/Dushanbe";
   const [serviceId, setServiceId] = useState("");
   const service = branchServices.find((item) => item.id === serviceId);
-  const [staffId, setStaffId] = useState("");
-  const [date, setDate] = useState("");
+  const [staffId, setStaffId] = useState(initial?.staffId ?? "");
+  const [date, setDate] = useState(initial?.date ?? "");
   const [starts, setStarts] = useState<string[]>([]);
   const [startsAt, setStartsAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [slotError, setSlotError] = useState("");
+  const requestedStart = initial?.startsAt ? Date.parse(initial.startsAt) : Number.NaN;
 
   async function loadSlots(nextDate: string, nextStaffId = staffId, nextServiceId = serviceId) {
     setDate(nextDate); setStarts([]); setStartsAt(""); setSlotError("");
@@ -37,7 +41,12 @@ export function ManualBookingForm({ action, branches, services, error, canRepeat
     try {
       const response = await fetch(`/api/availability?${new URLSearchParams({ branchId, serviceId: nextServiceId, staffId: nextStaffId, date: nextDate })}`);
       if (!response.ok) throw new Error("availability");
-      setStarts(((await response.json()) as { starts: string[] }).starts);
+      const loaded = ((await response.json()) as { starts: string[] }).starts;
+      setStarts(loaded);
+      // Only preselect a slot the sweep just confirmed: the calendar the receptionist clicked is a moment
+      // old, and silently moving them to a neighbouring time would be worse than asking again.
+      const requested = loaded.find((value) => Date.parse(value) === requestedStart);
+      if (requested) setStartsAt(requested);
     } catch { setSlotError("Не удалось загрузить свободное время. Попробуйте ещё раз."); }
     finally { setLoading(false); }
   }
@@ -57,7 +66,20 @@ export function ManualBookingForm({ action, branches, services, error, canRepeat
           </Select>
         </Field>
         <Field label="Услуга">
-          <Select name="serviceId" value={serviceId} onChange={(event) => { setServiceId(event.target.value); setStaffId(""); setDate(""); setStarts([]); }} required>
+          <Select
+            name="serviceId"
+            value={serviceId}
+            onChange={(event) => {
+              const nextServiceId = event.target.value;
+              // A specialist and a date already chosen survive a change of service if the new service is
+              // one they perform. Clearing them unconditionally made a prefilled slot unusable.
+              const nextStaffId = branchServices.find((item) => item.id === nextServiceId)?.staffMembers.some((item) => item.id === staffId) ? staffId : "";
+              setServiceId(nextServiceId);
+              setStaffId(nextStaffId);
+              void loadSlots(date, nextStaffId, nextServiceId);
+            }}
+            required
+          >
             <option value="">Выберите услугу</option>
             {branchServices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </Select>

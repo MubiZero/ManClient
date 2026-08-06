@@ -10,7 +10,7 @@ import { businessHasFeature } from "@/core/platform/subscription-plans";
 import { EntityListPage } from "@/features/dashboard/entity-list-page";
 import { ManualBookingForm } from "@/features/dashboard/bookings/manual-booking-form";
 
-type PageProps = { searchParams: Promise<{ error?: string }> };
+type PageProps = { searchParams: Promise<{ error?: string; branchId?: string; staffId?: string; date?: string; startsAt?: string }> };
 
 export default async function NewBookingPage({ searchParams }: PageProps) {
   const membership = await requireBusinessSession();
@@ -51,7 +51,19 @@ export default async function NewBookingPage({ searchParams }: PageProps) {
     }
   }
 
-  return <EntityListPage title="Создать запись" description="Добавьте клиента в свободное время без перехода на публичную страницу."><ManualBookingForm action={create} branches={branches} services={services} error={errorMessage(query.error)} canRepeat={canRepeat} /></EntityListPage>;
+  return <EntityListPage title="Создать запись" description="Добавьте клиента в свободное время без перехода на публичную страницу."><ManualBookingForm action={create} branches={branches} services={services} error={errorMessage(query.error)} canRepeat={canRepeat} initial={prefill(query, branches)} /></EntityListPage>;
+}
+
+/**
+ * A slot clicked in the day calendar arrives here as branch, specialist, date and instant. Only the
+ * service is left to choose, and the requested time is preselected once the sweep confirms it is still
+ * free — the calendar's picture is a moment old, and the form must not promise what has since been taken.
+ */
+function prefill(query: { branchId?: string; staffId?: string; date?: string; startsAt?: string }, branches: Array<{ id: string }>) {
+  const branchId = query.branchId && branches.some((branch) => branch.id === query.branchId) ? query.branchId : undefined;
+  if (!branchId) return undefined;
+  const startsAt = query.startsAt && !Number.isNaN(Date.parse(query.startsAt)) ? query.startsAt : undefined;
+  return { branchId, staffId: query.staffId, date: /^\d{4}-\d{2}-\d{2}$/.test(query.date ?? "") ? query.date : undefined, startsAt };
 }
 
 function errorMessage(code?: string) { return ({ INVALID_INPUT: "Проверьте имя и номер телефона клиента.", SLOT_UNAVAILABLE: "Это время уже занято или находится вне рабочего графика. Выберите другой слот.", NOT_FOUND: "Услуга, филиал или специалист больше недоступны.", FORBIDDEN: "У вас нет доступа к выбранному специалисту.", PLAN_REQUIRED: "Повторяющиеся записи доступны только на тарифе Премиум." } as Record<string, string>)[code ?? ""]; }
