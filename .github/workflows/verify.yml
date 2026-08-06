@@ -7,6 +7,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # GitHub occasionally does not create a run for a push, which leaves main ahead of what is deployed and
+  # no way to fix it but an empty commit. This makes the same pipeline — tests, browser suite, deploy —
+  # runnable by hand against any ref.
+  workflow_dispatch:
 
 env:
   DATABASE_URL: postgresql://manclient:manclient@127.0.0.1:5432/manclient
@@ -105,7 +109,7 @@ jobs:
 
   deploy:
     needs: [test, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - name: Trigger Coolify deployment
