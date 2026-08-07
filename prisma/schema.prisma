@@ -71,6 +71,21 @@ enum SubscriptionPlan {
   PREMIUM
 }
 
+/// Whether the sold plan is currently in force. The plan itself says what was sold; this says
+/// whether it still applies. `GRACE` deliberately keeps every paid feature switched on — it is a
+/// warning, not a punishment.
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  GRACE
+  EXPIRED
+}
+
+enum BillingPeriod {
+  MONTHLY
+  YEARLY
+}
+
 enum RecurrenceFrequency {
   WEEKLY
   BIWEEKLY
@@ -213,6 +228,11 @@ model Business {
   /// Fixed deposit in diram. Wins over the percentage, and is capped at the price of the visit.
   depositAmountDiram               Int?
   subscriptionPlan                 SubscriptionPlan              @default(START)
+  subscriptionStatus               SubscriptionStatus            @default(ACTIVE)
+  /// Paid through this moment. Null means no expiry at all, which is what every business had before
+  /// billing existed and what a manual grant by a platform admin still means. The lifecycle job must
+  /// never touch a null.
+  subscriptionEndsAt               DateTime?
   smsNotificationsEnabled          Boolean                       @default(false)
   defaultCommissionPercent         Int?
   publicPageLocale                 String                        @default("ru")
