@@ -41,7 +41,7 @@ describe("phone verification SMS", () => {
 
     const label = smsLabel(long);
 
-    // Cyrillic fits 70 characters per segment and the fixed wording spends 26 of them.
+    // Cyrillic fits 70 characters per segment and the fixed wording spends 28 of them.
     expect(label.length).toBeLessThanOrEqual(40);
     expect(label.endsWith("…")).toBe(true);
     expect(smsLabel("Барбершоп Алиф")).toBe("Барбершоп Алиф");
