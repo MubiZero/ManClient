@@ -3,7 +3,7 @@ import { requireSettingsAccess } from "@/core/business-settings/authorize-settin
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
 import { writeAuditEvent } from "@/core/audit/audit-service";
-import { businessHasFeature } from "@/core/platform/subscription-plans";
+import { SUBSCRIPTION_SELECT, businessHasFeature } from "@/core/platform/subscription-plans";
 
 // `commissionPercent` is gated by the STAFF_COMMISSIONS plan feature: businesses without the
 // feature have any submitted value silently dropped to `null` server-side (not a hard
@@ -31,8 +31,8 @@ async function saveStaff(input: StaffInput & { staffId?: string }) {
   if (!commissionParsed.success) throw new SettingsError("INVALID_INPUT");
   return prisma.$transaction(async transaction => {
     await requireSettingsAccess(transaction, input);
-    const business = await transaction.business.findUniqueOrThrow({ where: { id: input.businessId }, select: { subscriptionPlan: true } });
-    const commissionPercent = businessHasFeature(business.subscriptionPlan, "STAFF_COMMISSIONS") ? commissionParsed.data ?? null : null;
+    const business = await transaction.business.findUniqueOrThrow({ where: { id: input.businessId }, select: SUBSCRIPTION_SELECT });
+    const commissionPercent = businessHasFeature(business, "STAFF_COMMISSIONS") ? commissionParsed.data ?? null : null;
     const branchCount = await transaction.branch.count({ where: { id: { in: value.branchIds }, businessId: input.businessId, archivedAt: null } });
     const services = await transaction.service.findMany({ where: { id: { in: value.serviceIds }, branch: { businessId: input.businessId }, archivedAt: null }, select: { id: true, branchId: true } });
     if (branchCount !== value.branchIds.length || services.length !== value.serviceIds.length || services.some(service => !value.branchIds.includes(service.branchId))) throw new SettingsError("INVALID_INPUT");

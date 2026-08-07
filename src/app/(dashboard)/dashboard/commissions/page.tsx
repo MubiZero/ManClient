@@ -19,7 +19,7 @@ export default async function CommissionsPage({ searchParams }: PageProps) {
   const membership = await requireBusinessAdmin();
   const query = compactQuery(await searchParams);
 
-  if (!businessHasFeature(membership.business.subscriptionPlan, "STAFF_COMMISSIONS")) {
+  if (!businessHasFeature(membership.business, "STAFF_COMMISSIONS")) {
     return (
       <>
         <PageHeader eyebrow="Персонал" title="Комиссии" description="Учёт комиссионных начислений специалистам." />

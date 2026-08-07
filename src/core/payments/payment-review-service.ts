@@ -5,7 +5,7 @@ import { cardLast4 } from "@/core/formatting/card-number";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
-import { businessHasFeature } from "@/core/platform/subscription-plans";
+import { SUBSCRIPTION_SELECT, businessHasFeature } from "@/core/platform/subscription-plans";
 import { scheduleBookingReminders, scheduleReviewRequest, scheduleSmsConfirmation, scheduleSmsPaymentRejected, scheduleWhatsAppConfirmation, scheduleWhatsAppPaymentRejected } from "@/core/notifications/notification-service";
 import { getReceipt, type ReceiptObject } from "@/core/payments/receipt-storage";
 import { scheduleBusinessNotification, scheduleUpcomingBusinessVisit } from "@/core/notifications/business-notification-service";
@@ -279,9 +279,9 @@ async function recordCommissionEntry(
 ) {
   const business = await transaction.business.findUniqueOrThrow({
     where: { id: input.businessId },
-    select: { subscriptionPlan: true, defaultCommissionPercent: true },
+    select: { ...SUBSCRIPTION_SELECT, defaultCommissionPercent: true },
   });
-  if (!businessHasFeature(business.subscriptionPlan, "STAFF_COMMISSIONS")) return;
+  if (!businessHasFeature(business, "STAFF_COMMISSIONS")) return;
   const staff = await transaction.staffMember.findUniqueOrThrow({ where: { id: input.staffId }, select: { commissionPercent: true } });
   const percent = staff.commissionPercent ?? business.defaultCommissionPercent ?? 0;
   if (percent <= 0) return;

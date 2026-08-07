@@ -17,7 +17,7 @@ import {
   scheduleUpcomingBusinessVisit,
 } from "@/core/notifications/business-notification-service";
 import { scheduleBookingReminders } from "@/core/notifications/notification-service";
-import { requirePlanFeature } from "@/core/platform/subscription-plans";
+import { SUBSCRIPTION_SELECT, requirePlanFeature } from "@/core/platform/subscription-plans";
 
 const RESERVATION_MINUTES = 15;
 const MIN_OCCURRENCES = 2;
@@ -54,10 +54,10 @@ export async function createRecurringBooking(input: CreateRecurringBookingInput,
 
   const business = await prisma.business.findUnique({
     where: { id: input.businessId },
-    select: { id: true, subscriptionPlan: true, prepaymentMode: true, depositPercent: true, depositAmountDiram: true },
+    select: { id: true, ...SUBSCRIPTION_SELECT, prepaymentMode: true, depositPercent: true, depositAmountDiram: true },
   });
   if (!business) throw new SettingsError("NOT_FOUND");
-  requirePlanFeature(business.subscriptionPlan, "RECURRING_BOOKINGS");
+  requirePlanFeature(business, "RECURRING_BOOKINGS");
 
   const phone = normalizeTajikPhone(value.customer.phone);
   if (!phone) throw new SettingsError("INVALID_INPUT");

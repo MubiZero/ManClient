@@ -34,7 +34,7 @@ function formatRange(from: Date, to: Date) {
 export default async function WaitlistPage({ searchParams }: PageProps) {
   const membership = await requireBusinessAdmin();
 
-  if (!businessHasFeature(membership.business.subscriptionPlan, "WAITLIST")) {
+  if (!businessHasFeature(membership.business, "WAITLIST")) {
     return (
       <>
         <PageHeader eyebrow="Клиенты" title="Лист ожидания" description="Клиенты, которые ждут освободившийся слот." />

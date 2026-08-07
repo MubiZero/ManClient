@@ -43,6 +43,8 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
       depositAmountDiram: true,
       publicPageLocale: true,
       subscriptionPlan: true,
+      subscriptionStatus: true,
+      subscriptionEndsAt: true,
       branches: {
         orderBy: { name: "asc" },
         select: {
@@ -75,7 +77,7 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
     ? ({ "--color-primary": business.brandColor, "--color-ring": business.brandColor } as CSSProperties)
     : undefined;
 
-  const rating = businessHasFeature(business.subscriptionPlan, "REVIEWS")
+  const rating = businessHasFeature(business, "REVIEWS")
     ? await getAverageRating(business.id)
     : { average: null, count: 0 };
 
@@ -136,9 +138,9 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
               businessSlug={business.slug}
               branches={business.branches}
               locale={locale}
-              canRepeat={businessHasFeature(business.subscriptionPlan, "RECURRING_BOOKINGS")}
-              canUsePromoCodes={businessHasFeature(business.subscriptionPlan, "PROMO_CODES")}
-              canUseWaitlist={businessHasFeature(business.subscriptionPlan, "WAITLIST")}
+              canRepeat={businessHasFeature(business, "RECURRING_BOOKINGS")}
+              canUsePromoCodes={businessHasFeature(business, "PROMO_CODES")}
+              canUseWaitlist={businessHasFeature(business, "WAITLIST")}
             />
             <PolicyNotice
               locale={locale}

@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 
 import { businessHasFeature } from "@/core/platform/subscription-plans";
+import type { SubscriptionState } from "@/core/platform/subscription-lifecycle";
 import { prisma } from "@/core/database/prisma";
 
 type NotificationDatabase = Pick<Prisma.TransactionClient, "booking" | "message">;
@@ -16,7 +17,7 @@ export async function scheduleBookingReminders(bookingId: string, database: Noti
   const channels = [
     ...(booking.customer.telegramChatId ? ["TELEGRAM" as const] : []),
     ...(booking.business.whatsappPhoneNumberId && booking.business.whatsappTemplateName ? ["WHATSAPP" as const] : []),
-    ...(booking.business.smsNotificationsEnabled && businessHasFeature(booking.business.subscriptionPlan, "SMS") ? ["SMS" as const] : []),
+    ...(booking.business.smsNotificationsEnabled && businessHasFeature(booking.business, "SMS") ? ["SMS" as const] : []),
   ];
   return Promise.all(channels.map((channel) => database.message.upsert({
     where: { bookingId_channel_kind: { bookingId, channel, kind: "BOOKING_REMINDER" } },
@@ -31,7 +32,7 @@ export async function scheduleReviewRequest(bookingId: string, database: Notific
     include: { customer: true, business: true },
   });
   if (!booking || booking.status !== "CONFIRMED") return null;
-  if (!businessHasFeature(booking.business.subscriptionPlan, "REVIEWS")) return null;
+  if (!businessHasFeature(booking.business, "REVIEWS")) return null;
 
   // WhatsApp only supports pre-approved templates and there is no dedicated review-request
   // template field on Business, so review requests are Telegram-only for now (see report).
@@ -85,8 +86,8 @@ export async function scheduleWhatsAppPaymentRejected(bookingId: string, databas
   });
 }
 
-function businessHasSms(business: { smsNotificationsEnabled: boolean; subscriptionPlan: Parameters<typeof businessHasFeature>[0] }): boolean {
-  return business.smsNotificationsEnabled && businessHasFeature(business.subscriptionPlan, "SMS");
+function businessHasSms(business: SubscriptionState & { smsNotificationsEnabled: boolean }): boolean {
+  return business.smsNotificationsEnabled && businessHasFeature(business, "SMS");
 }
 
 export async function scheduleSmsConfirmation(bookingId: string, database: NotificationDatabase = prisma) {

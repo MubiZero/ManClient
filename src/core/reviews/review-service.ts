@@ -1,6 +1,6 @@
 import { prisma } from "@/core/database/prisma";
 import { isUniqueConstraintError } from "@/core/database/prisma-errors";
-import { businessHasFeature } from "@/core/platform/subscription-plans";
+import { SUBSCRIPTION_SELECT, businessHasFeature } from "@/core/platform/subscription-plans";
 
 export class ReviewError extends Error {
   constructor(public readonly code: "INVALID_INPUT" | "NOT_FOUND" | "ALREADY_SUBMITTED" | "PLAN_REQUIRED" | "FORBIDDEN") {
@@ -18,11 +18,11 @@ export async function submitReview(input: { bookingId: string; customerId: strin
   const comment = input.comment?.trim().slice(0, 1000) || null;
   const booking = await prisma.booking.findUnique({
     where: { id: input.bookingId },
-    select: { id: true, businessId: true, customerId: true, business: { select: { subscriptionPlan: true } } },
+    select: { id: true, businessId: true, customerId: true, business: { select: SUBSCRIPTION_SELECT } },
   });
   if (!booking || booking.customerId !== input.customerId) throw new ReviewError("NOT_FOUND");
   // Invitation links stay valid after a downgrade, so the plan is re-checked at submission time.
-  if (!businessHasFeature(booking.business.subscriptionPlan, "REVIEWS")) throw new ReviewError("PLAN_REQUIRED");
+  if (!businessHasFeature(booking.business, "REVIEWS")) throw new ReviewError("PLAN_REQUIRED");
 
   try {
     return await prisma.review.create({
@@ -47,10 +47,10 @@ export async function getAverageRating(businessId: string) {
       _avg: { rating: true },
       _count: { _all: true },
     }),
-    prisma.business.findUnique({ where: { id: businessId }, select: { subscriptionPlan: true } }),
+    prisma.business.findUnique({ where: { id: businessId }, select: SUBSCRIPTION_SELECT }),
   ]);
   const count = aggregate._count._all;
-  if (!business || !businessHasFeature(business.subscriptionPlan, "REVIEWS") || count === 0) {
+  if (!business || !businessHasFeature(business, "REVIEWS") || count === 0) {
     return { average: null, count: 0 };
   }
   return { average: aggregate._avg.rating ?? null, count };

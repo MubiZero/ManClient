@@ -15,7 +15,7 @@ type PageProps = { searchParams: Promise<{ page?: string }> };
 export default async function ReviewsPage({ searchParams }: PageProps) {
   const membership = await requireBusinessAdmin();
 
-  if (!businessHasFeature(membership.business.subscriptionPlan, "REVIEWS")) {
+  if (!businessHasFeature(membership.business, "REVIEWS")) {
     return (
       <>
         <PageHeader eyebrow="Клиенты" title="Отзывы" description="Отзывы и рейтинг после визита клиента." />

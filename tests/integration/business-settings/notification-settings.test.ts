@@ -40,7 +40,6 @@ describe("business notification settings", () => {
       notifyOnPaymentNeedsReview: true,
       notifyOnCancellation: true,
       smsNotificationsEnabled: false,
-      subscriptionPlan: "START",
       smsFeatureAvailable: false,
     });
   });
@@ -62,7 +61,7 @@ describe("business notification settings", () => {
     });
 
     const settings = await getNotificationSettings(businessId);
-    expect(settings).toEqual({ ...updated, subscriptionPlan: "START", smsFeatureAvailable: false });
+    expect(settings).toEqual({ ...updated, smsFeatureAvailable: false });
   });
 
   it("rejects turning on SMS notifications when the business plan does not include the SMS feature", async () => {

@@ -3,7 +3,7 @@ import type { Prisma, WaitlistStatus } from "@/generated/prisma/client";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
-import { businessHasFeature, requirePlanFeature } from "@/core/platform/subscription-plans";
+import { SUBSCRIPTION_SELECT, businessHasFeature, requirePlanFeature } from "@/core/platform/subscription-plans";
 
 const WAITLIST_NOTIFY_LIMIT = 3;
 /** Shared with src/jobs/send-booking-reminder.ts and the payom template table. */
@@ -24,9 +24,9 @@ export type JoinWaitlistInput = {
 };
 
 export async function joinWaitlist(input: JoinWaitlistInput, database: WaitlistJoinDatabase = prisma) {
-  const business = await database.business.findUnique({ where: { id: input.businessId }, select: { id: true, subscriptionPlan: true } });
+  const business = await database.business.findUnique({ where: { id: input.businessId }, select: { id: true, ...SUBSCRIPTION_SELECT } });
   if (!business) throw new SettingsError("NOT_FOUND");
-  requirePlanFeature(business.subscriptionPlan, "WAITLIST");
+  requirePlanFeature(business, "WAITLIST");
 
   const phone = normalizeTajikPhone(input.customer.phone);
   if (!phone) throw new SettingsError("INVALID_INPUT");
@@ -106,9 +106,9 @@ export async function notifyWaitlistForFreedSlot(
   const customerById = new Map(customers.map((customer) => [customer.id, customer]));
   const business = await database.business.findUnique({
     where: { id: input.businessId },
-    select: { smsNotificationsEnabled: true, subscriptionPlan: true },
+    select: { smsNotificationsEnabled: true, ...SUBSCRIPTION_SELECT },
   });
-  const smsAvailable = Boolean(business?.smsNotificationsEnabled) && businessHasFeature(business!.subscriptionPlan, "SMS");
+  const smsAvailable = Boolean(business?.smsNotificationsEnabled) && businessHasFeature(business!, "SMS");
 
   let notified = 0;
   for (const entry of candidates) {

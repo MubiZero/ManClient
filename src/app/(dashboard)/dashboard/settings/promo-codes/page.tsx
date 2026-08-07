@@ -20,7 +20,7 @@ type PageProps = { searchParams: Promise<{ notice?: string; error?: string }> };
 export default async function PromoCodesPage({ searchParams }: PageProps) {
   const membership = await requireBusinessAdmin();
 
-  if (!businessHasFeature(membership.business.subscriptionPlan, "PROMO_CODES")) {
+  if (!businessHasFeature(membership.business, "PROMO_CODES")) {
     return (
       <>
         <PageHeader eyebrow="Настройки" title="Промокоды" description="Скидки для клиентов при онлайн-записи." />

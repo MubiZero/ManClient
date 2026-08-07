@@ -5,7 +5,7 @@ import { promoCodeInputSchema } from "@/core/business-settings/setting-schemas";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
-import { requirePlanFeature } from "@/core/platform/subscription-plans";
+import { SUBSCRIPTION_SELECT, requirePlanFeature } from "@/core/platform/subscription-plans";
 
 type PromoDatabase = Pick<Prisma.TransactionClient, "promoCode" | "promoCodeRedemption" | "business" | "membership" | "auditEvent">;
 
@@ -100,9 +100,9 @@ export async function createPromoCode(
     await requireSettingsAccess(transaction, input);
     const business = await transaction.business.findUniqueOrThrow({
       where: { id: input.businessId },
-      select: { subscriptionPlan: true },
+      select: SUBSCRIPTION_SELECT,
     });
-    requirePlanFeature(business.subscriptionPlan, "PROMO_CODES");
+    requirePlanFeature(business, "PROMO_CODES");
 
     const code = normalizeCode(parsed.data.code);
     const existing = await transaction.promoCode.findUnique({

@@ -20,7 +20,7 @@ type PageProps = { searchParams: Promise<{ action?: string; edit?: string; archi
 
 export default async function StaffPage({ searchParams }: PageProps) {
   const member = await requireBusinessAdmin();
-  const commissionEnabled = businessHasFeature(member.business.subscriptionPlan, "STAFF_COMMISSIONS");
+  const commissionEnabled = businessHasFeature(member.business, "STAFF_COMMISSIONS");
   const query = await searchParams;
   const [items, branches, services] = await Promise.all([
     prisma.staffMember.findMany({ where: { businessId: member.businessId }, include: { membership: true, branches: { include: { branch: true }, orderBy: { isPrimary: "desc" } }, services: true }, orderBy: [{ archivedAt: "asc" }, { displayName: "asc" }] }),

@@ -17,8 +17,7 @@ export default async function NewBookingPage({ searchParams }: PageProps) {
   const query = await searchParams;
   const branches = await prisma.branch.findMany({ where: { businessId: membership.businessId, archivedAt: null }, select: { id: true, name: true, timeZone: true }, orderBy: { name: "asc" } });
   const services = await prisma.service.findMany({ where: { branch: { businessId: membership.businessId, archivedAt: null }, archivedAt: null, isPublished: true }, select: { id: true, name: true, branchId: true, staffMembers: { where: { archivedAt: null, ...(membership.role === "STAFF" ? { id: membership.staff?.id ?? "__none__" } : {}) }, select: { id: true, displayName: true } } }, orderBy: { name: "asc" } });
-  const business = await prisma.business.findUniqueOrThrow({ where: { id: membership.businessId }, select: { subscriptionPlan: true } });
-  const canRepeat = businessHasFeature(business.subscriptionPlan, "RECURRING_BOOKINGS");
+  const canRepeat = businessHasFeature(membership.business, "RECURRING_BOOKINGS");
 
   async function create(formData: FormData) {
     "use server";
