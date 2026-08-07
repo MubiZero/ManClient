@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Статус на 2026-08-07: реализовано.** Сверено с кодом; `pnpm lint`, `pnpm typecheck` и `pnpm vitest run tests/unit tests/integration` (113 файлов, 474 теста) проходят.
+
 **Goal:** Make the public booking route a recoverable, timezone-correct stepper that a customer can complete confidently on a phone.
 
 **Architecture:** Keep booking creation and availability in the existing API/domain services. The client form owns only presentation state: explicit current step, selected values, client-side phone feedback, and cancellation of stale availability requests. The server page passes each branch timezone with its published services.

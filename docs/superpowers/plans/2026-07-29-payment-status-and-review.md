@@ -1,5 +1,7 @@
 # Payment Status and Review Implementation Plan
 
+> **Статус на 2026-08-07: реализовано.** Сверено с кодом; `pnpm lint`, `pnpm typecheck` и `pnpm vitest run tests/unit tests/integration` (113 файлов, 474 теста) проходят.
+
 **Goal:** Клиент после создания записи всегда попадает на восстанавливаемую страницу оплаты, может отправить чек из web и увидеть итог, а бизнес получает безопасную очередь ручной проверки.
 
 **Architecture:** Публичный доступ к payment идёт только через подписанный action token. Upload сохраняет оригинал в private S3, немедленно возвращает понятный processing state и использует общий OCR/confirmation service. Review commands повторно проверяют OWNER/ADMIN membership и tenant. Изображение отдаётся только через authenticated streaming endpoint; bucket не становится публичным.

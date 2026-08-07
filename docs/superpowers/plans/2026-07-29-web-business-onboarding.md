@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Статус на 2026-08-07: реализовано.** Сверено с кодом; `pnpm lint`, `pnpm typecheck` и `pnpm vitest run tests/unit tests/integration` (113 файлов, 474 теста) проходят.
+
 **Goal:** Убрать круговой переход сайт -> Telegram -> сайт и дать новому владельцу самостоятельную web-регистрацию бизнеса.
 
 **Architecture:** Core registration service валидирует данные и атомарно создаёт tenant graph. Server Action выполняет регистрацию и вход. Landing использует обычные внутренние ссылки, а onboarding показывает следующие действия в кабинете.
@@ -26,10 +28,10 @@
 **Interfaces:**
 - Produces: `registerBusiness(input): Promise<{ userId: string; businessId: string }>`.
 
-- [ ] Write tests for successful tenant graph, normalized email and duplicate rejection.
-- [ ] Run focused test and confirm RED because module is missing.
-- [ ] Implement Zod validation, slug allocation, password hashing and Prisma transaction.
-- [ ] Run focused test and confirm GREEN.
+- [x] Write tests for successful tenant graph, normalized email and duplicate rejection.
+- [x] Run focused test and confirm RED because module is missing.
+- [x] Implement Zod validation, slug allocation, password hashing and Prisma transaction.
+- [x] Run focused test and confirm GREEN.
 
 ### Task 2: Registration and onboarding UI
 
@@ -43,10 +45,10 @@
 **Interfaces:**
 - Consumes: `registerBusiness(input)`.
 
-- [ ] Write render assertions for persistent labels, password hint, login/register cross-links and real next-step links.
-- [ ] Run test and confirm RED.
-- [ ] Implement Server Action registration, automatic credentials sign-in and responsive onboarding page.
-- [ ] Run test, typecheck and lint.
+- [x] Write render assertions for persistent labels, password hint, login/register cross-links and real next-step links.
+- [x] Run test and confirm RED.
+- [x] Implement Server Action registration, automatic credentials sign-in and responsive onboarding page.
+- [x] Run test, typecheck and lint.
 
 ### Task 3: Remove Telegram marketing handoff
 
@@ -59,8 +61,8 @@
 **Interfaces:**
 - Landing CTA is always internal `/register` and never reads Telegram environment.
 
-- [ ] Change the existing marketing test first to require `/register` and reject `t.me`.
-- [ ] Run it and confirm RED.
-- [ ] Remove Telegram URL normalization and replace CTA anchors with Next links.
-- [ ] Add E2E landing -> register -> onboarding coverage and mobile check.
-- [ ] Run complete release gate, commit, push and deploy exact SHA.
+- [x] Change the existing marketing test first to require `/register` and reject `t.me`.
+- [x] Run it and confirm RED.
+- [x] Remove Telegram URL normalization and replace CTA anchors with Next links.
+- [x] Add E2E landing -> register -> onboarding coverage and mobile check.
+- [x] Run complete release gate, commit, push and deploy exact SHA.

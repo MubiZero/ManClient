@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Статус на 2026-08-07: реализовано.** Сверено с кодом; `pnpm lint`, `pnpm typecheck` и `pnpm vitest run tests/unit tests/integration` (113 файлов, 474 теста) проходят.
+
 **Goal:** Replace the root placeholder with a responsive Russian B2B landing page that explains ManClient and routes owners to onboarding or sign-in.
 
 **Architecture:** Keep `src/app/page.tsx` as a thin runtime environment adapter and render a focused server component from `src/features/marketing/homepage.tsx`. The component receives a validated optional Telegram onboarding URL, so its configured and fallback states are deterministic and testable without network or database access. Extend the existing CSS token system and metadata without adding a frontend dependency.
@@ -32,7 +34,7 @@
 - Produces: `MarketingHomePage({ onboardingUrl }: { onboardingUrl: string | null }): ReactElement` renders the complete landing and both CTA states.
 - Consumes: `process.env.NEXT_PUBLIC_ONBOARDING_TELEGRAM_URL` in the root page only.
 
-- [ ] **Step 1: Write failing component and URL-contract tests**
+- [x] **Step 1: Write failing component and URL-contract tests**
 
 ```tsx
 import { renderToStaticMarkup } from "react-dom/server";
@@ -57,23 +59,23 @@ describe("ManClient homepage", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `pnpm test tests/unit/marketing/homepage.test.tsx`
 
 Expected: FAIL because `@/features/marketing/homepage` does not exist.
 
-- [ ] **Step 3: Implement the server component and thin root adapter**
+- [x] **Step 3: Implement the server component and thin root adapter**
 
 Implement semantic `header`, `main`, seven sections, and `footer`; use real product flow copy and working anchor links. Export `dynamic = "force-dynamic"` from `src/app/page.tsx` so the onboarding URL is evaluated at runtime rather than baked into the image.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run: `pnpm test tests/unit/marketing/homepage.test.tsx`
 
 Expected: 2 tests pass.
 
-- [ ] **Step 5: Commit the content contract**
+- [x] **Step 5: Commit the content contract**
 
 ```bash
 git add src/app/page.tsx src/features/marketing/homepage.tsx tests/unit/marketing/homepage.test.tsx
@@ -91,21 +93,21 @@ git commit -m "feat: add ManClient B2B homepage"
 - Consumes: the semantic class names defined by `MarketingHomePage`.
 - Produces: root metadata for title, description, Open Graph, and Twitter summary.
 
-- [ ] **Step 1: Extend the failing test with metadata and structural assertions**
+- [x] **Step 1: Extend the failing test with metadata and structural assertions**
 
 Assert that the rendered markup contains `aria-label="Основная навигация"`, the `#how-it-works` anchor target, the final CTA, and no inactive buttons. Import `metadata` from `src/app/layout.tsx` and assert the title and description identify online booking for service businesses.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `pnpm test tests/unit/marketing/homepage.test.tsx`
 
 Expected: FAIL on missing metadata/structure assertions.
 
-- [ ] **Step 3: Implement styles and metadata**
+- [x] **Step 3: Implement styles and metadata**
 
 Add landing-specific classes under a `.marketing-page` namespace. Use an offset two-column hero, a real booking-flow explanation, varied sections instead of repeated identical cards, mobile navigation wrapping, 44 px actions, visible focus, and `prefers-reduced-motion`. Update metadata to `ManClient - онлайн-запись для сервисного бизнеса` with an accurate Russian description and matching Open Graph/Twitter values.
 
-- [ ] **Step 4: Run focused and full static verification**
+- [x] **Step 4: Run focused and full static verification**
 
 Run:
 
@@ -124,7 +126,7 @@ BOOKING_ACTION_SECRET='local-booking-secret-at-least-32-characters' pnpm build
 
 Expected: lint/typecheck/build exit 0 and all tests pass.
 
-- [ ] **Step 5: Commit the visual implementation**
+- [x] **Step 5: Commit the visual implementation**
 
 ```bash
 git add src/app/globals.css src/app/layout.tsx tests/unit/marketing/homepage.test.tsx
@@ -141,29 +143,29 @@ git commit -m "style: finish responsive ManClient landing"
 - Consumes: `/`, `/login`, `/api/health`, and the committed landing component.
 - Produces: a verified GitHub SHA and a matching successful Coolify deployment.
 
-- [ ] **Step 1: Run local Playwright QA because the Browser plugin is unavailable**
+- [x] **Step 1: Run local Playwright QA because the Browser plugin is unavailable**
 
 Target flow: `/` loads -> B2B hero renders -> sign-in action navigates to `/login` -> mobile layout has no horizontal overflow.
 
 Use Chromium at 1440x1000 and 390x844. Check title, hero, no framework overlay, console errors/warnings, focus visibility, `/login` navigation, horizontal overflow, and capture screenshots under `/tmp`.
 
-- [ ] **Step 2: Fix any rendered regression with a failing test first**
+- [x] **Step 2: Fix any rendered regression with a failing test first**
 
 For each defect, add the smallest component assertion or Playwright check that fails, apply the focused fix, then repeat Step 1.
 
-- [ ] **Step 3: Run final verification and inspect scope**
+- [x] **Step 3: Run final verification and inspect scope**
 
 Run: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, then `git diff --check`, `git status --short`, and `git log -3 --oneline`.
 
 Expected: all commands pass; only the landing/spec/plan scope is present.
 
-- [ ] **Step 4: Push `main` and verify GitHub identity**
+- [x] **Step 4: Push `main` and verify GitHub identity**
 
 ```bash
 git push origin main
 test "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/main | cut -f1)"
 ```
 
-- [ ] **Step 5: Observe the auto-deploy and verify production**
+- [x] **Step 5: Observe the auto-deploy and verify production**
 
 Use the Vault-backed Coolify API. Require deployment `finished`, application `running:healthy`, deployment/app/GitHub SHA equality, `/api/health` HTTP 200, `/` HTTP 200 with the new hero heading, and desktop/mobile browser smoke against `https://manclient.mubi.dev`.

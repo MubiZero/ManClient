@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Статус на 2026-08-07: реализовано.** Сверено с кодом; `pnpm lint`, `pnpm typecheck` и `pnpm vitest run tests/unit tests/integration` (113 файлов, 474 теста) проходят.
+>
+> Расхождения с планом: Отдельного `business-bot-security.test.ts` нет: проверки tenant-изоляции и подписи webhook живут в `business-bot-handler.test.ts`, `business-telegram-webhook.test.ts` и `business-bot-booking-actions.test.ts`.
+
 **Goal:** Превратить `@manclient_bot` в безопасный самостоятельный рабочий интерфейс владельца и команды для записей, чеков и оперативных уведомлений.
 
 **Architecture:** Platform bot получает единый update dispatcher, отделённые identity/query/action/rendering services и непрозрачные callback actions. Все мутации делегируются существующим booking/payment services, а доставка событий бизнеса идёт через durable message outbox и отдельный job.
@@ -37,7 +41,7 @@
 - Produces: `getPlatformTelegramActor({ chatId, telegramUserId })` returning active membership, business, role and destination.
 - Produces: `listBusinessTelegramDestinations(businessId)` for notification delivery.
 
-- [ ] **Step 1: Write failing identity and group authorization tests**
+- [x] **Step 1: Write failing identity and group authorization tests**
 
 ```ts
 it("authorizes a group callback only for a linked Telegram identity", async () => {
@@ -53,27 +57,27 @@ it("authorizes a group callback only for a linked Telegram identity", async () =
 });
 ```
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 Run: `pnpm test tests/integration/integrations/platform-telegram-webhook.test.ts tests/integration/integrations/telegram-schema.test.ts`
 
 Expected: FAIL because identity/chat type fields and actor lookup do not exist.
 
-- [ ] **Step 3: Add normalized identity and destination fields**
+- [x] **Step 3: Add normalized identity and destination fields**
 
 Model a unique `(membershipId, telegramUserId)` identity and active chat destination with `chatType`, preserving current private links through a migration. Parse `message.from.id`, `callback_query.from.id` and `chat.type`. A group deep link may create the destination for the linking admin, but callbacks always resolve the individual actor.
 
-- [ ] **Step 4: Implement safe link consumption and actor lookup**
+- [x] **Step 4: Implement safe link consumption and actor lookup**
 
 Keep HMAC signature, expiry, single consumption and transaction isolation. Reject STAFF creation of a shared destination; allow STAFF private identity connection. Return generic expired/invalid copy without revealing membership data.
 
-- [ ] **Step 5: Run GREEN tests and schema generation**
+- [x] **Step 5: Run GREEN tests and schema generation**
 
 Run: `pnpm db:generate && pnpm test tests/integration/integrations/platform-telegram-webhook.test.ts tests/integration/integrations/telegram-schema.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add prisma src/core/integrations/platform-chat-link.ts src/integrations/telegram/platform-update-handler.ts tests/integration/integrations/platform-telegram-webhook.test.ts tests/integration/integrations/telegram-schema.test.ts
@@ -93,7 +97,7 @@ git commit -m "feat: secure business Telegram identities"
 - Produces adapter methods `answerCallbackQuery`, `editMessageText`, `editMessageReplyMarkup`, `sendPhoto`, `setMyCommands`.
 - Produces renderer functions `mainMenuView`, `bookingListView`, `bookingCardView`, `paymentReviewView`, `staleActionView`.
 
-- [ ] **Step 1: Write failing adapter contract tests**
+- [x] **Step 1: Write failing adapter contract tests**
 
 ```ts
 it("answers callbacks without leaking tokens", async () => {
@@ -107,27 +111,27 @@ it("answers callbacks without leaking tokens", async () => {
 });
 ```
 
-- [ ] **Step 2: Write failing renderer tests**
+- [x] **Step 2: Write failing renderer tests**
 
 Assert that menus are role-aware, booking cards contain useful local date/payment status, rows contain at most two buttons, destructive actions use confirmation copy, and no internal IDs/card numbers appear.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 Run: `pnpm test tests/unit/integrations/telegram-api.test.ts tests/unit/integrations/business-bot-renderer.test.ts`
 
 Expected: FAIL on missing adapter and renderer exports.
 
-- [ ] **Step 4: Implement adapter and renderer**
+- [x] **Step 4: Implement adapter and renderer**
 
 Use Telegram-native reply/inline keyboard types. `sendPhoto` accepts stored bytes or a signed protected URL supplied by the caller; renderer consumes typed view models and performs no Prisma access.
 
-- [ ] **Step 5: Run GREEN tests**
+- [x] **Step 5: Run GREEN tests**
 
 Run: `pnpm test tests/unit/integrations/telegram-api.test.ts tests/unit/integrations/business-bot-renderer.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/integrations/telegram/telegram-api.ts src/integrations/telegram/business-bot-renderer.ts tests/unit/integrations
@@ -150,11 +154,11 @@ git commit -m "feat: add native business bot rendering"
 - Produces: `getBusinessBotSummary(actor, now)`, `listBusinessBotBookings(actor, filter, cursor, now)`, `getBusinessBotBooking(actor, bookingId)`.
 - Produces: opaque action functions `createBusinessBotAction` and `consumeBusinessBotAction` with actor, business, expiry and one-shot mutation policy.
 
-- [ ] **Step 1: Write failing role and time-zone query tests**
+- [x] **Step 1: Write failing role and time-zone query tests**
 
 Create OWNER and STAFF fixtures in the same business plus another tenant. Assert OWNER sees all in-scope bookings, STAFF sees only its staff assignment, other-tenant data never appears, `today` uses branch timezone, and cursor pagination has no duplicates.
 
-- [ ] **Step 2: Write failing handler flow tests**
+- [x] **Step 2: Write failing handler flow tests**
 
 ```ts
 it("renders a useful menu and opens a pending booking without a web redirect", async () => {
@@ -166,27 +170,27 @@ it("renders a useful menu and opens a pending booking without a web redirect", a
 });
 ```
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 Run: `pnpm test tests/integration/integrations/business-bot-query.test.ts tests/integration/integrations/business-bot-handler.test.ts`
 
 Expected: FAIL because query/action/handler modules do not exist.
 
-- [ ] **Step 4: Implement query and opaque action services**
+- [x] **Step 4: Implement query and opaque action services**
 
 Reuse `requireBookingAccess`, `bookingScopeWhere`, shared date/money/phone formatters and `ConversationAction` only if its semantics remain clear; otherwise add a focused `BusinessTelegramAction` model and migration. Navigation actions may be repeatable; mutation actions are consumed once.
 
-- [ ] **Step 5: Implement `/start`, `/menu`, `/help`, reply menu and callbacks**
+- [x] **Step 5: Implement `/start`, `/menu`, `/help`, reply menu and callbacks**
 
 Include summary, Today, Bookings filters, Client link, More, role-gated Checks and channel status. Answer every callback immediately, edit prior cards when possible, and provide `Обновить`/`Главное меню` for stale actions.
 
-- [ ] **Step 6: Run GREEN tests**
+- [x] **Step 6: Run GREEN tests**
 
 Run: `pnpm test tests/integration/integrations/business-bot-query.test.ts tests/integration/integrations/business-bot-handler.test.ts tests/integration/integrations/platform-telegram-webhook.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/core/integrations src/integrations/telegram src/app/api/webhooks/telegram/platform tests/integration/integrations
@@ -205,31 +209,31 @@ git commit -m "feat: add business bot booking workspace"
 - Consumes: `confirmBusinessBooking`, `rescheduleBusinessBooking`, `cancelBusinessBooking`.
 - Produces: action kinds `BOOKING_CONFIRM`, `BOOKING_REMIND_PAYMENT`, `BOOKING_RESCHEDULE_DATE`, `BOOKING_RESCHEDULE_SLOT`, `BOOKING_CANCEL_BEGIN`, `BOOKING_CANCEL_REASON`, `BOOKING_REFRESH`.
 
-- [ ] **Step 1: Write failing mutation authorization/idempotency tests**
+- [x] **Step 1: Write failing mutation authorization/idempotency tests**
 
 Assert OWNER confirmation, STAFF scope denial, foreign tenant denial, repeated confirmation showing current state, cancellation confirmation with reason, and reschedule rechecking allocation before changing the old slot.
 
-- [ ] **Step 2: Write failing payment reminder test**
+- [x] **Step 2: Write failing payment reminder test**
 
 Assert that reminder creation is deduplicated by booking/channel/kind and that it targets the linked customer channel without marking payment complete.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 Run: `pnpm test tests/integration/integrations/business-bot-booking-actions.test.ts`
 
 Expected: FAIL because bot mutation handlers and payment reminder scheduling are missing.
 
-- [ ] **Step 4: Implement confirmation, reminder, reschedule and cancellation flows**
+- [x] **Step 4: Implement confirmation, reminder, reschedule and cancellation flows**
 
 All writes call domain services with `actorUserId`; translate `BookingOperationError` into specific recovery copy. Store multi-step cancellation/reschedule state as short-lived server actions, not global in-memory state.
 
-- [ ] **Step 5: Run GREEN and regression tests**
+- [x] **Step 5: Run GREEN and regression tests**
 
 Run: `pnpm test tests/integration/integrations/business-bot-booking-actions.test.ts tests/integration/booking-operations`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/core src/integrations/telegram/business-bot-handler.ts tests/integration/integrations/business-bot-booking-actions.test.ts
@@ -249,27 +253,27 @@ git commit -m "feat: manage bookings from business bot"
 - Consumes: `listPaymentsForReview`, `getPaymentForReview`, `approvePaymentReview`, `rejectPaymentReview`.
 - Produces: paginated review query and protected receipt bytes/short-lived URL accessor.
 
-- [ ] **Step 1: Write failing review queue tests**
+- [x] **Step 1: Write failing review queue tests**
 
 Assert OWNER/ADMIN access, STAFF denial, pagination, safe card mask, receipt photo delivery, typical rejection reasons, custom reason validation, duplicate decision idempotency and customer notification scheduling.
 
-- [ ] **Step 2: Run RED test**
+- [x] **Step 2: Run RED test**
 
 Run: `pnpm test tests/integration/integrations/business-bot-payment-review.test.ts`
 
 Expected: FAIL because bot review flow and protected image accessor are missing.
 
-- [ ] **Step 3: Implement queue, image and decision flows**
+- [x] **Step 3: Implement queue, image and decision flows**
 
 Never expose raw storage keys publicly. Use `sendPhoto` with protected data, immediately answer callbacks, require confirmation before approval, and refresh the card after a decision.
 
-- [ ] **Step 4: Run GREEN and payment regression tests**
+- [x] **Step 4: Run GREEN and payment regression tests**
 
 Run: `pnpm test tests/integration/integrations/business-bot-payment-review.test.ts tests/integration/payments`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/payments src/core/integrations/business-bot-query-service.ts src/integrations/telegram/business-bot-handler.ts tests/integration/integrations/business-bot-payment-review.test.ts
@@ -293,31 +297,31 @@ git commit -m "feat: review receipts from business bot"
 - Produces: `scheduleBusinessNotification({ businessId, bookingId?, kind, deduplicationKey, scheduledAt })`.
 - Produces: `sendDueBusinessTelegramNotifications(now, dependencies)` with claim, retry and terminal failure handling.
 
-- [ ] **Step 1: Write failing scheduling and retry tests**
+- [x] **Step 1: Write failing scheduling and retry tests**
 
 Assert event deduplication, delivery to all active destinations, role-sensitive receipt notifications, no rollback of domain operation, retry after five minutes and terminal `FAILED` after `maxAttempts`.
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 Run: `pnpm test tests/integration/notifications/business-notification-service.test.ts tests/integration/jobs/send-business-telegram-notifications.test.ts`
 
 Expected: FAIL because outbox and worker do not exist.
 
-- [ ] **Step 3: Implement outbox and job**
+- [x] **Step 3: Implement outbox and job**
 
 Persist typed event payload references, not rendered PII snapshots. Load fresh authorized view data at delivery time. Reuse platform bot token only at runtime. Record a generic safe `lastError` and do not log secrets.
 
-- [ ] **Step 4: Wire domain events**
+- [x] **Step 4: Wire domain events**
 
 Schedule new pending booking, receipt processing/review, payment decision, confirmation, cancellation, reschedule and upcoming visit events only after the relevant transaction commits. Use deterministic deduplication keys.
 
-- [ ] **Step 5: Run GREEN tests and schema generation**
+- [x] **Step 5: Run GREEN tests and schema generation**
 
 Run: `pnpm db:generate && pnpm test tests/integration/notifications/business-notification-service.test.ts tests/integration/jobs/send-business-telegram-notifications.test.ts tests/integration/jobs`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add prisma src/core/notifications src/jobs package.json tests/integration/notifications tests/integration/jobs
@@ -339,21 +343,21 @@ git commit -m "feat: deliver durable business bot notifications"
 - Consumes all previous tasks.
 - Produces registration of `/start`, `/menu`, `/today`, `/bookings`, `/checks`, `/help` and accurate dashboard setup guidance.
 
-- [ ] **Step 1: Write failing command and security tests**
+- [x] **Step 1: Write failing command and security tests**
 
 Assert `setMyCommands`, unlinked/stale/forbidden paths, secret-free errors, group callback actor enforcement, cross-tenant denial, duplicate update handling and complete navigation back to main menu.
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 Run: `pnpm test tests/integration/integrations/business-bot-security.test.ts tests/unit/integrations/telegram-api.test.ts`
 
 Expected: FAIL on missing command registration or incomplete state recovery.
 
-- [ ] **Step 3: Complete commands, setup copy and runbook**
+- [x] **Step 3: Complete commands, setup copy and runbook**
 
 Explain clearly that `@manclient_bot` is for the team and the connected business bot is for clients. Show personal/group privacy implications and disconnect controls. Do not expose a control that is not operational.
 
-- [ ] **Step 4: Run feature verification**
+- [x] **Step 4: Run feature verification**
 
 Run:
 
@@ -367,11 +371,11 @@ pnpm build
 
 Expected: all commands exit 0 without new warnings.
 
-- [ ] **Step 5: Self-review against the design spec**
+- [x] **Step 5: Self-review against the design spec**
 
 Check every section of `docs/superpowers/specs/2026-07-29-business-telegram-interface-design.md`; record direct code/test evidence for personal chat, group security, roles, menus, bookings, review queue, notifications, stale/error states and privacy.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scripts src/features/dashboard src/i18n docs/pilot-runbook.md tests
