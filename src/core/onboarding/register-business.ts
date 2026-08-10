@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { hashPassword } from "@/core/auth/password";
 import { prisma } from "@/core/database/prisma";
+import { startTrial } from "@/core/platform/subscription-lifecycle";
 
 const registrationSchema = z.object({
   ownerName: z.string().trim().min(2).max(80),
@@ -37,8 +38,11 @@ export async function registerBusiness(input: RegisterBusinessInput) {
           passwordHash,
         },
       });
+      // The trial is written here rather than as a schema default: the default has to stay `START`
+      // and `ACTIVE` so that every business created before billing — and every manual grant since —
+      // keeps working with no end date at all.
       const business = await transaction.business.create({
-        data: { name: parsed.data.businessName, slug: businessSlug },
+        data: { name: parsed.data.businessName, slug: businessSlug, ...startTrial(new Date()) },
       });
       const membership = await transaction.membership.create({
         data: { userId: user.id, businessId: business.id, role: "OWNER" },
