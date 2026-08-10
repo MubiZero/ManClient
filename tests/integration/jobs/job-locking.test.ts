@@ -73,6 +73,7 @@ describe("job locking", () => {
       "receipt-processing",
       "integration-health-alerts",
       "security-maintenance",
+      "subscription-lifecycle",
       "data-retention",
     ]);
   });
@@ -82,6 +83,7 @@ describe("job locking", () => {
     // question sixty times an hour is noise in the logs and load on the database for nothing.
     const byName = new Map(SCHEDULED_JOBS.map((job) => [job.name, job]));
     expect(byName.get("data-retention")?.intervalMs).toBe(60 * 60_000);
+    expect(byName.get("subscription-lifecycle")?.intervalMs).toBe(60 * 60_000);
     expect(byName.get("booking-reminders")?.intervalMs).toBeUndefined();
   });
 });

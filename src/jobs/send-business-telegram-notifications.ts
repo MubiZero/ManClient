@@ -185,6 +185,10 @@ function notificationTitle(kind: BusinessNotificationKind) {
     BOOKING_RESCHEDULED: "Запись перенесена",
     UPCOMING_VISIT: "Скоро визит клиента",
     INTEGRATION_ERROR: "Ошибка Telegram-интеграции",
+    // These carry no booking, so the title is the whole message and has to say what to do.
+    SUBSCRIPTION_ENDING: "Подписка скоро закончится. Продлите её в кабинете, в разделе «Тариф».",
+    SUBSCRIPTION_GRACE: "Подписка не продлена. Всё пока работает, но через неделю платные функции отключатся.",
+    SUBSCRIPTION_EXPIRED: "Подписка закончилась: платные функции отключены. Записи, клиенты и история на месте.",
   } satisfies Record<BusinessNotificationKind, string>)[kind];
 }
 

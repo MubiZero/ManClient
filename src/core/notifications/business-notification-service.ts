@@ -13,7 +13,10 @@ export type BusinessNotificationKind =
   | "BOOKING_CANCELLED"
   | "BOOKING_RESCHEDULED"
   | "UPCOMING_VISIT"
-  | "INTEGRATION_ERROR";
+  | "INTEGRATION_ERROR"
+  | "SUBSCRIPTION_ENDING"
+  | "SUBSCRIPTION_GRACE"
+  | "SUBSCRIPTION_EXPIRED";
 
 export type ScheduleBusinessNotificationInput = {
   businessId: string;
