@@ -5,6 +5,7 @@ import { runDataRetention } from "@/core/maintenance/data-retention";
 import { runSecurityMaintenance } from "@/core/security/security-maintenance";
 import { sendDueBookingReminders } from "@/jobs/send-booking-reminder";
 import { sendDueBusinessTelegramNotifications } from "@/jobs/send-business-telegram-notifications";
+import { runSubscriptionLifecycle } from "@/jobs/subscription-lifecycle";
 
 /**
  * One list of background jobs, shared by the long-running scheduler and the one-shot `pnpm jobs:*`
@@ -31,6 +32,9 @@ export const SCHEDULED_JOBS: readonly ScheduledJob[] = [
   { name: "receipt-processing", run: () => retryReceiptSubmissions() },
   { name: "integration-health-alerts", run: () => checkIntegrationHealthAlerts() },
   { name: "security-maintenance", run: () => runSecurityMaintenance() },
+  // Hourly is enough for a boundary measured in days, and it keeps the warning from arriving at
+  // whatever minute of the night the period happens to end on.
+  { name: "subscription-lifecycle", run: () => runSubscriptionLifecycle(), intervalMs: 60 * 60_000 },
   { name: "data-retention", run: () => runDataRetention(), intervalMs: 60 * 60_000 },
 ];
 
