@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+
+import { nextDate } from "./dates";
 import { Client } from "pg";
 
 test("visitor selects a service, specialist and receives a payment link", async ({
@@ -135,8 +137,3 @@ async function reachTimeStep(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: /Алишер/ }).click();
 }
 
-function nextDate(daysAhead = 2): string {
-  const value = new Date();
-  value.setUTCDate(value.getUTCDate() + daysAhead);
-  return value.toISOString().slice(0, 10);
-}

@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+
+import { nextDate } from "./dates";
 import { Client } from "pg";
 
 /**
@@ -25,13 +27,13 @@ test("visitor joins the waitlist when a day has nothing free", async ({ page }) 
     if (await branchButton.isVisible().catch(() => false)) await branchButton.click();
     await page.getByRole("button", { name: /Мужская стрижка/ }).click();
     await page.getByRole("button", { name: /Алишер/ }).click();
-    await page.getByLabel("Дата записи").fill(nextDate());
+    await page.getByLabel("Дата записи").fill(nextDate(3));
 
     await expect(page.getByText("На эту дату свободного времени нет")).toBeVisible();
     await page.getByRole("button", { name: "Встать в лист ожидания" }).click();
 
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByLabel("Удобно с")).toHaveValue(nextDate());
+    await expect(dialog.getByLabel("Удобно с")).toHaveValue(nextDate(3));
     await dialog.getByLabel("Имя").fill("Мухаммад");
     await dialog.getByLabel("Телефон").fill(phone);
     await dialog.getByRole("button", { name: "Записаться в лист" }).click();
@@ -53,8 +55,3 @@ test("visitor joins the waitlist when a day has nothing free", async ({ page }) 
   }
 });
 
-function nextDate(): string {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + 3);
-  return date.toISOString().slice(0, 10);
-}

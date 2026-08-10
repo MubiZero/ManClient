@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { nextDate } from "./dates";
+
 const autoOwnerPassword = requiredEnv("DEMO_AUTO_OWNER_PASSWORD");
 const internalSecret = requiredEnv("INTERNAL_API_SECRET");
 
@@ -15,7 +17,7 @@ test("pilot auto service confirms a resource booking after receipt", async ({ pa
   await page.goto("/b/demo-auto");
   await page.getByRole("button", { name: /Замена масла/ }).click();
   await page.getByRole("button", { name: /Бехруз/ }).click();
-  await page.getByLabel("Дата записи").fill(nextDate());
+  await page.getByLabel("Дата записи").fill(nextDate(3));
   await page.locator("[data-slot]").first().click();
   await page.getByLabel("Имя").fill(customerName);
   await page.getByLabel("Телефон").fill(`+99290${suffix}`);
@@ -47,12 +49,6 @@ test("pilot auto service confirms a resource booking after receipt", async ({ pa
   await expect(bookingRow).toContainText("Подтверждена");
   await expect(bookingRow).toContainText("Подъёмник 1");
 });
-
-function nextDate(): string {
-  const value = new Date();
-  value.setUTCDate(value.getUTCDate() + 3);
-  return value.toISOString().slice(0, 10);
-}
 
 function requiredEnv(name: "DEMO_AUTO_OWNER_PASSWORD" | "INTERNAL_API_SECRET") {
   const value = process.env[name];
