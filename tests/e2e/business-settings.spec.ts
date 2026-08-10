@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { nextDate } from "./dates";
+
 const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
 
 test("owner creates, edits, archives and restores a branch", async ({ page }) => {
@@ -63,6 +65,9 @@ test("owner configures a specialist, resource and published service", async ({ p
 });
 
 test("owner configures schedule, lunch break and a day off", async ({ page }) => {
+  // Three weeks out, past the week the calendar specs book against, so closing the branch for a day
+  // cannot take slots away from another spec.
+  const DAY_OFF = nextDate(21);
   await signIn(page);
   await page.goto("/dashboard/settings/schedule");
 
@@ -76,7 +81,7 @@ test("owner configures schedule, lunch break and a day off", async ({ page }) =>
   await page.getByRole("button", { name: "Сохранить расписание" }).click();
   await expect(page.getByText("Расписание сохранено", { exact: true }).first()).toBeVisible();
 
-  await page.getByLabel("Дата").fill("2026-08-10");
+  await page.getByLabel("Дата").fill(DAY_OFF);
   await page.getByLabel("Комментарий").fill("Праздник");
   await page.getByRole("button", { name: "Добавить изменение" }).click();
   await expect(page.getByText("Изменение даты добавлено", { exact: true }).first()).toBeVisible();
@@ -87,7 +92,7 @@ test("owner configures schedule, lunch break and a day off", async ({ page }) =>
   if (await branchButton.isVisible().catch(() => false)) await branchButton.click();
   await page.getByRole("button", { name: /Мужская стрижка/ }).click();
   await page.getByRole("button", { name: /Алишер/ }).click();
-  await page.getByLabel("Дата записи").fill("2026-08-10");
+  await page.getByLabel("Дата записи").fill(DAY_OFF);
   await expect(page.getByText("На эту дату свободного времени нет")).toBeVisible();
 });
 
