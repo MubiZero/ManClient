@@ -1,8 +1,17 @@
 import { expect, test } from "@playwright/test";
 
+import { addDays, dayLabel, nextWeekday } from "./dates";
+
 const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
-/** A date no other spec touches, so the day starts empty and the free slots below are predictable. */
-const DATE = "2026-09-15";
+/**
+ * A Tuesday at least a week out: far enough that no other spec books against it, so the day starts
+ * empty and the free slots below are predictable, and a known weekday so the week around it can be
+ * named — Monday starts it, Sunday ends it, Thursday is two columns to the right.
+ */
+const DATE = nextWeekday(2, 7);
+const MONDAY = addDays(DATE, -1);
+const THURSDAY = addDays(DATE, 2);
+const SUNDAY = addDays(DATE, 5);
 
 /**
  * The calendar is only useful if clicking an empty patch of it books that time. This walks the loop the
@@ -80,15 +89,15 @@ test("the week shows every day and hands off to the day it is asked about", asyn
   await signIn(page);
 
   await page.goto(`/dashboard/bookings?view=week&date=${DATE}`);
-  // 2026-09-15 is a Tuesday, so its week runs Monday the 14th to Sunday the 20th.
-  await expect(page.getByRole("link", { name: /вт.*15 сент/is })).toBeVisible();
-  await expect(page.getByRole("link", { name: /пн.*14 сент/is })).toBeVisible();
-  await expect(page.getByRole("link", { name: /вс.*20 сент/is })).toBeVisible();
+  // The chosen day is a Tuesday, so its week runs from the Monday before it to the Sunday after.
+  await expect(page.getByRole("link", { name: new RegExp(`вт.*${dayLabel(DATE)}`, "is") })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`пн.*${dayLabel(MONDAY)}`, "is") })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`вс.*${dayLabel(SUNDAY)}`, "is") })).toBeVisible();
   // Demo-barber's branch has one specialist, so the week knows whose gaps these are and offers them.
-  await expect(page.getByRole("link", { name: /Записать на 10:00, 2026-09-15/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`Записать на 10:00, ${DATE}`) })).toBeVisible();
 
-  await page.getByRole("link", { name: /вт.*15 сент/is }).click();
-  await expect(page).toHaveURL(/view=day&date=2026-09-15/);
+  await page.getByRole("link", { name: new RegExp(`вт.*${dayLabel(DATE)}`, "is") }).click();
+  await expect(page).toHaveURL(new RegExp(`view=day&date=${DATE}`));
   await expect(page.getByRole("link", { name: "Записать на 10:00, Алишер" })).toBeVisible();
 });
 
@@ -108,7 +117,7 @@ test("owner drags a visit to another day in the week", async ({ page }) => {
   const block = page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") });
   await block.scrollIntoViewIfNeeded();
   const box = (await block.boundingBox())!;
-  const thursday = (await page.getByRole("link", { name: /чт.*17 сент/is }).boundingBox())!;
+  const thursday = (await page.getByRole("link", { name: new RegExp(`чт.*${dayLabel(THURSDAY)}`, "is") }).boundingBox())!;
 
   // Sideways across two day columns, keeping the same height: only the date should change.
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -118,15 +127,15 @@ test("owner drags a visit to another day in the week", async ({ page }) => {
 
   // The visit belongs to Thursday as soon as it is dropped there — the grid does not wait for the server
   // before showing the answer the receptionist gave it.
-  await expect(page.getByRole("link", { name: /чт.*17 сент.*записей: 1/is })).toBeVisible();
-  await expect(page.getByRole("link", { name: /вт.*15 сент.*свободно/is })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`чт.*${dayLabel(THURSDAY)}.*записей: 1`, "is") })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`вт.*${dayLabel(DATE)}.*свободно`, "is") })).toBeVisible();
 
   // And it is still Thursday's after a reload, which is what proves the server was told rather than only
   // the picture being redrawn.
   await page.reload();
-  await expect(page.getByRole("link", { name: /чт.*17 сент.*записей: 1/is })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`чт.*${dayLabel(THURSDAY)}.*записей: 1`, "is") })).toBeVisible();
 
-  await page.goto(`/dashboard/bookings?view=day&date=2026-09-17`);
+  await page.goto(`/dashboard/bookings?view=day&date=${THURSDAY}`);
   await expect(page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") })).toBeVisible();
 
   await page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") }).click();

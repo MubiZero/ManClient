@@ -3,7 +3,12 @@ import { Client } from "pg";
 
 import { createCustomerBookingToken } from "@/core/bookings/booking-action-token";
 
+import { nextDate } from "./dates";
+
 const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
+
+const BOOKED_ON = nextDate(3);
+const MOVED_TO = nextDate(4);
 
 test("visitor reschedules a booking from the public link", async ({ page }) => {
   const customerName = `Клиент ${Date.now().toString().slice(-6)}`;
@@ -13,7 +18,7 @@ test("visitor reschedules a booking from the public link", async ({ page }) => {
   await page.goto("/dashboard/bookings/new");
   await page.getByLabel("Услуга").selectOption({ label: "Мужская стрижка" });
   await page.getByLabel("Специалист").selectOption({ label: "Алишер" });
-  await page.getByLabel("Дата").fill("2026-08-11");
+  await page.getByLabel("Дата").fill(BOOKED_ON);
   await page.getByRole("group", { name: "Свободное время" }).getByRole("button").first().click();
   await page.getByLabel("Имя клиента").fill(customerName);
   await page.getByLabel("Телефон клиента").fill(customerPhone);
@@ -32,11 +37,11 @@ test("visitor reschedules a booking from the public link", async ({ page }) => {
   await page.goto(`/reschedule/${token}`);
   await expect(page.getByRole("heading", { name: "Выберите новое время" })).toBeVisible();
   const [availabilityResponse] = await Promise.all([
-    page.waitForResponse((response) => response.url().includes("/api/availability") && response.url().includes("date=2026-08-13")),
-    page.getByLabel("Новая дата").fill("2026-08-13"),
+    page.waitForResponse((response) => response.url().includes("/api/availability") && response.url().includes(`date=${MOVED_TO}`)),
+    page.getByLabel("Новая дата").fill(MOVED_TO),
   ]);
   const { starts } = (await availabilityResponse.json()) as { starts: string[] };
-  if (!starts.length) throw new Error("No availability returned for 2026-08-13");
+  if (!starts.length) throw new Error(`No availability returned for ${MOVED_TO}`);
   await expect(page.locator("[data-slot]").first()).toBeVisible();
   await page.locator("[data-slot]").first().click();
   await expect(page.getByText("Запись перенесена. Новое время сохранено.", { exact: true })).toBeVisible();
@@ -51,7 +56,7 @@ test("visitor reschedules a booking from the public link", async ({ page }) => {
       `SELECT "startsAt"::text AS "startsAt" FROM "Booking" WHERE id = $1`,
       [bookingId],
     );
-    expect(result.rows[0]?.startsAt.slice(0, 10)).toBe("2026-08-13");
+    expect(result.rows[0]?.startsAt.slice(0, 10)).toBe(MOVED_TO);
   } finally {
     await database.end();
   }

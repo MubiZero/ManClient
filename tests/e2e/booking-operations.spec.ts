@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { nextDate } from "./dates";
+
 const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
 
 test("owner creates, finds, reschedules and cancels a booking", async ({ page }) => {
@@ -9,7 +11,7 @@ test("owner creates, finds, reschedules and cancels a booking", async ({ page })
   await page.goto("/dashboard/bookings/new");
   await page.getByLabel("Услуга").selectOption({ label: "Мужская стрижка" });
   await page.getByLabel("Специалист").selectOption({ label: "Алишер" });
-  await page.getByLabel("Дата").fill("2026-08-11");
+  await page.getByLabel("Дата").fill(nextDate());
   await page.getByRole("group", { name: "Свободное время" }).getByRole("button").first().click();
   await page.getByLabel("Имя клиента").fill(customerName);
   await page.getByLabel("Телефон клиента").fill(customerPhone);
@@ -19,7 +21,7 @@ test("owner creates, finds, reschedules and cancels a booking", async ({ page })
   await expect(page.getByText("Создана в кабинете")).toBeVisible();
   await expect(page.getByText("Не оплачено").first()).toBeVisible();
 
-  await page.getByLabel("Новая дата").fill("2026-08-11");
+  await page.getByLabel("Новая дата").fill(nextDate());
   await page.getByRole("group", { name: "Свободное время" }).getByRole("button").first().click();
   await page.getByRole("button", { name: "Перенести запись" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Перенести запись" }).click();
