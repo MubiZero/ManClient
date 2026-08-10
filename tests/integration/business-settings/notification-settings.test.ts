@@ -40,7 +40,9 @@ describe("business notification settings", () => {
       notifyOnPaymentNeedsReview: true,
       notifyOnCancellation: true,
       smsNotificationsEnabled: false,
-      smsFeatureAvailable: false,
+      // A freshly registered business is on the premium trial, so SMS is offered from the first
+      // minute — it is switched off, not withheld.
+      smsFeatureAvailable: true,
     });
   });
 
@@ -61,10 +63,12 @@ describe("business notification settings", () => {
     });
 
     const settings = await getNotificationSettings(businessId);
-    expect(settings).toEqual({ ...updated, smsFeatureAvailable: false });
+    expect(settings).toEqual({ ...updated, smsFeatureAvailable: true });
   });
 
   it("rejects turning on SMS notifications when the business plan does not include the SMS feature", async () => {
+    await prisma.business.update({ where: { id: businessId }, data: { subscriptionPlan: "START" } });
+
     await expect(updateNotificationSettings({
       businessId,
       actorUserId,

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { verifyPassword } from "@/core/auth/password";
 import { prisma } from "@/core/database/prisma";
 import { registerBusiness, RegistrationError } from "@/core/onboarding/register-business";
+import { TRIAL_DAYS } from "@/core/platform/subscription-lifecycle";
+import { SUBSCRIPTION_SELECT, businessHasFeature } from "@/core/platform/subscription-plans";
 
 describe("business registration", () => {
   const phones: string[] = [];
@@ -46,6 +48,34 @@ describe("business registration", () => {
     expect(branch.name).toBe("Основной филиал");
     expect(branch.staffAssignments).toHaveLength(1);
     expect(branch.scheduleRules).toHaveLength(7);
+  });
+
+  it("starts the new business on a premium trial that runs out", async () => {
+    const suffix = randomUUID();
+    const phone = `+9929${suffix.replace(/-/g, "").replace(/\D/g, "").padEnd(8, "3").slice(0, 8)}`;
+    phones.push(phone);
+    const before = Date.now();
+
+    const result = await registerBusiness({
+      ownerName: "Далер",
+      phone,
+      password: "safe-password-123",
+      businessName: `Барбершоп ${suffix}`,
+    });
+    businessIds.push(result.businessId);
+
+    const business = await prisma.business.findUniqueOrThrow({
+      where: { id: result.businessId },
+      select: SUBSCRIPTION_SELECT,
+    });
+    expect(business.subscriptionPlan).toBe("PREMIUM");
+    expect(business.subscriptionStatus).toBe("TRIALING");
+    // The trial has to end: a null end date is the "never expires" grant, and handing it to every
+    // registration would give the whole product away for good.
+    expect(business.subscriptionEndsAt).not.toBeNull();
+    expect(business.subscriptionEndsAt!.getTime()).toBeGreaterThanOrEqual(before + TRIAL_DAYS * 86_400_000);
+    expect(business.subscriptionEndsAt!.getTime()).toBeLessThanOrEqual(Date.now() + TRIAL_DAYS * 86_400_000);
+    expect(businessHasFeature(business, "SMS")).toBe(true);
   });
 
   it("rejects a duplicate phone without creating another business", async () => {

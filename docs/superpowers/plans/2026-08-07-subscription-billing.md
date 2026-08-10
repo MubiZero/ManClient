@@ -57,21 +57,21 @@ Run: `pnpm vitest run tests/unit/platform/subscription-lifecycle.test.ts`
 - Consumes: `{ subscriptionPlan, subscriptionStatus, subscriptionEndsAt }`.
 - Produces: `businessHasFeature(subscription, feature)`, `requirePlanFeature(subscription, feature)`.
 
-- [ ] **Step 1: Написать падающий тест: просроченный PREMIUM не имеет ни одной платной функции**
+- [x] **Step 1: Написать падающий тест: просроченный PREMIUM не имеет ни одной платной функции**
 
 Отдельно проверить, что `GRACE` их сохраняет, а `TRIALING` даёт полный PREMIUM.
 
-- [ ] **Step 2: Запустить тест и убедиться в падении**
+- [x] **Step 2: Запустить тест и убедиться в падении**
 
-- [ ] **Step 3: Сменить сигнатуру на объект подписки**
+- [x] **Step 3: Сменить сигнатуру на объект подписки**
 
 Голый enum больше не принимается — это и есть механизм поиска пропущенных мест.
 
-- [ ] **Step 4: Прогнать `pnpm typecheck` и перевести каждое место из списка ошибок**
+- [x] **Step 4: Прогнать `pnpm typecheck` и перевести каждое место из списка ошибок**
 
 Запросы Prisma в этих местах должны выбирать три поля вместо одного. Ни одно место не «чинится» приведением типа.
 
-- [ ] **Step 5: Прогнать `pnpm typecheck` и весь `pnpm test`**
+- [x] **Step 5: Прогнать `pnpm typecheck` и весь `pnpm test`**
 
 Полный сюит здесь обязателен: задача трогает гейты SMS, отзывов, промокодов, комиссий, листа ожидания и повторяющихся записей.
 
@@ -81,15 +81,15 @@ Run: `pnpm vitest run tests/unit/platform/subscription-lifecycle.test.ts`
 - Modify: `src/core/onboarding/register-business.ts`
 - Modify: `tests/integration/onboarding/register-business.test.ts`
 
-- [ ] **Step 1: Написать падающий тест: новый бизнес получает PREMIUM, `TRIALING` и срок +14 дней**
+- [x] **Step 1: Написать падающий тест: новый бизнес получает PREMIUM, `TRIALING` и срок +14 дней**
 
-- [ ] **Step 2: Запустить тест и убедиться в падении**
+- [x] **Step 2: Запустить тест и убедиться в падении**
 
-- [ ] **Step 3: Проставить триал в той же транзакции, что создаёт бизнес**
+- [x] **Step 3: Проставить триал в той же транзакции, что создаёт бизнес**
 
 Длина триала — именованная константа, а не литерал в трёх местах.
 
-- [ ] **Step 4: Перезапустить тест**
+- [x] **Step 4: Перезапустить тест**
 
 ### Task 4: Счёт за подписку и ссылка на оплату
 
