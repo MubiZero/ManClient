@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { Client } from "pg";
 
-const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
+import { signIn } from "./sign-in";
+import { Client } from "pg";
 
 /**
  * The path a business walks when its subscription runs out: it is told what is about to stop, it is
@@ -69,16 +69,3 @@ test("owner in grace sees the warning, prices a plan and gets a bill", async ({ 
   }
 });
 
-async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");
-  await page.getByLabel("Пароль").fill(ownerPassword);
-  await page.getByRole("button", { name: "Войти в кабинет" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
-
-function requiredEnv(name: "DEMO_OWNER_PASSWORD"): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required for the subscription payment E2E test`);
-  return value;
-}

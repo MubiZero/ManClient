@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { nextDate } from "./dates";
+import { signIn } from "./sign-in";
 
 const autoOwnerPassword = requiredEnv("DEMO_AUTO_OWNER_PASSWORD");
 const internalSecret = requiredEnv("INTERNAL_API_SECRET");
@@ -39,11 +40,7 @@ test("pilot auto service confirms a resource booking after receipt", async ({ pa
   });
   expect(receipt.status()).toBe(200);
 
-  await page.goto("/login");
-  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-auto.local");
-  await page.getByLabel("Пароль").fill(autoOwnerPassword);
-  await page.getByRole("button", { name: "Войти в кабинет" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  await signIn(page, { email: "owner@demo-auto.local", password: autoOwnerPassword });
   await page.goto("/dashboard/bookings?view=list");
   const bookingRow = page.getByRole("row").filter({ hasText: customerName });
   await expect(bookingRow).toContainText("Подтверждена");

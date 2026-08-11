@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-import { nextDate } from "./dates";
+import { signIn } from "./sign-in";
 
-const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
+import { nextDate } from "./dates";
 
 test("owner creates, edits, archives and restores a branch", async ({ page }) => {
   const suffix = Date.now().toString().slice(-6);
@@ -114,16 +114,3 @@ test("settings remain usable without horizontal overflow at supported widths", a
   }
 });
 
-async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");
-  await page.getByLabel("Пароль").fill(ownerPassword);
-  await page.getByRole("button", { name: "Войти в кабинет" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
-
-function requiredEnv(name: "DEMO_OWNER_PASSWORD"): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required for business settings E2E tests`);
-  return value;
-}
