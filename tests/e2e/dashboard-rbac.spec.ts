@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+import { signIn } from "./sign-in";
+
 const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
 const staffPassword = requiredEnv("DEMO_STAFF_PASSWORD");
 
 test("owner can open business settings", async ({ page }) => {
-  await signIn(page, "owner@demo-barber.local", ownerPassword);
+  await signIn(page, { email: "owner@demo-barber.local", password: ownerPassword });
   await page.goto("/dashboard/settings/services");
 
   await expect(page.getByRole("heading", { name: "Услуги" })).toBeVisible();
@@ -12,7 +14,7 @@ test("owner can open business settings", async ({ page }) => {
 });
 
 test("staff cannot open business settings", async ({ page }) => {
-  await signIn(page, "alisher@demo-barber.local", staffPassword);
+  await signIn(page, { email: "alisher@demo-barber.local", password: staffPassword });
   await page.goto("/dashboard/settings/services");
 
   await expect(page).toHaveURL(/\/dashboard\?notice=settings$/);
@@ -21,7 +23,7 @@ test("staff cannot open business settings", async ({ page }) => {
 
 test("owner can reach settings and sign out controls on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await signIn(page, "owner@demo-barber.local", ownerPassword);
+  await signIn(page, { email: "owner@demo-barber.local", password: ownerPassword });
 
   await page.getByRole("button", { name: "Ещё" }).click();
   await expect(page.getByRole("link", { name: /Услуги/ })).toBeVisible();
@@ -31,14 +33,6 @@ test("owner can reach settings and sign out controls on mobile", async ({ page }
   await expect(page).toHaveURL(/\/dashboard\/settings\/services$/);
   await expect(page.getByRole("heading", { name: "Услуги" })).toBeVisible();
 });
-
-async function signIn(page: import("@playwright/test").Page, email: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Телефон или электронная почта").fill(email);
-  await page.getByLabel("Пароль").fill(password);
-  await page.getByRole("button", { name: "Войти в кабинет" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
 
 function requiredEnv(name: "DEMO_OWNER_PASSWORD" | "DEMO_STAFF_PASSWORD"): string {
   const value = process.env[name];

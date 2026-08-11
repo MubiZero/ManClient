@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+import { signIn } from "./sign-in";
+
 import { addDays, dayLabel, nextWeekday } from "./dates";
 
-const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
 /**
  * A Tuesday at least a week out: far enough that no other spec books against it, so the day starts
  * empty and the free slots below are predictable, and a known weekday so the week around it can be
@@ -162,16 +163,3 @@ async function cancelBooking(page: import("@playwright/test").Page) {
   await expect(page.getByText("Запись отменена", { exact: true }).first()).toBeVisible();
 }
 
-async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");
-  await page.getByLabel("Пароль").fill(ownerPassword);
-  await page.getByRole("button", { name: "Войти в кабинет" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
-
-function requiredEnv(name: "DEMO_OWNER_PASSWORD") {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-}

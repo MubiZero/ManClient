@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
+
+import { signIn } from "./sign-in";
 import { Client } from "pg";
 
 import { createCustomerBookingToken } from "@/core/bookings/booking-action-token";
 
 import { nextDate } from "./dates";
-
-const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
 
 const BOOKED_ON = nextDate(3);
 const MOVED_TO = nextDate(4);
@@ -62,16 +62,3 @@ test("visitor reschedules a booking from the public link", async ({ page }) => {
   }
 });
 
-async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");
-  await page.getByLabel("Пароль").fill(ownerPassword);
-  await page.getByRole("button", { name: "Войти в кабинет" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
-
-function requiredEnv(name: "DEMO_OWNER_PASSWORD"): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required for the public reschedule E2E test`);
-  return value;
-}

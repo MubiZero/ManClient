@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
+import { signIn } from "./sign-in";
 
 test("owner can choose the secondary existing-bot path without retaining its token", async ({ page }) => {
   await page.route("**/api/integrations/telegram", async route => {
@@ -37,16 +37,3 @@ test("settings remain usable on a narrow screen", async ({ page }) => {
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
 
-async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");
-  await page.getByLabel("Пароль").fill(ownerPassword);
-  await page.getByRole("button", { name: "Войти в кабинет" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
-
-function requiredEnv(name: "DEMO_OWNER_PASSWORD") {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required for dashboard E2E tests`);
-  return value;
-}
