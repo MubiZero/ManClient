@@ -192,6 +192,7 @@ model Business {
   customers                        Customer[]
   payments                         Payment[]
   subscriptionInvoices             SubscriptionInvoice[]
+  subscriptionReceipts             SubscriptionReceipt[]
   receiptSubmissions               ReceiptSubmission[]
   messages                         Message[]
   businessNotifications            BusinessNotification[]
@@ -818,11 +819,50 @@ model SubscriptionInvoice {
   reference   String                    @unique
   paidAt      DateTime?
   business    Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  receipts    SubscriptionReceipt[]
   createdAt   DateTime                  @default(now())
   updatedAt   DateTime                  @updatedAt
 
   @@index([businessId, status])
   @@index([status, createdAt])
+}
+
+enum SubscriptionReceiptStatus {
+  ACCEPTED
+  NEEDS_REVIEW
+  REJECTED
+}
+
+/// A transfer a business says it made for its subscription. Kept apart from `ReceiptSubmission`,
+/// which hangs off a booking's payment: this one answers for a bill from the platform, and the card
+/// it was sent to is the platform's own, held in the environment rather than in any branch row.
+model SubscriptionReceipt {
+  id                    String                    @id @default(cuid())
+  invoiceId             String
+  businessId            String
+  storageKey            String
+  contentType           String
+  sizeBytes             Int
+  status                SubscriptionReceiptStatus
+  /// Why it could not be accepted outright, in the operator's terms: AMOUNT_MISMATCH,
+  /// RECIPIENT_MISMATCH, OPERATION_TIME_MISMATCH, RECEIPT_NOT_SUCCESSFUL, OCR_UNRELIABLE.
+  attentionReason       String?
+  /// Unique across subscriptions: one transfer pays for one period, and a screenshot sent twice —
+  /// by the same business or another one — must not buy a second month.
+  parsedOperationNumber String?                   @unique
+  parsedAmountDiram     Int?
+  parsedCardSuffix      String?
+  parsedOperationAt     DateTime?
+  reviewedById          String?
+  reviewedAt            DateTime?
+  reviewNote            String?
+  invoice               SubscriptionInvoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  business              Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([businessId, createdAt])
 }
 
 model Customer {
