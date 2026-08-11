@@ -58,21 +58,45 @@ export async function setBusinessStatus(input: { businessId: string; status: "AC
   });
 }
 
+/**
+ * The operator's own hand on a subscription: the plan a business is on and how long it is paid for.
+ * `endsAt` of null is a grant with no expiry — what every business created before billing has — and
+ * the status always goes back to `ACTIVE` because a grant that left a business `EXPIRED` would take
+ * away the very features it was granting. A date in the past is allowed and simply lets the
+ * lifecycle job walk it back into grace on its next pass.
+ */
 export async function setBusinessSubscriptionPlan(input: {
   businessId: string;
   plan: "START" | "STANDARD" | "PREMIUM";
+  endsAt?: Date | null;
   actorUserId: string;
 }) {
   await prisma.$transaction(async (transaction) => {
-    const previous = await transaction.business.findUniqueOrThrow({ where: { id: input.businessId }, select: { subscriptionPlan: true } });
-    await transaction.business.update({ where: { id: input.businessId }, data: { subscriptionPlan: input.plan } });
+    const previous = await transaction.business.findUniqueOrThrow({
+      where: { id: input.businessId },
+      select: { subscriptionPlan: true, subscriptionStatus: true, subscriptionEndsAt: true },
+    });
+    await transaction.business.update({
+      where: { id: input.businessId },
+      data: {
+        subscriptionPlan: input.plan,
+        subscriptionStatus: "ACTIVE",
+        subscriptionEndsAt: input.endsAt === undefined ? previous.subscriptionEndsAt : input.endsAt,
+      },
+    });
     await writeAuditEvent(
       {
         businessId: input.businessId,
         type: "business.plan_changed",
         actorType: "platform_admin",
         actorId: input.actorUserId,
-        metadata: { from: previous.subscriptionPlan, to: input.plan },
+        metadata: {
+          from: previous.subscriptionPlan,
+          to: input.plan,
+          fromStatus: previous.subscriptionStatus,
+          fromEndsAt: previous.subscriptionEndsAt?.toISOString() ?? null,
+          toEndsAt: (input.endsAt === undefined ? previous.subscriptionEndsAt : input.endsAt)?.toISOString() ?? null,
+        },
       },
       transaction,
     );
