@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const ownerPassword = requiredEnv("DEMO_OWNER_PASSWORD");
+import { signIn } from "./sign-in";
 
 /**
  * The rules are only worth anything if the customer sees the same ones the server enforces, so this
@@ -47,16 +47,3 @@ test("owner sets booking rules and the public page states them to customers", as
   await expect(page.getByText("Правила записи сохранены")).toBeVisible();
 });
 
-async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Телефон или электронная почта").fill("owner@demo-barber.local");
-  await page.getByLabel("Пароль").fill(ownerPassword);
-  await page.getByRole("button", { name: "Войти в кабинет" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
-
-function requiredEnv(name: "DEMO_OWNER_PASSWORD"): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required for booking policy E2E tests`);
-  return value;
-}
