@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CreditCard, LayoutDashboard, Menu, Plug, ScrollText, Tags } from "lucide-react";
+import { Building2, CreditCard, LayoutDashboard, Menu, Plug, ReceiptText, ScrollText, Tags } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -14,6 +14,7 @@ const items = [
   { href: "/platform/businesses", label: "Бизнесы", icon: Building2 },
   { href: "/platform/payments", label: "Оплаты", icon: CreditCard },
   { href: "/platform/plans", label: "Тарифы", icon: Tags },
+  { href: "/platform/subscriptions", label: "Подписки", icon: ReceiptText },
   { href: "/platform/integrations", label: "Интеграции", icon: Plug },
   { href: "/platform/audit", label: "Журнал", icon: ScrollText },
 ];

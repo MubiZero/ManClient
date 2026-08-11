@@ -3,6 +3,7 @@ export type PlatformErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "NOT_PRICED"
+  | "DUPLICATE_OPERATION"
   | "NOT_CONFIGURED";
 
 /**
