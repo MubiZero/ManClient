@@ -4,15 +4,12 @@ import { writePlatformAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 import { PlatformError } from "@/core/platform/platform-error";
 
+export { PERIOD_LABELS } from "@/core/platform/plan-labels";
+
 /** The plans that can carry a price. `START` is the free tier, so pricing it is a mistake, not a choice. */
 export const SELLABLE_PLANS = ["STANDARD", "PREMIUM"] as const satisfies readonly SubscriptionPlan[];
 
 export const BILLING_PERIODS = ["MONTHLY", "YEARLY"] as const satisfies readonly BillingPeriod[];
-
-export const PERIOD_LABELS: Record<BillingPeriod, string> = {
-  MONTHLY: "Месяц",
-  YEARLY: "Год",
-};
 
 export type PlanPriceRow = {
   plan: SubscriptionPlan;
