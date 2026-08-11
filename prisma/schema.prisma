@@ -191,6 +191,7 @@ model Business {
   bookings                         Booking[]
   customers                        Customer[]
   payments                         Payment[]
+  subscriptionInvoices             SubscriptionInvoice[]
   receiptSubmissions               ReceiptSubmission[]
   messages                         Message[]
   businessNotifications            BusinessNotification[]
@@ -765,18 +766,63 @@ model BusinessNotificationDelivery {
 
 model AuditEvent {
   id         String   @id @default(cuid())
-  businessId String
+  /// Null for platform-wide events — changing what a plan costs belongs to no single salon. Every
+  /// business-scoped event still carries its business, and `writeAuditEvent` still demands one.
+  businessId String?
   bookingId  String?
   type       String
   actorType  String
   actorId    String?
   metadata   Json
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
   booking    Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
 
   @@index([businessId, createdAt])
   @@index([bookingId, createdAt])
+}
+
+/// What a plan costs, one row per plan and period. A plan with no row is not sold at all — that is
+/// how a plan is taken off the shelf without deleting anyone's subscription to it.
+model PlanPrice {
+  id          String           @id @default(cuid())
+  plan        SubscriptionPlan
+  period      BillingPeriod
+  amountDiram Int
+  /// The platform admin who last set it, for the screen that has to say who changed the price.
+  updatedById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([plan, period])
+}
+
+enum SubscriptionInvoiceStatus {
+  OPEN
+  NEEDS_ATTENTION
+  PAID
+  CANCELLED
+}
+
+/// A bill for one subscription period. `amountDiram` is a snapshot, not a lookup: re-pricing a plan
+/// tomorrow must not silently change what a business was asked to pay today.
+model SubscriptionInvoice {
+  id          String                    @id @default(cuid())
+  businessId  String
+  plan        SubscriptionPlan
+  period      BillingPeriod
+  amountDiram Int
+  status      SubscriptionInvoiceStatus @default(OPEN)
+  /// Short human-readable number. It travels in the payment link and is what the operator matches a
+  /// transfer against, so it is unique and never reused.
+  reference   String                    @unique
+  paidAt      DateTime?
+  business    Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  @@index([businessId, status])
+  @@index([status, createdAt])
 }
 
 model Customer {

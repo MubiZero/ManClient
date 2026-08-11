@@ -1,5 +1,5 @@
 import { requirePlatformAdmin } from "@/core/auth/platform-session";
-import { listAuditEvents } from "@/core/platform/audit-log";
+import { PLATFORM_SCOPE, listAuditEvents } from "@/core/platform/audit-log";
 
 function csvEscape(value: string) {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const page = await listAuditEvents({ businessId, type }, { cursor });
     for (const event of page.items) {
       rows.push(
-        [event.createdAt.toISOString(), event.business.name, event.type, event.actorType]
+        [event.createdAt.toISOString(), event.business?.name ?? PLATFORM_SCOPE, event.type, event.actorType]
           .map((value) => csvEscape(String(value)))
           .join(","),
       );

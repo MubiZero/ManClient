@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { listAuditEventTypes, listAuditEvents } from "@/core/platform/audit-log";
+import { PLATFORM_SCOPE, listAuditEventTypes, listAuditEvents } from "@/core/platform/audit-log";
 import { listBusinessOptions } from "@/core/platform/business-directory";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { Select } from "@/features/ui-kit/field";
@@ -63,7 +63,7 @@ export default async function PlatformAuditPage({ searchParams }: { searchParams
             {events.map((event) => (
               <TableRow key={event.id}>
                 <TableCell className="text-muted-foreground">{event.createdAt.toLocaleString("ru-RU")}</TableCell>
-                <TableCell>{event.business.name}</TableCell>
+                <TableCell>{event.business?.name ?? PLATFORM_SCOPE}</TableCell>
                 <TableCell className="font-mono text-xs">{event.type}</TableCell>
                 <TableCell className="text-muted-foreground">{event.actorType}</TableCell>
               </TableRow>
