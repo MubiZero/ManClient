@@ -3,6 +3,8 @@ import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
 import { effectivePlan, type SubscriptionState } from "@/core/platform/subscription-lifecycle";
 
+export { PLAN_DESCRIPTIONS, PLAN_LABELS } from "@/core/platform/plan-labels";
+
 export type PlanFeature = "SMS" | "WAITLIST" | "PROMO_CODES" | "RECURRING_BOOKINGS" | "STAFF_COMMISSIONS" | "REVIEWS";
 
 /** Everything that costs money, in the order a business meets it going up the plans. */
@@ -19,18 +21,6 @@ const PLAN_FEATURES: Record<SubscriptionPlan, ReadonlySet<PlanFeature>> = {
   START: new Set(),
   STANDARD: new Set(["SMS", "WAITLIST", "PROMO_CODES"]),
   PREMIUM: new Set(["SMS", "WAITLIST", "PROMO_CODES", "RECURRING_BOOKINGS", "STAFF_COMMISSIONS", "REVIEWS"]),
-};
-
-export const PLAN_LABELS: Record<SubscriptionPlan, string> = {
-  START: "Старт",
-  STANDARD: "Стандарт",
-  PREMIUM: "Премиум",
-};
-
-export const PLAN_DESCRIPTIONS: Record<SubscriptionPlan, string> = {
-  START: "Базовые записи, дашборд, WhatsApp и Telegram-бот.",
-  STANDARD: "Всё из Старта + SMS-уведомления, лист ожидания, промокоды.",
-  PREMIUM: "Всё из Стандарта + повторяющиеся записи, комиссии персонала, отзывы и рейтинги.",
 };
 
 /**

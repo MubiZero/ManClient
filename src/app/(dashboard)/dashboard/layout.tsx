@@ -5,10 +5,18 @@ import type { ReactNode } from "react";
 import { signOut } from "@/auth";
 import { ACTIVE_BUSINESS_COOKIE, requireBusinessSession } from "@/core/auth/business-session";
 import { DashboardNav } from "@/features/dashboard/dashboard-nav";
+import { GraceBanner } from "@/features/dashboard/subscription/grace-banner";
+import { graceDisableAt } from "@/features/dashboard/subscription/subscription-summary";
 import { Toaster } from "@/features/ui-kit/toaster";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const membership = await requireBusinessSession();
+  // Unpaid is not the same as suspended: the day carries on, and the banner only says what will
+  // stop and when. Shown to owners and administrators, since a specialist cannot act on it.
+  const disableAt = membership.role === "STAFF" ? null : graceDisableAt({
+    status: membership.business.subscriptionStatus,
+    endsAt: membership.business.subscriptionEndsAt,
+  });
 
   async function switchBusinessAction(formData: FormData) {
     "use server";
@@ -32,6 +40,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       />
       <main className="flex-1 overflow-x-hidden pb-20 md:pb-0">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:p-8">
+          {disableAt ? <GraceBanner disableAt={disableAt} /> : null}
           {membership.business.status === "SUSPENDED" ? (
             <div
               className="rounded-md border border-danger-100 bg-danger-50 px-4 py-3 text-sm text-danger-700 dark:border-danger-700 dark:bg-danger-600/10 dark:text-danger-500"
