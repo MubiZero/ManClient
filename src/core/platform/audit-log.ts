@@ -2,6 +2,9 @@ import { prisma } from "@/core/database/prisma";
 
 const AUDIT_EVENTS_PAGE_SIZE = 50;
 
+/** Shown in the business column for platform-wide events, which belong to no single salon. */
+export const PLATFORM_SCOPE = "Платформа";
+
 export async function listAuditEvents(filters: { businessId?: string; type?: string }, page: { cursor?: string | null } = {}) {
   const rows = await prisma.auditEvent.findMany({
     where: {
