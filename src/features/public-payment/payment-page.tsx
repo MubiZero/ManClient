@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { formatSomoni } from "@/core/formatting/money";
-import { ButtonLink } from "@/features/ui-kit/button";
+import type { PaymentInstructions } from "@/core/payments/payment-service";
+import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { cn } from "@/features/ui-kit/cn";
 import { PublicBrandMark } from "@/features/public-booking/public-brand-mark";
@@ -33,13 +34,13 @@ type PaymentView = {
 export function PaymentPage({
   token,
   initialPayment,
-  paymentUrl,
+  instructions,
   locale,
 }: {
   token: string;
   initialPayment: PaymentView;
   /** Absent when nothing is due: a business paid on the premises has no card to transfer to. */
-  paymentUrl: string | null;
+  instructions: PaymentInstructions | null;
   locale: SupportedLocale;
 }) {
   const [payment, setPayment] = useState(initialPayment);
@@ -218,8 +219,34 @@ export function PaymentPage({
                   <li>{t(locale, "payment.steps.return")}</li>
                   <li>{t(locale, "payment.steps.attach")}</li>
                 </ol>
-                {paymentUrl ? (
-                  <ButtonLink href={paymentUrl} target="_blank" rel="noreferrer" size="lg">
+                {instructions ? (
+                  <div className="flex flex-col gap-3 rounded-md border border-border bg-secondary/40 p-4">
+                    <CopyRow
+                      label={t(locale, "payment.cardLabel")}
+                      value={instructions.cardNumber}
+                      display={groupCardNumber(instructions.cardNumber)}
+                      copyLabel={t(locale, "payment.copy")}
+                      copiedLabel={t(locale, "payment.copied")}
+                    />
+                    <CopyRow
+                      label={t(locale, "payment.amountLabel")}
+                      value={(payment.amountDiram / 100).toFixed(2)}
+                      display={formatSomoni(payment.amountDiram, moneyLocale(locale))}
+                      copyLabel={t(locale, "payment.copy")}
+                      copiedLabel={t(locale, "payment.copied")}
+                    />
+                    <CopyRow
+                      label={t(locale, "payment.referenceLabel")}
+                      value={instructions.reference}
+                      display={instructions.reference}
+                      copyLabel={t(locale, "payment.copy")}
+                      copiedLabel={t(locale, "payment.copied")}
+                    />
+                    <p className="text-xs text-muted-foreground">{t(locale, "payment.transferHint")}</p>
+                  </div>
+                ) : null}
+                {instructions ? (
+                  <ButtonLink href={instructions.url} target="_blank" rel="noreferrer" size="lg">
                     {t(locale, "payment.payCta", { amount: formatSomoni(payment.amountDiram, moneyLocale(locale)) })}
                   </ButtonLink>
                 ) : null}
@@ -232,7 +259,6 @@ export function PaymentPage({
                     ref={inputRef}
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
-                    capture="environment"
                     disabled={uploading}
                     onChange={(event) => void upload(event.target.files?.[0])}
                     className="sr-only"
@@ -305,4 +331,54 @@ function formatRemainingHold(milliseconds: number) {
 
 function formatVisitDateTime(value: Date | string, timeZone: string, locale: SupportedLocale) {
   return new Intl.DateTimeFormat(intlLocale(locale), { timeZone, day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+/**
+ * One line of transfer details with a copy button. Copying matters more than it looks: the customer
+ * is about to leave for a banking app, and a sixteen-digit number retyped from memory is the most
+ * common way a transfer lands on the wrong card.
+ */
+function CopyRow({
+  label,
+  value,
+  display,
+  copyLabel,
+  copiedLabel,
+}: {
+  label: string;
+  value: string;
+  display: string;
+  copyLabel: string;
+  copiedLabel: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // Older Android browsers and insecure origins have no clipboard; the number is on screen
+      // anyway, so a failed copy is not worth an error message.
+      return;
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="truncate font-mono text-base font-semibold tabular-nums text-foreground">{display}</p>
+      </div>
+      <Button type="button" variant="secondary" size="sm" onClick={() => void copy()}>
+        {copied ? copiedLabel : copyLabel}
+      </Button>
+    </div>
+  );
+}
+
+/** 1111 2222 3333 4444 — grouped so it can be read off the screen and typed without losing place. */
+function groupCardNumber(cardNumber: string): string {
+  return cardNumber.replace(/(.{4})/g, "$1 ").trim();
 }

@@ -76,7 +76,8 @@ export function BookingBlock({
         onPointerUp={handlers.onPointerUp}
         onClick={handlers.onClick}
         className={cn(
-          "absolute z-10 flex touch-none flex-col overflow-hidden rounded-sm border leading-tight transition-colors hover:brightness-95",
+          // No `touch-none`: dragging is mouse-only, so a finger on a block must scroll the day.
+          "absolute z-10 flex flex-col overflow-hidden rounded-sm border leading-tight transition-colors hover:brightness-95",
           compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-1 text-xs",
           draggable && "cursor-grab",
           drag && "z-30 cursor-grabbing opacity-90 shadow-lg ring-2 ring-primary",

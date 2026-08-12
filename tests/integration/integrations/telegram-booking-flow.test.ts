@@ -81,7 +81,7 @@ describe("tenant Telegram booking journey", () => {
     await callback(context, dependencies, sent, "Подтвердить запись", 11);
 
     expect(sent.at(-1)?.text).toContain("DushanbeCity");
-    expect(findUrl(sent.at(-1), "Оплатить")).toMatch(/^http:\/\/pay\.expresspay\.tj\//);
+    expect(findUrl(sent.at(-1), "Оплатить")).toMatch(/^https:\/\/pay\.expresspay\.tj\//);
 
     await callback(context, dependencies, sent, "Я оплатил", 12);
     const workingStoreReceipt = dependencies.storeReceipt;
