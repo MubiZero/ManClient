@@ -31,13 +31,19 @@ test("visitor selects a service, specialist and receives a payment link", async 
   await expect(
     page.getByRole("heading", { name: "Завершите оплату" }),
   ).toBeVisible();
+  // The transfer details themselves, because the ExpressPay link only opens for customers of one
+  // bank — everybody else needs a card number to type into their own banking app.
+  await expect(page.getByText("Карта для перевода")).toBeVisible();
+  await expect(page.getByText("1111 2222 3333 4444")).toBeVisible();
+  await expect(page.getByText("Назначение перевода")).toBeVisible();
+  await expect(page.getByText(/^MC-/)).toBeVisible();
+
   const paymentHref = await page
     .getByRole("link", { name: /Оплатить/ })
     .getAttribute("href");
-  expect(paymentHref).toContain("http://pay.expresspay.tj/");
   if (!paymentHref) throw new Error("Payment link is missing");
   const paymentUrl = new URL(paymentHref);
-  expect(paymentUrl.origin).toBe("http://pay.expresspay.tj");
+  expect(paymentUrl.origin).toBe("https://pay.expresspay.tj");
   expect(paymentUrl.searchParams.get("A")).toBe("1111222233334444");
 });
 

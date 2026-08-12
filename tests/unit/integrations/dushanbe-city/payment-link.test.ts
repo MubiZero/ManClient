@@ -10,7 +10,9 @@ describe("createPaymentUrl", () => {
       bookingReference: "MC-1",
     });
 
-    expect(url.origin + url.pathname).toBe("http://pay.expresspay.tj/");
+    // The card number travels in the query string, so plain http would hand a stranger on the same
+    // Wi-Fi the salon's card and the amount.
+    expect(url.origin + url.pathname).toBe("https://pay.expresspay.tj/");
     expect(url.searchParams.get("A")).toBe("1111222233334444");
     expect(url.searchParams.get("s")).toBe("17.50");
     expect(url.searchParams.get("c")).toBe("MC-1");

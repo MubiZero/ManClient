@@ -93,11 +93,11 @@ describe("InvoicePaymentPanel", () => {
   const invoice = { reference: "SUB-A1B2C3D4", amountDiram: 30_000, plan: "PREMIUM" as const, period: "MONTHLY" as const, status: "OPEN" as const };
 
   it("shows the amount, the invoice number, the payment link and the receipt upload", () => {
-    render(<InvoicePaymentPanel invoice={invoice} paymentUrl="http://pay.expresspay.tj/?A=1" />);
+    render(<InvoicePaymentPanel invoice={invoice} paymentUrl="https://pay.expresspay.tj/?A=1" />);
 
     expect(screen.getByText("300,00 TJS")).toBeTruthy();
     expect(screen.getByText("SUB-A1B2C3D4")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Оплатить переводом" }).getAttribute("href")).toBe("http://pay.expresspay.tj/?A=1");
+    expect(screen.getByRole("link", { name: "Оплатить переводом" }).getAttribute("href")).toBe("https://pay.expresspay.tj/?A=1");
     expect(screen.getByLabelText("Чек об оплате")).toBeTruthy();
   });
 

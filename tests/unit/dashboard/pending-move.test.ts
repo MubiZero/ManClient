@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DayScheduleBooking } from "@/core/booking-operations/day-schedule-service";
-import { applyPendingMove } from "@/features/dashboard/bookings/use-calendar-drag";
+import { applyPendingMove, pointerCanDrag } from "@/features/dashboard/bookings/use-calendar-drag";
 
 /**
  * What the calendar draws between letting go of a visit and the server confirming it. Without this the
@@ -68,3 +68,21 @@ function booking(id: string, startMinute: number): DayScheduleBooking {
     laneCount: 1,
   };
 }
+
+/**
+ * Who is allowed to move a visit by dragging it. The blocks used to accept a finger, with a threshold
+ * of four pixels and a snap step of twelve in the week view — smaller than the wobble of a hand trying
+ * to scroll the day. The receptionist scrolled, the visit moved, and the server accepted it.
+ */
+describe("which pointers may drag a visit", () => {
+  it("lets a mouse and a stylus drag, and refuses a finger", () => {
+    expect(pointerCanDrag({ pointerType: "mouse", button: 0 })).toBe(true);
+    expect(pointerCanDrag({ pointerType: "pen", button: 0 })).toBe(true);
+    expect(pointerCanDrag({ pointerType: "touch", button: 0 })).toBe(false);
+  });
+
+  it("still ignores the right and middle mouse buttons", () => {
+    expect(pointerCanDrag({ pointerType: "mouse", button: 1 })).toBe(false);
+    expect(pointerCanDrag({ pointerType: "mouse", button: 2 })).toBe(false);
+  });
+});
