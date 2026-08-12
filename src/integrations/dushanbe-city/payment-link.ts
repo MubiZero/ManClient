@@ -13,7 +13,9 @@ export function createPaymentUrl(input: PaymentUrlInput): URL {
     throw new Error("Payment amount must be a positive integer of dirams");
   }
 
-  const url = new URL("http://pay.expresspay.tj/");
+  // https, not http: the card number and the amount ride in the query string, and plain http hands
+  // them to anyone sharing the salon's Wi-Fi.
+  const url = new URL("https://pay.expresspay.tj/");
   url.searchParams.set("A", input.cardNumber);
   url.searchParams.set("s", (input.amountDiram / 100).toFixed(2));
   url.searchParams.set("c", input.bookingReference);

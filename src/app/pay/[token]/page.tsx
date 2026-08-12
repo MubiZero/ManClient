@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { verifyBookingActionToken } from "@/core/bookings/booking-action-token";
 import { prisma } from "@/core/database/prisma";
-import { getPaymentUrl } from "@/core/payments/payment-service";
+import { getPaymentInstructions } from "@/core/payments/payment-service";
 import { getPublicPayment } from "@/core/payments/receipt-submission-service";
 import { PaymentPage } from "@/features/public-payment/payment-page";
 import { resolveLocale } from "@/i18n/translate";
@@ -27,7 +27,7 @@ export default async function PublicPaymentPage({ params, searchParams }: PagePr
   });
   const locale = resolveLocale([lang, cookieStore.get(LOCALE_COOKIE)?.value, business?.publicPageLocale]);
   return (
-    <PaymentPage token={token} initialPayment={result.payment} paymentUrl={result.paymentUrl} locale={locale} />
+    <PaymentPage token={token} initialPayment={result.payment} instructions={result.instructions} locale={locale} />
   );
 }
 
@@ -36,10 +36,10 @@ async function loadPayment(token: string) {
     const action = verifyBookingActionToken(token, new Date(), "view_payment");
     const payment = await getPublicPayment(action.paymentId);
     if (!payment) return null;
-    // A booking that asked for no money has no payment link, and demanding one here would 404 the page
-    // that is supposed to confirm the visit.
-    const paymentUrl = payment.amountDiram > 0 ? (await getPaymentUrl(payment.id)).toString() : null;
-    return { payment, paymentUrl };
+    // A booking that asked for no money has no payment details, and demanding them here would 404
+    // the page that is supposed to confirm the visit.
+    const instructions = payment.amountDiram > 0 ? await getPaymentInstructions(payment.id) : null;
+    return { payment, instructions };
   } catch {
     return null;
   }

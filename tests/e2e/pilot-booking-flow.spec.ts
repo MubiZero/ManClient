@@ -24,7 +24,7 @@ test("pilot auto service confirms a resource booking after receipt", async ({ pa
   await page.getByLabel("Телефон").fill(`+99290${suffix}`);
   await page.getByRole("button", { name: "Перейти к оплате" }).click();
   await expect(page).toHaveURL(/\/pay\//);
-  await expect(page.getByRole("link", { name: /Оплатить/ })).toHaveAttribute("href", /^http:\/\/pay\.expresspay\.tj\//);
+  await expect(page.getByRole("link", { name: /Оплатить/ })).toHaveAttribute("href", /^https:\/\/pay\.expresspay\.tj\//);
   if (!booking) throw new Error("Booking response was not captured");
 
   const receipt = await request.post(`/api/payments/${booking.paymentId}/receipt`, {

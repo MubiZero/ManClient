@@ -40,7 +40,22 @@ export async function assertPaymentCardConfigured(branchId: string): Promise<voi
   decryptCardNumber(branch.recipientCardEncrypted, encryptionKey);
 }
 
-export async function getPaymentUrl(paymentId: string): Promise<URL> {
+export type PaymentInstructions = {
+  /** Shortcut for customers whose bank opens it; useless for everyone else, hence the fields below. */
+  url: string;
+  /** The salon's card, in full. A transfer cannot be made from four last digits. */
+  cardNumber: string;
+  /** What the customer writes on the transfer so the receipt can be matched to this booking. */
+  reference: string;
+  amountDiram: number;
+};
+
+/**
+ * Everything a customer needs to pay by hand. The page used to show only the ExpressPay link, so a
+ * customer banking with anyone else had nowhere to send the money — and was then asked for a receipt
+ * of a payment the page had made impossible.
+ */
+export async function getPaymentInstructions(paymentId: string): Promise<PaymentInstructions> {
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId },
     include: { booking: { include: { branch: true } } },
@@ -51,11 +66,18 @@ export async function getPaymentUrl(paymentId: string): Promise<URL> {
     throw new PaymentConfigurationError();
   }
 
-  return createPaymentUrl({
-    cardNumber: decryptCardNumber(encryptedCardNumber, encryptionKey),
+  const cardNumber = decryptCardNumber(encryptedCardNumber, encryptionKey);
+  const reference = `MC-${payment.bookingId}`;
+  return {
+    url: createPaymentUrl({ cardNumber, amountDiram: payment.amountDiram, bookingReference: reference }).toString(),
+    cardNumber,
+    reference,
     amountDiram: payment.amountDiram,
-    bookingReference: `MC-${payment.bookingId}`,
-  });
+  };
+}
+
+export async function getPaymentUrl(paymentId: string): Promise<URL> {
+  return new URL((await getPaymentInstructions(paymentId)).url);
 }
 
 export async function confirmFromReceipt(input: ReceiptInput) {

@@ -15,6 +15,19 @@ import type { DayScheduleBooking } from "@/core/booking-operations/day-schedule-
 /** Below this the gesture was a click on the block, not an attempt to move it. */
 const DRAG_THRESHOLD_PIXELS = 4;
 
+/**
+ * Whether this pointer may move a visit at all. A finger may not, and that is the point: the drag
+ * threshold is four pixels and the week view snaps in twelve-pixel steps, both smaller than the wobble
+ * of a hand trying to scroll the day. On a phone the receptionist scrolled, the visit moved, and the
+ * server accepted it — a client's appointment changed because somebody looked at their calendar.
+ * Touch keeps the reschedule form in the booking card, which asks before it moves anything.
+ */
+export function pointerCanDrag(pointer: { pointerType: string; button: number }): boolean {
+  // Left button only: a right-click is a context menu, and a middle-click opens the card in a new tab.
+  if (pointer.button !== 0) return false;
+  return pointer.pointerType !== "touch";
+}
+
 /** Statuses a visit can be moved in. A cancelled or missed visit is history, not a plan. */
 const MOVABLE_STATUSES = ["CONFIRMED", "PENDING_PAYMENT"];
 
@@ -115,8 +128,7 @@ export function useCalendarDrag({
     return {
       onPointerDown(event: ReactPointerEvent<HTMLElement>) {
         if (!isDraggable(booking) || submitting) return;
-        // Left button only: a right-click is a context menu, and a middle-click opens the card in a new tab.
-        if (event.button !== 0) return;
+        if (!pointerCanDrag(event)) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         grabRef.current = minuteAt(event.clientY) - booking.startMinute;
         setMessage("");
