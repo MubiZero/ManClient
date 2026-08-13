@@ -225,6 +225,41 @@ describe("phone verification", () => {
     });
   });
 
+  it("spends a code only at the salon that asked for it", async () => {
+    const now = new Date("2026-08-04T10:00:00.000Z");
+    const asking = await prisma.business.create({ data: { name: "Салон Сино", slug: `sino-${randomUUID()}` } });
+    const other = await prisma.business.create({ data: { name: "Салон Рудаки", slug: `rudaki-${randomUUID()}` } });
+    businessIds.push(asking.id, other.id);
+    const phone = uniquePhone();
+
+    const requested = await requestPhoneVerification({ phone, purpose: "BOOKING", businessSlug: asking.slug }, now, { sendSms });
+    await confirmPhoneVerification({ verificationId: requested.verificationId, phone, code: sent[0]?.variables["code-1"] ?? "" }, now);
+
+    await expect(prisma.phoneVerification.findUniqueOrThrow({ where: { id: requested.verificationId }, select: { businessId: true } }))
+      .resolves.toMatchObject({ businessId: asking.id });
+    await expect(assertPhoneVerified({ phone, verificationId: requested.verificationId, businessSlug: asking.slug }, now)).resolves.toBeUndefined();
+    // The SMS named one salon. A code the customer agreed to give that salon is not a code for every other.
+    await expect(assertPhoneVerified({ phone, verificationId: requested.verificationId, businessSlug: other.slug }, now)).rejects.toMatchObject({
+      code: "VERIFICATION_REQUIRED",
+    });
+    await expect(assertPhoneVerified({ phone, verificationId: requested.verificationId }, now)).rejects.toMatchObject({
+      code: "VERIFICATION_REQUIRED",
+    });
+  });
+
+  it("keeps accepting a code that names no salon, so codes in flight survive the deploy", async () => {
+    const now = new Date("2026-08-04T10:00:00.000Z");
+    const business = await prisma.business.create({ data: { name: "Салон Пайкар", slug: `paykar-${randomUUID()}` } });
+    businessIds.push(business.id);
+    const phone = uniquePhone();
+
+    // No slug: what a row written before this column looks like, and what account recovery still writes.
+    const requested = await requestPhoneVerification({ phone, purpose: "BOOKING" }, now, { sendSms });
+    await confirmPhoneVerification({ verificationId: requested.verificationId, phone, code: sent[0]?.variables["code-1"] ?? "" }, now);
+
+    await expect(assertPhoneVerified({ phone, verificationId: requested.verificationId, businessSlug: business.slug }, now)).resolves.toBeUndefined();
+  });
+
   it("never turns a failed spend into an error for the caller", async () => {
     // The booking already exists by the time this runs; a stale id must not surface as a 500.
     await expect(spendPhoneVerification({ phone: uniquePhone(), verificationId: "missing-id" })).resolves.toBeUndefined();

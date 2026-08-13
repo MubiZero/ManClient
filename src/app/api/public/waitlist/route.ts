@@ -29,7 +29,7 @@ export async function POST(request: Request): Promise<Response> {
     // way to make the platform text a stranger.
     await assertRateLimit("waitlist.join", `ip:${clientIdentifier(request)}`);
     await assertRateLimit("waitlist.join", `phone:${payload.customer.phone}`);
-    await assertPhoneVerified({ phone: payload.customer.phone, verificationId: payload.phoneVerificationId, sessionPhone: await readCustomerPhone() });
+    await assertPhoneVerified({ phone: payload.customer.phone, verificationId: payload.phoneVerificationId, businessSlug: payload.businessSlug, sessionPhone: await readCustomerPhone() });
 
     const business = await prisma.business.findUnique({ where: { slug: payload.businessSlug }, select: { id: true } });
     if (!business) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
