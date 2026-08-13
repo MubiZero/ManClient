@@ -117,11 +117,11 @@ pnpm telegram:register-platform-webhook
 
 Целевой URL: `https://<host>/api/webhooks/telegram/platform`. Endpoint принимает запрос только с совпадающим `X-Telegram-Bot-Api-Secret-Token`. Старый `/api/webhooks/telegram` после cutover обязан отвечать `410 Gone`.
 
-Проверка без вывода credentials:
+Проверка без вывода credentials — `pnpm probe:https` (см. §9). Если проверяете вручную, legacy endpoint нужно дёргать именно POST: на GET route отвечает `405`, а `410 Gone` возвращает только POST.
 
 ```bash
 curl --fail --silent --show-error "$APP_URL/api/health"
-curl --silent --output /dev/null --write-out '%{http_code}\n' "$APP_URL/api/webhooks/telegram"
+curl --silent --output /dev/null --write-out '%{http_code}\n' -X POST "$APP_URL/api/webhooks/telegram"
 ```
 
 Ожидается `200` для health и `410` для legacy webhook.
@@ -338,7 +338,31 @@ pnpm playwright test
 
 Подлинность входящих webhooks закрыта тестами: `tests/unit/security/webhook-auth.test.ts` (сравнение секрета и подписи) и `tests/integration/security/webhook-authentication.test.ts` (каждый endpoint отдельно). Главное, что они держат: **ненастроенный секрет закрывает webhook, а не открывает его**. Если `TELEGRAM_WEBHOOK_SECRET`, `WHATSAPP_APP_SECRET` или `WHATSAPP_VERIFY_TOKEN` не выставлены в окружении, endpoint отвечает 401/403 всем, включая пустой заголовок. Поэтому забытая переменная в Coolify ломает интеграцию заметно — вместо того чтобы тихо пустить внутрь любого, кто знает URL.
 
-До pilot нужен также HTTPS probe.
+### HTTPS probe
+
+```bash
+pnpm probe:https -- --url https://manclient.mubi.dev --wait 180
+```
+
+Семь проверок по развёрнутому инстансу, exit code 1 при любом провале:
+
+| Проверка | Что ловит |
+| --- | --- |
+| `https` | цель probe вообще по HTTPS — по http всё ниже пройдёт и не докажет ничего |
+| `certificate` | сертификат живой и до конца больше 14 дней; продление идёт за 30, так что две недели молчания — это застрявший renewal, а не «ещё рано» |
+| `no plaintext` | порт 80 редиректит на https или закрыт; cookie сессии помечены `Secure`, страница по 80-му порту переписывается сетью |
+| `health` | `200 {"status":"ok"}` — заодно доказывает, что прод дотягивается до базы |
+| `legacy webhook gone` | POST на `/api/webhooks/telegram` отвечает `410`; старый endpoint после cutover не должен принимать updates |
+| `telegram webhook secret set` | POST без секрета получает `401` — значит `TELEGRAM_WEBHOOK_SECRET` в окружении есть |
+| `whatsapp verify token set` | заведомо неверный `hub.verify_token` получает `403` — значит `WHATSAPP_VERIFY_TOKEN` есть и не пустой |
+
+Последние две — это тот же контракт, что закрыт unit-тестами, но проверенный на живом окружении: тесты доказывают, что код без секрета закрывается, probe доказывает, что секрет вообще доехал до Coolify. Переменная, которую забыли добавить, выглядит как здоровое приложение ровно до первого входящего webhook.
+
+`--wait N` повторяет весь набор, пока контейнер поднимается, но не дольше N секунд.
+
+Оговорка про `certificate`: внутри окружения, которое терминирует TLS за вас (корпоративный прокси, sandbox egress gateway), probe видит сертификат прокси, а не тот, что отдаётся наружу. Запускайте из CI или с обычной сети.
+
+В CI это шаг job `deploy`: `pnpm deploy:coolify` дожидается окончания сборки (endpoint триггера отвечает сразу после постановки в очередь — без ожидания job зеленел бы на неудачной сборке, а probe отвечал бы предыдущей версией), затем probe идёт по `https://manclient.mubi.dev`.
 
 **Сознательно отложено (13.08.2026):** репетиция восстановления из бэкапа и проверка, что S3-бакет не публичный. Решение владельца, зафиксировано здесь, чтобы не всплывало каждый релиз как забытое. Что это значит на практике: бэкапы Postgres снимаются (§7.0), но **ни разу не разворачивались** — то есть в момент аварии мы узнаем не только про потерю данных, но и про то, восстановим ли мы их вообще; а по бакету с чеками клиентов мы не знаем, отдаёт ли он объекты по прямой ссылке без подписи. Обе проверки — часовые, и делать их лучше до того, как они понадобятся.
 

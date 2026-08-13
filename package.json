@@ -20,6 +20,8 @@
     "jobs:subscriptions": "tsx src/jobs/run-subscription-lifecycle.ts",
     "jobs:scheduler": "tsx src/jobs/scheduler.ts",
     "telegram:register-platform-webhook": "tsx scripts/register-platform-telegram-webhook.ts",
+    "deploy:coolify": "tsx scripts/deploy-to-coolify.ts",
+    "probe:https": "tsx scripts/probe-https.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --no-file-parallelism --maxWorkers=1",
