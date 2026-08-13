@@ -5,6 +5,7 @@ import { createBookingActionToken } from "@/core/bookings/booking-action-token";
 import { BookingValidationError, createPendingBooking } from "@/core/bookings/booking-service";
 import { prisma } from "@/core/database/prisma";
 import { getPaymentUrl, PaymentConfigurationError } from "@/core/payments/payment-service";
+import { readCustomerPhone } from "@/core/customers/customer-session";
 import { assertPhoneVerified, spendPhoneVerification } from "@/core/security/phone-verification-gate";
 import { PhoneVerificationError } from "@/core/security/phone-verification-service";
 import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
@@ -22,7 +23,7 @@ export async function POST(request: Request): Promise<Response> {
     // Also per phone: one script rotating through proxies still cannot fill a calendar under a single
     // number, and a customer who legitimately rebooks four times in ten minutes is unaffected.
     if (phone) await assertRateLimit("booking.create", `phone:${phone}`);
-    await assertPhoneVerified({ phone, verificationId });
+    await assertPhoneVerified({ phone, verificationId, sessionPhone: await readCustomerPhone() });
 
     const startsAt = new Date(String(payload.startsAt));
     // "Anyone" is answered here rather than inside the booking: a booking always names a specialist,

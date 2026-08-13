@@ -1057,6 +1057,8 @@ model RateLimitCounter {
 enum PhoneVerificationPurpose {
   BOOKING
   PASSWORD_RESET
+  /// A customer proving the number is theirs in order to open their own visits, not to make one.
+  CUSTOMER_LOGIN
 }
 
 enum PhoneVerificationStatus {
