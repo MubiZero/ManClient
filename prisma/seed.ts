@@ -20,12 +20,17 @@ async function main() {
 
   const business = await prisma.business.upsert({
     where: { slug: "demo-barber" },
+    // Prepayment is stated rather than inherited. A new salon now starts at NONE, and both demo
+    // businesses exist to show the paying-by-receipt flow — leaving it to the default would make the
+    // demo data depend on when the database happened to be created.
     create: {
       name: "Сартарош",
       slug: "demo-barber",
+      prepaymentMode: "FULL",
     },
     update: {
       name: "Сартарош",
+      prepaymentMode: "FULL",
     },
   });
 
@@ -141,8 +146,8 @@ async function seedAutoService(paymentCardEncrypted: string | undefined) {
   });
   const business = await prisma.business.upsert({
     where: { slug: "demo-auto" },
-    create: { name: "АвтоПрофи", slug: "demo-auto" },
-    update: { name: "АвтоПрофи" },
+    create: { name: "АвтоПрофи", slug: "demo-auto", prepaymentMode: "FULL" },
+    update: { name: "АвтоПрофи", prepaymentMode: "FULL" },
   });
   await prisma.membership.upsert({
     where: { businessId_userId: { businessId: business.id, userId: owner.id } },
