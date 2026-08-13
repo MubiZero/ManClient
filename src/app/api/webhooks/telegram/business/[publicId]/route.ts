@@ -1,10 +1,10 @@
 import { claimInboundUpdate, completeInboundUpdate, failInboundUpdate } from "@/core/integrations/inbound-update-service";
+import { matchesWebhookSecret } from "@/core/security/webhook-auth";
 import {
   dispatchLoadedBusinessTelegramUpdate,
   loadBusinessTelegramContext,
   type BusinessTelegramUpdate,
 } from "@/integrations/telegram/business-update-dispatcher";
-import { matchesWebhookSecret } from "@/integrations/telegram/webhook-auth";
 
 type RouteContext = { params: Promise<{ publicId: string }> };
 
