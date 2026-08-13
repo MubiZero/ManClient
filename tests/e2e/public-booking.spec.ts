@@ -7,6 +7,13 @@ test("visitor selects a service, specialist and receives a payment link", async 
   page,
 }) => {
   await reachTimeStep(page);
+  // The strip opens the first day that actually has room, so slots are on screen without the
+  // customer guessing a date first.
+  const days = page.getByRole("group", { name: "Ближайшие дни" });
+  await expect(days).toBeVisible();
+  await expect(days.getByRole("button", { pressed: true })).toBeVisible();
+  await expect(page.locator("[data-slot]").first()).toBeVisible();
+
   await page.getByLabel("Дата записи").fill(nextDate());
   await page.locator("[data-slot]").first().click();
   await page.getByRole("button", { name: "Назад к выбору времени" }).click();

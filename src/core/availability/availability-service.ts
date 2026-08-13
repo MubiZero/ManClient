@@ -1,5 +1,6 @@
 import { prisma } from "@/core/database/prisma";
 import { blockedWindow, listOccupiedWindows, windowsOverlap } from "@/core/availability/booking-window";
+import { localDateTimeToUtc, todayInTimeZone } from "@/core/formatting/dushanbe-date";
 
 type AvailabilityQuery = {
   branchId: string;
@@ -31,6 +32,71 @@ const WEEKDAY_BY_NAME: Record<string, number> = {
   Fri: 5,
   Sat: 6,
 };
+
+/** How far ahead the date strip may ask about. Enough for a month, bounded so nobody sweeps a year. */
+const MAX_DAYS_AHEAD = 31;
+
+export type AvailableDay = { date: string; hasSlots: boolean };
+
+/**
+ * Which of the coming days have room, so the customer can be shown a strip of dates instead of a
+ * blank date field. Before this the form knew about one day at a time: a customer picked a date,
+ * waited, was told there was nothing, and picked again — and left after the third guess.
+ *
+ * One sweep over the whole range rather than a query per day: the underlying availability already
+ * takes a range, and the policy window (minimum notice, booking horizon) is applied inside it, so a
+ * day beyond what the business accepts simply comes back empty.
+ */
+export async function getAvailableDays(query: {
+  branchId: string;
+  serviceId: string;
+  staffId: string;
+  from: string;
+  days: number;
+  now?: Date;
+}): Promise<AvailableDay[]> {
+  const days = Math.min(Math.max(Math.trunc(query.days), 1), MAX_DAYS_AHEAD);
+  const service = await prisma.service.findFirst({
+    where: {
+      id: query.serviceId,
+      branchId: query.branchId,
+      archivedAt: null,
+      isPublished: true,
+      staffMembers: { some: { id: query.staffId } },
+    },
+    select: {
+      durationMinutes: true,
+      branch: { select: { timeZone: true } },
+      resources: { select: { resourceId: true } },
+    },
+  });
+  if (!service) return [];
+
+  const timeZone = service.branch.timeZone;
+  const dates = Array.from({ length: days }, (_, offset) => addDays(query.from, offset));
+  const starts = await getAvailableStarts({
+    branchId: query.branchId,
+    serviceId: query.serviceId,
+    staffId: query.staffId,
+    resourceIds: service.resources.map(({ resourceId }) => resourceId),
+    rangeStartsAt: localDateTimeToUtc(query.from, "00:00", timeZone),
+    rangeEndsAt: localDateTimeToUtc(addDays(query.from, days), "00:00", timeZone),
+    durationMinutes: service.durationMinutes,
+    intervalMinutes: 30,
+    now: query.now,
+  });
+
+  // Grouped by the branch's own day, not the server's: a slot at 01:00 in Dushanbe is the previous
+  // day in UTC, and the customer is choosing days as the salon counts them.
+  const free = new Set(starts.map((start) => todayInTimeZone(timeZone, start)));
+  return dates.map((date) => ({ date, hasSlots: free.has(date) }));
+}
+
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
 
 export async function getAvailableStarts(query: AvailabilityQuery): Promise<Date[]> {
   if (!Number.isInteger(query.durationMinutes) || query.durationMinutes <= 0) {

@@ -77,6 +77,13 @@ export function BookingForm({
   const [staffId, setStaffId] = useState("");
   const [date, setDate] = useState("");
   const [starts, setStarts] = useState<string[]>([]);
+  const [availableDays, setAvailableDays] = useState<{ date: string; hasSlots: boolean }[]>([]);
+  /**
+   * The date as it is right now, for the day strip to read when its request comes back. The strip
+   * loads over the network, and by the time it answers the customer may already have picked a day —
+   * reading `date` from the closure would then quietly move them off it.
+   */
+  const chosenDateRef = useRef("");
   const [startsAt, setStartsAt] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -137,8 +144,10 @@ export function BookingForm({
 
   function clearSlots() {
     requestRef.current?.abort();
+    chosenDateRef.current = "";
     setDate("");
     setStarts([]);
+    setAvailableDays([]);
     setStartsAt("");
     setIsLoadingSlots(false);
   }
@@ -183,7 +192,37 @@ export function BookingForm({
     if (currentStep === "service" && branches.length > 1) chooseBranch("");
   }
 
+  /**
+   * The strip of days behind the date field. Loaded once when the specialist is known, so the
+   * customer sees which days are worth tapping instead of guessing one and waiting to be refused.
+   */
+  useEffect(() => {
+    if (!service || !staffId || !branchId) return;
+    const request = new AbortController();
+    const from = todayInTimeZone(branch?.timeZone ?? "Asia/Dushanbe");
+    const query = new URLSearchParams({ branchId, serviceId: service.id, staffId, from, days: "14" });
+    void (async () => {
+      try {
+        const response = await fetch(`/api/availability/days?${query}`, { signal: request.signal });
+        if (!response.ok) return;
+        const data = (await response.json()) as { days: { date: string; hasSlots: boolean }[] };
+        if (request.signal.aborted) return;
+        setAvailableDays(data.days);
+        // Opening the first free day saves the customer the guess entirely — but only while they have
+        // not chosen one themselves. A strip with nothing free is left alone so the waitlist offer
+        // below can speak for itself.
+        const firstFree = data.days.find((day) => day.hasSlots);
+        if (firstFree && !chosenDateRef.current) void loadSlots(firstFree.date);
+      } catch {
+        // A failed strip is not worth an error: the date field below still works on its own.
+      }
+    })();
+    return () => request.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, service?.id, staffId]);
+
   async function loadSlots(nextDate: string) {
+    chosenDateRef.current = nextDate;
     setDate(nextDate);
     setStartsAt("");
     setStarts([]);
@@ -538,6 +577,34 @@ export function BookingForm({
                 onBack={goBack}
                 backLabel={t(locale, "booking.back.toStaff")}
               />
+              {availableDays.length ? (
+                <div
+                  className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1"
+                  role="group"
+                  aria-label={t(locale, "booking.daysAriaLabel")}
+                >
+                  {availableDays.map((day) => (
+                    <button
+                      key={day.date}
+                      type="button"
+                      disabled={!day.hasSlots}
+                      aria-pressed={date === day.date}
+                      onClick={() => void loadSlots(day.date)}
+                      className={cn(
+                        "flex min-w-16 shrink-0 snap-start flex-col items-center rounded-md border border-border bg-card px-3 py-2 text-sm transition-colors",
+                        "hover:border-primary/50 hover:bg-secondary",
+                        "aria-[pressed=true]:border-primary aria-[pressed=true]:bg-primary aria-[pressed=true]:text-primary-foreground",
+                        // A day with nothing free stays visible: knowing the salon is closed on Monday
+                        // is an answer, and hiding it would make the strip lie about the week.
+                        "disabled:cursor-not-allowed disabled:border-dashed disabled:bg-transparent disabled:text-muted-foreground disabled:hover:border-border disabled:hover:bg-transparent",
+                      )}
+                    >
+                      <span className="text-xs uppercase">{formatDayWeekday(day.date, locale)}</span>
+                      <span className="font-semibold tabular-nums">{formatDayNumber(day.date, locale)}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <Field label={t(locale, "booking.dateLabel")} htmlFor="booking-date">
                 <Input
                   id="booking-date"
@@ -900,4 +967,14 @@ function addDays(date: string, days: number): string {
   if (Number.isNaN(value.getTime())) return "";
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
+}
+
+/** «пн», «вт» — the weekday over the number in a day chip. */
+function formatDayWeekday(date: string, locale: SupportedLocale): string {
+  return new Intl.DateTimeFormat(intlLocale(locale), { timeZone: "UTC", weekday: "short" }).format(new Date(`${date}T12:00:00.000Z`));
+}
+
+/** The day of the month alone: the strip never spans more than a month, so the month is implied. */
+function formatDayNumber(date: string, locale: SupportedLocale): string {
+  return new Intl.DateTimeFormat(intlLocale(locale), { timeZone: "UTC", day: "numeric" }).format(new Date(`${date}T12:00:00.000Z`));
 }
