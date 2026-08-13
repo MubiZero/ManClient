@@ -16,12 +16,19 @@ const DEPLOY_TIMEOUT_MS = 20 * 60_000;
 const FINISHED = "finished";
 const FAILED_STATES = ["failed", "cancelled-by-user", "error"];
 
+type Trigger = { deployments?: Array<{ deployment_uuid?: string }>; deployment_uuid?: string };
+/** The deployment record embeds the whole application, which carries a `status` of its own. */
+type Deployment = { status?: string };
+
 async function main() {
   const token = process.env.COOLIFY_API_TOKEN?.trim();
   if (!token) throw new Error("COOLIFY_API_TOKEN is required");
 
-  const trigger = await coolify(token, `/api/v1/deploy?uuid=${APPLICATION_UUID}&force=false`);
-  const deploymentUuid = /"deployment_uuid"\s*:\s*"([^"]+)"/.exec(trigger)?.[1];
+  // POST, not GET: Coolify answers a GET here with 405, which is how this step spent several releases
+  // failing while the application kept updating through Coolify's own git webhook — the pipeline was red
+  // and the site was current, so nobody read the red as real.
+  const trigger = await coolify<Trigger>(token, `/api/v1/deploy?uuid=${APPLICATION_UUID}&force=false`, "POST");
+  const deploymentUuid = trigger.deployments?.[0]?.deployment_uuid ?? trigger.deployment_uuid;
   if (!deploymentUuid) {
     // The deployment was accepted — we just cannot follow it. Say so plainly rather than fail the release:
     // the probe that runs next is what actually decides whether the release is good.
@@ -33,8 +40,9 @@ async function main() {
   const deadline = Date.now() + DEPLOY_TIMEOUT_MS;
   let lastStatus = "";
   for (;;) {
-    const body = await coolify(token, `/api/v1/deployments/${deploymentUuid}`);
-    const status = /"status"\s*:\s*"([^"]+)"/.exec(body)?.[1] ?? "unknown";
+    // Read the deployment's own status, not the nested application's: the application is "running:healthy"
+    // throughout, because the old container keeps serving until the new one is ready.
+    const { status = "unknown" } = await coolify<Deployment>(token, `/api/v1/deployments/${deploymentUuid}`);
     if (status !== lastStatus) {
       process.stdout.write(`deployment ${deploymentUuid}: ${status}\n`);
       lastStatus = status;
@@ -47,10 +55,10 @@ async function main() {
 }
 
 /** The token travels in a header and is never echoed: an error here is read from a public CI log. */
-async function coolify(token: string, path: string) {
-  const response = await fetch(`${COOLIFY_URL}${path}`, { headers: { authorization: `Bearer ${token}` } });
+async function coolify<T>(token: string, path: string, method: "GET" | "POST" = "GET"): Promise<T> {
+  const response = await fetch(`${COOLIFY_URL}${path}`, { method, headers: { authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error(`Coolify answered HTTP ${response.status} for ${path}`);
-  return response.text();
+  return await response.json() as T;
 }
 
 function sleep(ms: number) {
