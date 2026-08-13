@@ -6,6 +6,7 @@ import { createRecurringBooking } from "@/core/bookings/recurring-booking-servic
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
 import { getPaymentUrl, PaymentConfigurationError } from "@/core/payments/payment-service";
+import { readCustomerPhone } from "@/core/customers/customer-session";
 import { assertPhoneVerified, spendPhoneVerification } from "@/core/security/phone-verification-gate";
 import { PhoneVerificationError } from "@/core/security/phone-verification-service";
 import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
@@ -19,7 +20,7 @@ export async function POST(request: Request): Promise<Response> {
 
     await assertRateLimit("booking.recurring", `ip:${clientIdentifier(request)}`);
     if (phone) await assertRateLimit("booking.recurring", `phone:${phone}`);
-    await assertPhoneVerified({ phone, verificationId });
+    await assertPhoneVerified({ phone, verificationId, sessionPhone: await readCustomerPhone() });
 
     if (typeof payload.businessSlug !== "string") {
       return Response.json({ error: "INVALID_BOOKING" }, { status: 400 });

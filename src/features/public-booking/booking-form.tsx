@@ -63,6 +63,7 @@ export function BookingForm({
   canRepeat = false,
   canUsePromoCodes = false,
   canUseWaitlist = false,
+  signedInCustomer = null,
 }: {
   businessSlug: string;
   branches: Branch[];
@@ -70,6 +71,8 @@ export function BookingForm({
   canRepeat?: boolean;
   canUsePromoCodes?: boolean;
   canUseWaitlist?: boolean;
+  /** Filled in when this browser has signed in: their own number, and the name a salon knows them by. */
+  signedInCustomer?: { phone: string; name: string | null } | null;
 }) {
   const router = useRouter();
   const [branchId, setBranchId] = useState(
@@ -87,8 +90,10 @@ export function BookingForm({
    */
   const chosenDateRef = useRef("");
   const [startsAt, setStartsAt] = useState("");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [name, setName] = useState(signedInCustomer?.name ?? "");
+  const [phone, setPhone] = useState(signedInCustomer ? formatTajikPhoneInput(signedInCustomer.phone) : "");
+  // A primitive, so the draft restore below cannot be re-run by a prop object that is equal but new.
+  const isSignedIn = Boolean(signedInCustomer);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [repeatFrequency, setRepeatFrequency] = useState<RepeatFrequency>("WEEKLY");
@@ -213,10 +218,12 @@ export function BookingForm({
     if (saved.branchId) setBranchId(saved.branchId);
     if (saved.serviceId) setServiceId(saved.serviceId);
     if (saved.staffId) setStaffId(saved.staffId);
-    if (saved.name) setName(saved.name);
-    if (saved.phone) setPhone(saved.phone);
+    // A signed-in customer's own details outrank a draft: the draft may have been typed by whoever
+    // used this browser before them, and their number is the one the session proved.
+    if (saved.name && !isSignedIn) setName(saved.name);
+    if (saved.phone && !isSignedIn) setPhone(saved.phone);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [businessSlug]);
+  }, [businessSlug, isSignedIn]);
 
   useEffect(() => {
     saveBooking(businessSlug, { branchId, serviceId, staffId, name, phone });

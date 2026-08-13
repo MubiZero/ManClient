@@ -3,6 +3,7 @@ import { z } from "zod";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { joinWaitlist } from "@/core/bookings/waitlist-service";
 import { prisma } from "@/core/database/prisma";
+import { readCustomerPhone } from "@/core/customers/customer-session";
 import { assertPhoneVerified, spendPhoneVerification } from "@/core/security/phone-verification-gate";
 import { PhoneVerificationError } from "@/core/security/phone-verification-service";
 import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
@@ -28,7 +29,7 @@ export async function POST(request: Request): Promise<Response> {
     // way to make the platform text a stranger.
     await assertRateLimit("waitlist.join", `ip:${clientIdentifier(request)}`);
     await assertRateLimit("waitlist.join", `phone:${payload.customer.phone}`);
-    await assertPhoneVerified({ phone: payload.customer.phone, verificationId: payload.phoneVerificationId });
+    await assertPhoneVerified({ phone: payload.customer.phone, verificationId: payload.phoneVerificationId, sessionPhone: await readCustomerPhone() });
 
     const business = await prisma.business.findUnique({ where: { slug: payload.businessSlug }, select: { id: true } });
     if (!business) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
