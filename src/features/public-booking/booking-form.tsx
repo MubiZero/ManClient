@@ -195,6 +195,34 @@ export function BookingForm({
   }
 
   /**
+   * What the customer has typed, kept for the length of the tab. A dropped connection or a switch to
+   * the SMS app used to send them back through four steps, and on a flaky mobile network that is
+   * where a booking is abandoned.
+   *
+   * The chosen day and time are deliberately not kept: a slot restored from storage may well be taken
+   * by now, and offering it again only produces a refusal at the last step.
+   */
+  useEffect(() => {
+    // Read after mount rather than in a state initialiser: the server renders this form too, and
+    // reading storage during hydration would make the markup disagree with itself.
+    const saved = readSavedBooking(businessSlug);
+    if (!saved) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- restoring a draft is exactly the case the
+       rule warns about, and it is the intended one: it happens once on mount, from a source React
+       cannot see, and the extra render is the point rather than an accident. */
+    if (saved.branchId) setBranchId(saved.branchId);
+    if (saved.serviceId) setServiceId(saved.serviceId);
+    if (saved.staffId) setStaffId(saved.staffId);
+    if (saved.name) setName(saved.name);
+    if (saved.phone) setPhone(saved.phone);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [businessSlug]);
+
+  useEffect(() => {
+    saveBooking(businessSlug, { branchId, serviceId, staffId, name, phone });
+  }, [businessSlug, branchId, serviceId, staffId, name, phone]);
+
+  /**
    * The strip of days behind the date field. Loaded once when the specialist is known, so the
    * customer sees which days are worth tapping instead of guessing one and waiting to be refused.
    */
@@ -478,7 +506,9 @@ export function BookingForm({
       }
       if (!response.ok) throw new Error("booking");
       const data = (await response.json()) as { paymentPath: string };
-      router.replace(data.paymentPath);
+      // The chosen language travels with the customer. Without it a Tajik-speaking customer finished
+      // the last and most delicate step — the transfer — reading Russian.
+      router.replace(`${data.paymentPath}?lang=${locale}`);
     } catch {
       setError(t(locale, "booking.errors.submitFailed"));
     } finally {
@@ -995,4 +1025,30 @@ function formatDayWeekday(date: string, locale: SupportedLocale): string {
 /** The day of the month alone: the strip never spans more than a month, so the month is implied. */
 function formatDayNumber(date: string, locale: SupportedLocale): string {
   return new Intl.DateTimeFormat(intlLocale(locale), { timeZone: "UTC", day: "numeric" }).format(new Date(`${date}T12:00:00.000Z`));
+}
+
+type SavedBooking = { branchId: string; serviceId: string; staffId: string; name: string; phone: string };
+
+/** Per business and per tab: a phone left on one salon's page has no business on another's. */
+function storageKey(businessSlug: string): string {
+  return `manclient-booking:${businessSlug}`;
+}
+
+function readSavedBooking(businessSlug: string): SavedBooking | null {
+  try {
+    const raw = window.sessionStorage.getItem(storageKey(businessSlug));
+    return raw ? (JSON.parse(raw) as SavedBooking) : null;
+  } catch {
+    // Private mode and storage quotas both throw here. Losing the draft is a nuisance; failing to
+    // render the form over it would be a lost booking.
+    return null;
+  }
+}
+
+function saveBooking(businessSlug: string, value: SavedBooking): void {
+  try {
+    window.sessionStorage.setItem(storageKey(businessSlug), JSON.stringify(value));
+  } catch {
+    // As above: storage is a convenience here, never a requirement.
+  }
 }

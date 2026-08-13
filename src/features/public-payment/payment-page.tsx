@@ -59,14 +59,51 @@ export function PaymentPage({
   const remainingHold = getRemainingHold(payment.booking.expiresAt, now);
   const holdExpired = !complete && !reviewing && (payment.booking.status === "EXPIRED" || remainingHold === 0);
 
+  /**
+   * Polling while a receipt is being checked. It skips a hidden tab and slows down as the wait grows:
+   * the four-second beat used to keep running behind a locked screen, and mobile traffic here is
+   * expensive enough that a forgotten tab was a real cost to the customer.
+   */
   useEffect(() => {
     if (!reviewing) return;
-    const timer = window.setInterval(async () => {
-      const response = await fetch(`/api/public/payments/${token}`, { cache: "no-store" });
-      if (response.ok) setPayment(await response.json() as PaymentView);
-    }, 4000);
-    return () => window.clearInterval(timer);
+    let delay = 4_000;
+    let timer = 0;
+
+    async function poll() {
+      if (!document.hidden) {
+        const response = await fetch(`/api/public/payments/${token}`, { cache: "no-store" });
+        if (response.ok) setPayment(await response.json() as PaymentView);
+        delay = Math.min(delay * 1.5, 15_000);
+      }
+      timer = window.setTimeout(() => void poll(), delay);
+    }
+
+    timer = window.setTimeout(() => void poll(), delay);
+    return () => window.clearTimeout(timer);
   }, [reviewing, token]);
+
+  /**
+   * Coming back from the banking app buys more time. The hold is fifteen minutes and the page itself
+   * sends the customer away to pay; counting those minutes against somebody who is obeying us is how
+   * a paid-for visit used to be lost at the last step. The server decides how much more, and refuses
+   * once the slot has been held as long as it may be.
+   */
+  useEffect(() => {
+    if (complete || reviewing) return;
+
+    async function extendHold() {
+      if (document.hidden) return;
+      try {
+        const response = await fetch(`/api/public/payments/${token}`, { method: "POST", cache: "no-store" });
+        if (response.ok) setPayment(await response.json() as PaymentView);
+      } catch {
+        // Offline on return is common here; the hold simply stays as it was.
+      }
+    }
+
+    document.addEventListener("visibilitychange", extendHold);
+    return () => document.removeEventListener("visibilitychange", extendHold);
+  }, [complete, reviewing, token]);
 
   useEffect(() => {
     if (complete || reviewing || !payment.booking.expiresAt) return;
@@ -111,7 +148,7 @@ export function PaymentPage({
     <main className="flex min-h-screen flex-col bg-secondary/30" style={brandStyle}>
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4">
-          <PublicBrandMark slug={payment.business.slug} name={payment.business.name} hasLogo={Boolean(payment.business.logoStorageKey)} href="/" />
+          <PublicBrandMark slug={payment.business.slug} name={payment.business.name} hasLogo={Boolean(payment.business.logoStorageKey)} href={`/b/${payment.business.slug}`} />
           <span className="text-sm font-medium text-muted-foreground">{t(locale, "payment.securePaymentLabel")}</span>
           <nav className="ml-auto flex items-center gap-1 text-xs font-medium" aria-label={t(locale, "booking.languageSwitcherLabel")}>
             <a
