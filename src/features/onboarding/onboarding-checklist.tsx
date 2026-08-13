@@ -8,11 +8,15 @@ const defaultReadiness: Readiness = { service: true, staff: true, schedule: true
 
 export function OnboardingChecklist({ businessSlug, readiness = defaultReadiness }: { businessSlug: string; readiness?: Readiness }) {
   const bookingPath = `/b/${businessSlug}`;
-  const readyForBooking = readiness.service && readiness.staff && readiness.schedule;
+  const readyForBooking = readiness.service && readiness.staff && readiness.schedule && readiness.payment;
+  // `payment` is false only when something would ask the customer for money and there is no card to
+  // send it to — a booking in that state is refused, so it belongs with the blockers rather than with
+  // the nice-to-haves. A salon that takes payment on the premises never sees this line.
   const requiredActions = [
     !readiness.service ? { label: "Опубликовать услугу", href: "/dashboard/settings/services" } : null,
     !readiness.staff ? { label: "Добавить специалиста", href: "/dashboard/settings/staff" } : null,
     !readiness.schedule ? { label: "Настроить расписание", href: "/dashboard/settings/schedule" } : null,
+    !readiness.payment ? { label: "Добавить карту для предоплаты", href: "/dashboard/settings/branches" } : null,
   ].filter((item): item is { label: string; href: string } => Boolean(item));
 
   return <div className="onboarding-checklist">

@@ -229,6 +229,10 @@ model Business {
   /// salon makes rather than one it inherits — FULL was the default only because it is what every
   /// business did before deposits existed. Businesses created earlier keep the mode they are on.
   prepaymentMode                   PrepaymentMode                @default(NONE)
+  /// When the owner said during onboarding that this salon takes payment on the premises. It records a
+  /// decision, not an absence: without it the wizard cannot tell a salon that needs no card from one
+  /// that has not got round to entering it, and would hold both at the same step forever.
+  paymentSetupSkippedAt            DateTime?
   /// Share of the price taken as a deposit, 1–100. Ignored when `depositAmountDiram` is set.
   depositPercent                   Int?
   /// Fixed deposit in diram. Wins over the percentage, and is capped at the price of the visit.

@@ -106,6 +106,9 @@ export const branchInputSchema = z.object({
   address: optionalText(240),
   phone: phoneSchema,
   timeZone: z.string().trim().min(1).refine(isTimeZone, "INVALID_TIME_ZONE"),
+  /// Blank leaves the stored card alone — the form cannot show the existing number to prefill it, so an
+  /// empty field means "unchanged" rather than "remove". Sixteen digits, spaces optional.
+  recipientCard: z.string().transform(value => value.replace(/\s/g, "")).pipe(z.string().regex(/^\d{16}$/)).optional(),
 }).strict();
 
 export const serviceInputSchema = z.object({

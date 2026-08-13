@@ -3,7 +3,7 @@ import { ButtonLink } from "@/features/ui-kit/button";
 import { Field, Input, Select } from "@/features/ui-kit/field";
 import { SubmitButton } from "@/features/ui-kit/submit-button";
 
-type BranchValue = { id: string; name: string; address: string | null; phone: string | null; timeZone: string };
+type BranchValue = { id: string; name: string; address: string | null; phone: string | null; timeZone: string; recipientCardLast4: string | null };
 
 export function BranchForm({ action, branch, error }: { action: (formData: FormData) => void | Promise<void>; branch?: BranchValue; error?: string }) {
   const editing = Boolean(branch);
@@ -25,6 +25,11 @@ export function BranchForm({ action, branch, error }: { action: (formData: FormD
           <Select name="timeZone" defaultValue={branch?.timeZone ?? "Asia/Dushanbe"}>
             <option value="Asia/Dushanbe">Душанбе (UTC+5)</option>
           </Select>
+        </Field>
+        {/* The stored number is never sent back to the browser, so the field starts empty and an empty
+            field means "leave it as it is" — the four digits below are all the confirmation there is. */}
+        <Field label="Карта DushanbeCity для предоплаты" hint={branch?.recipientCardLast4 ? `Сейчас •••• ${branch.recipientCardLast4}. Оставьте пустым, чтобы не менять.` : "Нужна, только если берёте предоплату или депозит."}>
+          <Input name="recipientCard" inputMode="numeric" autoComplete="off" pattern="[0-9 ]{16,23}" placeholder="9762 0000 0000 0000" defaultValue="" />
         </Field>
       </div>
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}

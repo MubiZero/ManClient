@@ -20,7 +20,13 @@ type BranchesPageProps = { searchParams: Promise<{ action?: string; edit?: strin
 export default async function BranchesPage({ searchParams }: BranchesPageProps) {
   const member = await requireBusinessAdmin();
   const query = await searchParams;
-  const branches = await prisma.branch.findMany({ where: { businessId: member.businessId }, orderBy: [{ archivedAt: "asc" }, { name: "asc" }] });
+  // Explicit selection: the encrypted card has no business leaving the database for a page that only
+  // ever shows four digits of it.
+  const branches = await prisma.branch.findMany({
+    where: { businessId: member.businessId },
+    select: { id: true, name: true, address: true, phone: true, timeZone: true, archivedAt: true, recipientCardLast4: true },
+    orderBy: [{ archivedAt: "asc" }, { name: "asc" }],
+  });
   const editing = query.edit ? branches.find((item) => item.id === query.edit) : undefined;
   const archiving = query.archive ? branches.find((item) => item.id === query.archive && !item.archivedAt) : undefined;
 
@@ -83,6 +89,7 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
               <TableHead>Филиал</TableHead>
               <TableHead>Контакты</TableHead>
               <TableHead>Часовой пояс</TableHead>
+              <TableHead>Карта</TableHead>
               <TableHead>Статус</TableHead>
               <TableHead />
             </TableRow>
@@ -97,6 +104,7 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
                   <span className="text-xs">{item.phone || "Телефон не указан"}</span>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{item.timeZone}</TableCell>
+                <TableCell className="text-muted-foreground">{item.recipientCardLast4 ? `•••• ${item.recipientCardLast4}` : "Не задана"}</TableCell>
                 <TableCell>
                   <Badge variant={item.archivedAt ? "neutral" : "success"}>{item.archivedAt ? "В архиве" : "Работает"}</Badge>
                 </TableCell>
@@ -154,9 +162,15 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
 }
 
 function branchValues(formData: FormData) {
-  return { name: String(formData.get("name") ?? ""), address: String(formData.get("address") ?? ""), phone: String(formData.get("phone") ?? ""), timeZone: String(formData.get("timeZone") ?? "Asia/Dushanbe") };
+  return {
+    name: String(formData.get("name") ?? ""),
+    address: String(formData.get("address") ?? ""),
+    phone: String(formData.get("phone") ?? ""),
+    timeZone: String(formData.get("timeZone") ?? "Asia/Dushanbe"),
+    recipientCard: String(formData.get("recipientCard") ?? ""),
+  };
 }
 
 function errorCode(error: unknown) { return error instanceof SettingsError ? error.code : "INVALID_INPUT"; }
 function messageForNotice(code?: string) { return ({ created: "Филиал создан", updated: "Изменения сохранены", archived: "Филиал архивирован", restored: "Филиал восстановлен" } as Record<string, string>)[code ?? ""]; }
-function messageForError(code?: string) { return ({ INVALID_INPUT: "Проверьте название, телефон и остальные поля.", FUTURE_BOOKINGS: "Сначала перенесите или отмените будущие записи этого филиала.", LAST_ACTIVE_BRANCH: "Нельзя архивировать единственный работающий филиал.", NOT_FOUND: "Филиал не найден или уже недоступен." } as Record<string, string>)[code ?? ""]; }
+function messageForError(code?: string) { return ({ INVALID_INPUT: "Проверьте название, телефон и остальные поля. Карта — 16 цифр.",FUTURE_BOOKINGS: "Сначала перенесите или отмените будущие записи этого филиала.", LAST_ACTIVE_BRANCH: "Нельзя архивировать единственный работающий филиал.", NOT_FOUND: "Филиал не найден или уже недоступен." } as Record<string, string>)[code ?? ""]; }
