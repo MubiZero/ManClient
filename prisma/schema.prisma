@@ -222,9 +222,13 @@ model Business {
   freeCancellationHours            Int                           @default(0)
   /// How many times one booking may be moved by the customer. Null means unlimited.
   maxCustomerReschedules           Int?
-  /// How much of the price a customer must transfer before the slot is theirs. FULL is what every
-  /// business had before deposits existed: the whole price up front, or the reservation expires.
-  prepaymentMode                   PrepaymentMode                @default(FULL)
+  /// How much of the price a customer must transfer before the slot is theirs.
+  ///
+  /// New salons start at NONE. Asking a stranger to transfer the full price before their first
+  /// haircut is the steepest thing this product can ask of a customer, and it should be a decision a
+  /// salon makes rather than one it inherits — FULL was the default only because it is what every
+  /// business did before deposits existed. Businesses created earlier keep the mode they are on.
+  prepaymentMode                   PrepaymentMode                @default(NONE)
   /// Share of the price taken as a deposit, 1–100. Ignored when `depositAmountDiram` is set.
   depositPercent                   Int?
   /// Fixed deposit in diram. Wins over the percentage, and is capped at the price of the visit.

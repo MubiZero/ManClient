@@ -44,7 +44,8 @@ describe("booking policy settings", () => {
       freeCancellationHours: 0,
       maxCustomerReschedules: null,
       cancellationPolicy: null,
-      prepaymentMode: "FULL",
+      // A salon that has decided nothing has not decided to hold a stranger's money.
+      prepaymentMode: "NONE",
       depositPercent: null,
       depositAmountDiram: null,
     });
@@ -77,7 +78,7 @@ describe("booking policy settings", () => {
   });
 
   it("accepts strings from the form and treats a blank field as no rule", async () => {
-    await updateBookingPolicySettings({ businessId, actorUserId, minLeadTimeMinutes: 60, maxAdvanceDays: 30, freeCancellationHours: 4, maxCustomerReschedules: 1 });
+    await updateBookingPolicySettings({ businessId, actorUserId, minLeadTimeMinutes: 60, maxAdvanceDays: 30, freeCancellationHours: 4, maxCustomerReschedules: 1, prepaymentMode: "FULL" });
 
     const cleared = await updateBookingPolicySettings({
       businessId,
@@ -95,6 +96,8 @@ describe("booking policy settings", () => {
       freeCancellationHours: 0,
       maxCustomerReschedules: null,
       cancellationPolicy: null,
+      // The money rule survives a save that says nothing about it: a request without the field is a
+      // request that is not about prepayment.
       prepaymentMode: "FULL",
       depositPercent: null,
       depositAmountDiram: null,

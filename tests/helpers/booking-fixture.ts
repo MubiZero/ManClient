@@ -9,7 +9,9 @@ export async function createBookingFixture() {
   process.env.CARD_ENCRYPTION_KEY ??= fixtureEncryptionKey;
   const suffix = randomUUID();
   const business = await prisma.business.create({
-    data: { name: "Pilot Barber", slug: `pilot-barber-${suffix}` },
+    // Prepayment is stated rather than inherited: most of the suite is about what happens while a
+    // customer is paying, and that is no longer what a new salon does by default.
+    data: { name: "Pilot Barber", slug: `pilot-barber-${suffix}`, prepaymentMode: "FULL" },
   });
   const branch = await prisma.branch.create({
     data: {

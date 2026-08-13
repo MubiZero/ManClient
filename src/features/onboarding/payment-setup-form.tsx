@@ -20,7 +20,7 @@ export function PaymentSetupForm({
         <strong>Реквизиты защищены</strong>
         <span>Номер карты хранится в зашифрованном виде. В кабинете будут видны только последние четыре цифры.</span>
       </div>
-      <label className="field-label">Карта DushanbeCity<input className="text-input payment-card-input" name="recipientCard" inputMode="numeric" autoComplete="off" pattern="[0-9 ]{16,23}" placeholder="9762 0001 2835 1953" required /></label>
+      <label className="field-label">Карта DushanbeCity<input className="text-input payment-card-input" name="recipientCard" inputMode="numeric" autoComplete="off" pattern="[0-9 ]{16,23}" placeholder="9762 0000 0000 0000" required /></label>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       <div className="onboarding-form-actions">
         <Link className="quiet-action onboarding-back-link" href="/dashboard/onboarding?step=service">Назад к услуге</Link>
