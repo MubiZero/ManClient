@@ -47,6 +47,9 @@ describe("channel escalation", () => {
       { channel: "TELEGRAM", status: "SKIPPED", lastError: "TELEGRAM: business Telegram bot is unavailable" },
       { channel: "SMS", status: "SENT", lastError: null },
     ]);
+    // The rung that costs money is the one the salon is billed for, and only that one: the Telegram
+    // attempt above cost nothing and leaves no charge behind.
+    await expect(prisma.smsCharge.count({ where: { businessId, purpose: "NOTIFICATION" } })).resolves.toBe(1);
   });
 
   it("stops at the bottom rung instead of looping, and says so", async () => {
