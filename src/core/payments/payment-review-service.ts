@@ -52,6 +52,16 @@ const reviewSelect = {
   },
 } as const;
 
+/**
+ * How many receipts are waiting, for the badge on the cabinet's bottom bar. A number rather than a
+ * list: the bar only has to say "there is work here", and the owner is on a phone.
+ */
+export async function countPaymentsForReview(businessId: string): Promise<number> {
+  return prisma.payment.count({
+    where: { businessId, status: "NEEDS_ATTENTION", submissions: { some: { status: "NEEDS_REVIEW" } } },
+  });
+}
+
 export async function listPaymentsForReview(
   input: ActorInput,
   page: { cursor?: string | null; limit?: number } = {},
