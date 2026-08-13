@@ -20,6 +20,8 @@ export async function assertPhoneVerified(
     phone: string;
     verificationId?: string | null;
     purpose?: PhoneVerificationPurpose;
+    /** The salon this booking is for. A code issued by another one does not open this door. */
+    businessSlug?: string | null;
     /** The number this browser already proved by signing in, if any. */
     sessionPhone?: string | null;
   },
@@ -35,16 +37,30 @@ export async function assertPhoneVerified(
   if (input.sessionPhone && normalizeTajikPhone(input.sessionPhone) === phone) return;
   if (!input.verificationId) throw new PhoneVerificationError("VERIFICATION_REQUIRED");
 
-  const verification = await prisma.phoneVerification.findUnique({ where: { id: input.verificationId } });
+  // The salon comes along on the same read as the code, so scoping costs no extra query.
+  const verification = await prisma.phoneVerification.findUnique({
+    where: { id: input.verificationId },
+    include: { business: { select: { slug: true } } },
+  });
   if (
     !verification ||
     verification.phone !== phone ||
     verification.purpose !== (input.purpose ?? "BOOKING") ||
     verification.status !== "VERIFIED" ||
-    verification.expiresAt <= now
+    verification.expiresAt <= now ||
+    !belongsHere(verification.business?.slug, input.businessSlug)
   ) {
     throw new PhoneVerificationError("VERIFICATION_REQUIRED");
   }
+}
+
+/**
+ * A code that names a salon may only be spent at that salon. A code that names none — account recovery,
+ * or a row written before verifications carried a business — is accepted anywhere, which is the same
+ * behaviour as before and keeps in-flight codes working across the deploy that introduced this.
+ */
+function belongsHere(verificationSlug: string | undefined, bookingSlug: string | null | undefined): boolean {
+  return !verificationSlug || verificationSlug === bookingSlug;
 }
 
 /** Best effort: the booking already exists, so a failure here must not turn into an error response. */
