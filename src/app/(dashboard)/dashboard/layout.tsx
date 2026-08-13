@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { signOut } from "@/auth";
 import { ACTIVE_BUSINESS_COOKIE, requireBusinessSession } from "@/core/auth/business-session";
+import { countPaymentsForReview } from "@/core/payments/payment-review-service";
 import { DashboardNav } from "@/features/dashboard/dashboard-nav";
 import { GraceBanner } from "@/features/dashboard/subscription/grace-banner";
 import { graceDisableAt } from "@/features/dashboard/subscription/subscription-summary";
@@ -13,6 +14,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const membership = await requireBusinessSession();
   // Unpaid is not the same as suspended: the day carries on, and the banner only says what will
   // stop and when. Shown to owners and administrators, since a specialist cannot act on it.
+  // Only owners and administrators review receipts, so nobody else is shown a number they cannot act on.
+  const pendingReceiptCount = membership.role === "STAFF" ? 0 : await countPaymentsForReview(membership.businessId);
   const disableAt = membership.role === "STAFF" ? null : graceDisableAt({
     status: membership.business.subscriptionStatus,
     endsAt: membership.business.subscriptionEndsAt,
@@ -35,6 +38,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         displayName={membership.user.displayName}
         roleLabel={roleLabel(membership.role)}
         availableBusinesses={membership.availableBusinesses}
+        pendingReceiptCount={pendingReceiptCount}
         signOutAction={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}
         switchBusinessAction={switchBusinessAction}
       />

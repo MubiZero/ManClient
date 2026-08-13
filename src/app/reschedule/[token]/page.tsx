@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { brandPalette } from "@/core/branding/brand-palette";
 import type { CSSProperties } from "react";
 
 import { verifyCustomerBookingToken } from "@/core/bookings/booking-action-token";
@@ -12,7 +13,7 @@ export default async function ReschedulePage({ params }: { params: Promise<{ tok
   if (!booking) notFound();
 
   const brandStyle = booking.business.brandColor
-    ? ({ "--color-primary": booking.business.brandColor, "--color-ring": booking.business.brandColor } as CSSProperties)
+    ? (brandPalette(booking.business.brandColor) as CSSProperties | null) ?? undefined
     : undefined;
 
   return (

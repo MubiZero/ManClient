@@ -1,5 +1,6 @@
 "use client";
 
+import { brandPalette } from "@/core/branding/brand-palette";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -103,7 +104,7 @@ export function PaymentPage({
           : t(locale, "payment.defaultTitle");
 
   const brandStyle = payment.business.brandColor
-    ? ({ "--color-primary": payment.business.brandColor, "--color-ring": payment.business.brandColor } as CSSProperties)
+    ? (brandPalette(payment.business.brandColor) as CSSProperties | null) ?? undefined
     : undefined;
 
   return (

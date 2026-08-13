@@ -6,11 +6,17 @@ describe("dashboard navigation", () => {
   it("gives owners all settings and a mobile menu", () => {
     const navigation = dashboardNavigationForRole("OWNER");
     expect(navigation.map(item => item.label)).toEqual(expect.arrayContaining(["Обзор", "Записи", "Проверка чеков", "Филиалы", "Услуги", "Команда", "Ресурсы", "Расписание", "Интеграции"]));
-    expect(navigation.filter(item => item.mobile === "primary").map(item => item.label)).toEqual(["Обзор", "Записи"]);
+    // The bar carries the day's work: today's visits and the receipts holding somebody's slot.
+    // "Обзор" is a page one reads, not one acted on standing up, so it moved behind "Ещё".
+    expect(navigation.filter(item => item.mobile === "primary").map(item => item.label)).toEqual(["Записи", "Проверка чеков"]);
   });
 
   it("does not expose administrative routes to staff", () => {
     expect(dashboardNavigationForRole("STAFF").map(item => item.label)).toEqual(["Обзор", "Записи"]);
+  });
+
+  it("keeps the receipt queue off the bar for staff, who cannot review one", () => {
+    expect(dashboardNavigationForRole("STAFF").filter(item => item.mobile === "primary").map(item => item.label)).toEqual(["Записи"]);
   });
 
   it("marks exact and nested routes active without activating overview everywhere", () => {
