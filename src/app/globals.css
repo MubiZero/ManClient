@@ -232,6 +232,10 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .payment-card-input { font-variant-numeric: tabular-nums; letter-spacing: .04em; }
 .onboarding-form-actions { display: grid; grid-template-columns: auto minmax(220px, 1fr); align-items: center; gap: 12px; }
 .onboarding-back-link { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); text-decoration: none; }
+.onboarding-payment-choice { display: grid; gap: 24px; }
+.onboarding-payment-skip { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding-top: 24px; border-top: 1px solid var(--border); }
+.onboarding-payment-skip > div { display: grid; gap: 4px; }
+.onboarding-payment-skip span { color: var(--muted); font-size: .9rem; line-height: 1.45; }
 .onboarding-success-mark { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; background: var(--brand); color: white; font-size: 1.5rem; font-weight: 700; }
 .onboarding-pending-mark { width: 52px; height: 52px; display: grid; place-items: center; border: 1px solid #aebdb5; border-radius: 50%; background: var(--surface-subtle); color: var(--text); font-size: 1.25rem; font-weight: 700; }
 .onboarding-booking-link { display: grid; gap: 16px; padding: 20px; border-radius: var(--radius-md); background: #f3f7f4; }
@@ -330,6 +334,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   .onboarding-field-row { grid-template-columns: 1fr; }
   .onboarding-form-actions { grid-template-columns: 1fr; }
   .onboarding-form-actions .onboarding-back-link { order: 2; }
+  .onboarding-payment-skip { grid-template-columns: 1fr; }
+  .onboarding-payment-skip .secondary-action { width: 100%; }
   .onboarding-launch-actions, .onboarding-channel-card { display: grid; grid-template-columns: 1fr; }
   .onboarding-launch-actions .primary-link, .onboarding-launch-actions .secondary-action, .onboarding-channel-card .primary-link, .onboarding-channel-card .secondary-link { width: 100%; }
 }

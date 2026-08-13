@@ -4,6 +4,7 @@ import { branchInputSchema } from "@/core/business-settings/setting-schemas";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
+import { encryptCardNumber } from "@/core/payments/card-encryption";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 
 type BranchInput = {
@@ -13,31 +14,33 @@ type BranchInput = {
   address?: string;
   phone?: string;
   timeZone: string;
+  /** Where transfers for this branch arrive. Blank keeps whatever is stored. */
+  recipientCard?: string;
 };
 
 export async function createBranch(input: BranchInput) {
-  const value = parseBranch(input);
+  const { card, ...value } = parseBranch(input);
   return prisma.$transaction(async transaction => {
     await requireSettingsAccess(transaction, input);
     const branch = await transaction.branch.create({
-      data: { businessId: input.businessId, slug: uniqueSlug(value.name), ...value },
+      data: { businessId: input.businessId, slug: uniqueSlug(value.name), ...value, ...card },
       select: { id: true },
     });
-    await audit(transaction, input, "branch.created", branch.id);
+    await audit(transaction, input, "branch.created", branch.id, card);
     return branch;
   });
 }
 
 export async function updateBranch(input: BranchInput & { branchId: string }) {
-  const value = parseBranch(input);
+  const { card, ...value } = parseBranch(input);
   return prisma.$transaction(async transaction => {
     await requireSettingsAccess(transaction, input);
     const result = await transaction.branch.updateMany({
       where: { id: input.branchId, businessId: input.businessId },
-      data: value,
+      data: { ...value, ...card },
     });
     if (result.count !== 1) throw new SettingsError("NOT_FOUND");
-    await audit(transaction, input, "branch.updated", input.branchId);
+    await audit(transaction, input, "branch.updated", input.branchId, card);
     return { id: input.branchId };
   });
 }
@@ -69,10 +72,32 @@ async function setBranchArchived(input: { businessId: string; actorUserId: strin
   });
 }
 
+/**
+ * Splits the branch fields from the card, because the card is not a field like the others: it is written
+ * only when a new number was actually typed, and what reaches the database is ciphertext plus the four
+ * digits the cabinet is allowed to show.
+ */
 function parseBranch(input: BranchInput) {
-  const parsed = branchInputSchema.safeParse({ name: input.name, address: input.address, phone: input.phone, timeZone: input.timeZone });
+  const recipientCard = input.recipientCard?.trim();
+  const parsed = branchInputSchema.safeParse({
+    name: input.name,
+    address: input.address,
+    phone: input.phone,
+    timeZone: input.timeZone,
+    ...(recipientCard ? { recipientCard } : {}),
+  });
   if (!parsed.success) throw new SettingsError("INVALID_INPUT");
-  return parsed.data;
+  const { recipientCard: card, ...value } = parsed.data;
+  return { ...value, card: card ? encryptedCard(card) : undefined };
+}
+
+function encryptedCard(recipientCard: string) {
+  const encryptionKey = process.env.CARD_ENCRYPTION_KEY;
+  if (!encryptionKey) throw new SettingsError("INVALID_INPUT");
+  return {
+    recipientCardEncrypted: encryptCardNumber(recipientCard, encryptionKey),
+    recipientCardLast4: recipientCard.slice(-4),
+  };
 }
 
 function uniqueSlug(name: string) {
@@ -80,6 +105,19 @@ function uniqueSlug(name: string) {
   return `${base}-${randomBytes(3).toString("hex")}`;
 }
 
-function audit(transaction: Parameters<typeof writeAuditEvent>[1], input: { businessId: string; actorUserId: string }, type: string, branchId: string) {
-  return writeAuditEvent({ businessId: input.businessId, type, actorType: "USER", actorId: input.actorUserId, metadata: { branchId } }, transaction);
+/** Only the last four digits are ever recorded: the audit log is read by support, the card number is not. */
+function audit(
+  transaction: Parameters<typeof writeAuditEvent>[1],
+  input: { businessId: string; actorUserId: string },
+  type: string,
+  branchId: string,
+  card?: { recipientCardLast4: string },
+) {
+  return writeAuditEvent({
+    businessId: input.businessId,
+    type,
+    actorType: "USER",
+    actorId: input.actorUserId,
+    metadata: { branchId, ...(card ? { recipientCardLast4: card.recipientCardLast4 } : {}) },
+  }, transaction);
 }

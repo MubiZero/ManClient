@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/core/database/prisma";
 import { OnboardingStepError } from "@/core/onboarding/onboarding-step-error";
 import { registerBusiness } from "@/core/onboarding/register-business";
-import { savePaymentCard } from "@/core/onboarding/save-payment-card";
+import { savePaymentCard, skipPaymentSetup } from "@/core/onboarding/save-payment-card";
 
 describe("savePaymentCard", () => {
   const businessIds: string[] = [];
@@ -64,6 +64,40 @@ describe("savePaymentCard", () => {
 
     const secondBranch = await prisma.branch.findFirstOrThrow({ where: { businessId: second.businessId } });
     expect(secondBranch.recipientCardEncrypted).toBeNull();
+  });
+
+  it("lets a salon that takes payment on the premises leave the step without a card", async () => {
+    const registered = await register();
+
+    await skipPaymentSetup({ businessId: registered.businessId, actorUserId: registered.userId });
+
+    const business = await prisma.business.findUniqueOrThrow({ where: { id: registered.businessId }, select: { paymentSetupSkippedAt: true } });
+    const branch = await prisma.branch.findFirstOrThrow({ where: { businessId: registered.businessId } });
+    expect(business.paymentSetupSkippedAt).toBeInstanceOf(Date);
+    expect(branch.recipientCardEncrypted).toBeNull();
+    await expect(prisma.auditEvent.count({ where: { businessId: registered.businessId, type: "onboarding.payment_skipped" } })).resolves.toBe(1);
+  });
+
+  it("keeps the moment of the decision when the step is skipped twice", async () => {
+    const registered = await register();
+
+    await skipPaymentSetup({ businessId: registered.businessId, actorUserId: registered.userId });
+    const first = await prisma.business.findUniqueOrThrow({ where: { id: registered.businessId }, select: { paymentSetupSkippedAt: true } });
+    await skipPaymentSetup({ businessId: registered.businessId, actorUserId: registered.userId });
+    const second = await prisma.business.findUniqueOrThrow({ where: { id: registered.businessId }, select: { paymentSetupSkippedAt: true } });
+
+    expect(second.paymentSetupSkippedAt).toEqual(first.paymentSetupSkippedAt);
+    await expect(prisma.auditEvent.count({ where: { businessId: registered.businessId, type: "onboarding.payment_skipped" } })).resolves.toBe(1);
+  });
+
+  it("cannot skip the payment step of another tenant", async () => {
+    const first = await register();
+    const second = await register();
+
+    await expect(skipPaymentSetup({ businessId: second.businessId, actorUserId: first.userId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const business = await prisma.business.findUniqueOrThrow({ where: { id: second.businessId }, select: { paymentSetupSkippedAt: true } });
+    expect(business.paymentSetupSkippedAt).toBeNull();
   });
 
   it("reports missing encryption configuration", async () => {
