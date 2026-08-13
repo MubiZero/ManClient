@@ -214,6 +214,17 @@ describe("phone verification", () => {
     await expect(assertPhoneVerified({ phone: uniquePhone() })).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
   });
 
+  it("takes a signed-in customer's own number as already proven, and only their own", async () => {
+    const phone = uniquePhone();
+    // The session cost an SMS of its own; charging a second one to learn the same fact is the waste
+    // the sign-in exists to remove.
+    await expect(assertPhoneVerified({ phone, sessionPhone: phone })).resolves.toBeUndefined();
+    // Booking for somebody else from a signed-in browser proves nothing about their number.
+    await expect(assertPhoneVerified({ phone: uniquePhone(), sessionPhone: phone })).rejects.toMatchObject({
+      code: "VERIFICATION_REQUIRED",
+    });
+  });
+
   it("never turns a failed spend into an error for the caller", async () => {
     // The booking already exists by the time this runs; a stale id must not surface as a 500.
     await expect(spendPhoneVerification({ phone: uniquePhone(), verificationId: "missing-id" })).resolves.toBeUndefined();

@@ -5,6 +5,8 @@ import type { CSSProperties } from "react";
 
 import { Star } from "lucide-react";
 
+import { readCustomerPhone } from "@/core/customers/customer-session";
+import { findCustomerName } from "@/core/customers/customer-visits";
 import { prisma } from "@/core/database/prisma";
 import { businessHasFeature } from "@/core/platform/subscription-plans";
 import { getAverageRating } from "@/core/reviews/review-service";
@@ -82,13 +84,21 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
     ? await getAverageRating(business.id)
     : { average: null, count: 0 };
 
+  // A customer who has signed in gets their own details back rather than a blank form — and, because
+  // the session already proves the number, no second SMS on the way to the same booking.
+  const signedInPhone = await readCustomerPhone();
+  const signedInCustomer = signedInPhone ? { phone: signedInPhone, name: await findCustomerName(signedInPhone) } : null;
+
   return (
     <main className="min-h-screen bg-secondary/30" style={brandStyle}>
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 sm:px-6">
           <PublicBrandMark slug={business.slug} name={business.name} hasLogo={Boolean(business.logoStorageKey)} href={`/b/${business.slug}`} />
           <span className="text-sm font-medium text-muted-foreground">{t(locale, "booking.onlineBookingLabel")}</span>
-          <nav className="ml-auto flex items-center gap-1 text-xs font-medium" aria-label={t(locale, "booking.languageSwitcherLabel")}>
+          <a href="/my" className="ml-auto text-xs font-medium text-muted-foreground hover:text-foreground">
+            {t(locale, "visits.linkLabel")}
+          </a>
+          <nav className="flex items-center gap-1 text-xs font-medium" aria-label={t(locale, "booking.languageSwitcherLabel")}>
             <a
               href="?lang=ru"
               aria-current={locale === "ru" ? "true" : undefined}
@@ -142,6 +152,7 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
               canRepeat={businessHasFeature(business, "RECURRING_BOOKINGS")}
               canUsePromoCodes={businessHasFeature(business, "PROMO_CODES")}
               canUseWaitlist={businessHasFeature(business, "WAITLIST")}
+              signedInCustomer={signedInCustomer}
             />
             <PolicyNotice
               locale={locale}

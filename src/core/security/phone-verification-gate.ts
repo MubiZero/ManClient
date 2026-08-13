@@ -16,13 +16,23 @@ import { consumeVerifiedPhone, isPhoneVerificationRequired, PhoneVerificationErr
  */
 
 export async function assertPhoneVerified(
-  input: { phone: string; verificationId?: string | null; purpose?: PhoneVerificationPurpose },
+  input: {
+    phone: string;
+    verificationId?: string | null;
+    purpose?: PhoneVerificationPurpose;
+    /** The number this browser already proved by signing in, if any. */
+    sessionPhone?: string | null;
+  },
   now = new Date(),
 ): Promise<void> {
   if (!isPhoneVerificationRequired()) return;
 
   const phone = normalizeTajikPhone(input.phone);
   if (!phone) throw new PhoneVerificationError("INVALID_PHONE");
+  // A signed-in customer booking under their own number has already answered an SMS for this browser.
+  // Asking again would charge us a second message to learn the same fact, and cost the customer the
+  // step that the sign-in was meant to remove.
+  if (input.sessionPhone && normalizeTajikPhone(input.sessionPhone) === phone) return;
   if (!input.verificationId) throw new PhoneVerificationError("VERIFICATION_REQUIRED");
 
   const verification = await prisma.phoneVerification.findUnique({ where: { id: input.verificationId } });
