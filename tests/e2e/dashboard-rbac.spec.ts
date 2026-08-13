@@ -50,6 +50,24 @@ test("the bottom bar carries the day's work and counts the receipts waiting", as
   await expect(page).toHaveURL(/\/dashboard\/bookings\/new/);
 });
 
+test("owner can print a QR sheet that points at their own booking page", async ({ page }) => {
+  await signIn(page, { email: "owner@demo-barber.local", password: ownerPassword });
+  await page.goto("/dashboard/settings/materials");
+
+  await expect(page.getByRole("heading", { name: "Материалы для салона" })).toBeVisible();
+  // The address is printed beside the code, for when the sticker is scratched.
+  await expect(page.getByText(/\/b\/demo-barber/).first()).toBeVisible();
+  await expect(page.locator("svg").first()).toBeVisible();
+
+  await page.goto("/dashboard/settings/materials/print?format=sticker");
+  await expect(page.getByText("Сабти онлайн · Запись онлайн")).toBeVisible();
+  await expect(page.locator("svg").first()).toBeVisible();
+
+  // An unknown format returns to the list rather than printing an empty sheet.
+  await page.goto("/dashboard/settings/materials/print?format=billboard");
+  await expect(page).toHaveURL(/\/dashboard\/settings\/materials$/);
+});
+
 function requiredEnv(name: "DEMO_OWNER_PASSWORD" | "DEMO_STAFF_PASSWORD"): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required for dashboard E2E tests`);
