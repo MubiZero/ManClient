@@ -13,6 +13,7 @@ import type { ConversationData, ConversationLocale, ConversationStateName } from
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { prisma } from "@/core/database/prisma";
 import { DEFAULT_TIME_ZONE, localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
+import { formatSomoni } from "@/core/formatting/money";
 import { assertPaymentCardConfigured, getPaymentUrl } from "@/core/payments/payment-service";
 import type { ReceiptRecognizer } from "@/core/payments/receipt-recognizer";
 import { contactKeyboard, inlineButtonGrid, inlineButtons } from "@/integrations/telegram/conversation-renderer";
@@ -664,7 +665,7 @@ async function bookingSummary(businessId: string, data: ConversationData, locale
     prisma.staffMember.findFirstOrThrow({ where: { id: required(data.staffId), businessId }, select: { displayName: true } }),
   ]);
   const visit = new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone: branch.timeZone, dateStyle: "medium", timeStyle: "short" }).format(new Date(required(data.startsAt)));
-  return `${escapeTelegramHtml(branch.name)}\n${escapeTelegramHtml(service.name)} · ${escapeTelegramHtml(staff.displayName)}\n${visit}\n<b>${escapeTelegramHtml(required(data.name))}</b> · ${escapeTelegramHtml(required(data.phone))}\n<b>${(service.amountDiram / 100).toFixed(2)} TJS</b>`;
+  return `${escapeTelegramHtml(branch.name)}\n${escapeTelegramHtml(service.name)} · ${escapeTelegramHtml(staff.displayName)}\n${visit}\n<b>${escapeTelegramHtml(required(data.name))}</b> · ${escapeTelegramHtml(required(data.phone))}\n<b>${escapeTelegramHtml(formatSomoni(service.amountDiram, locale === "tg" ? "tg-TJ" : "ru-TJ"))}</b>`;
 }
 
 function localeOf(data: ConversationData): ConversationLocale {

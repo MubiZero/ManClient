@@ -14,7 +14,11 @@ describe("money formatting", () => {
     }
   });
 
-  it("formats diram as TJS for the selected locale", () => {
-    expect(formatSomoni(5_025, "ru-TJ")).toMatch(/50[,.]25\s*TJS/);
+  it("names the currency the way people say it, not the way banks code it", () => {
+    // «TJS» is a banking code; a customer checking a sum before a transfer reads it as a foreign
+    // abbreviation, and this number is shown to customers.
+    expect(formatSomoni(5_025, "ru-TJ")).toBe("50,25\u00a0сомони");
+    expect(formatSomoni(5_025, "tg-TJ")).toBe("50,25\u00a0сомонӣ");
+    expect(formatSomoni(5_025)).not.toContain("TJS");
   });
 });

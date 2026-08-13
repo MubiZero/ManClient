@@ -56,13 +56,13 @@ describe("PlanPicker", () => {
   it("shows the price of the chosen plan and period before anything is confirmed", () => {
     render(<PlanPicker currentPlan="STANDARD" prices={PRICES} action={() => undefined} />);
 
-    expect(screen.getByText("150,00 TJS")).toBeTruthy();
+    expect(screen.getByText("150,00 сомони")).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Тариф"), { target: { value: "PREMIUM" } });
-    expect(screen.getByText("300,00 TJS")).toBeTruthy();
+    expect(screen.getByText("300,00 сомони")).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Период"), { target: { value: "YEARLY" } });
-    expect(screen.getByText("3 000,00 TJS")).toBeTruthy();
+    expect(screen.getByText("3 000,00 сомони")).toBeTruthy();
   });
 
   it("asks to confirm a change of plan, naming what is being bought", () => {
@@ -75,8 +75,8 @@ describe("PlanPicker", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog.textContent).toContain("Премиум");
     expect(dialog.textContent).toContain("месяц");
-    // Matched without the currency: Intl separates the amount from TJS with a non-breaking space,
-    // which an accessible name keeps verbatim.
+    // Matched without the currency: the amount is tied to «сомони» with a non-breaking space, and an
+    // accessible name keeps it verbatim — unlike getByText, which normalises whitespace for us.
     expect(screen.getByRole("button", { name: /Выставить счёт на 300,00/ })).toBeTruthy();
   });
 
@@ -95,7 +95,7 @@ describe("InvoicePaymentPanel", () => {
   it("shows the amount, the invoice number, the payment link and the receipt upload", () => {
     render(<InvoicePaymentPanel invoice={invoice} paymentUrl="https://pay.expresspay.tj/?A=1" />);
 
-    expect(screen.getByText("300,00 TJS")).toBeTruthy();
+    expect(screen.getByText("300,00 сомони")).toBeTruthy();
     expect(screen.getByText("SUB-A1B2C3D4")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Оплатить переводом" }).getAttribute("href")).toBe("https://pay.expresspay.tj/?A=1");
     expect(screen.getByLabelText("Чек об оплате")).toBeTruthy();
