@@ -1,8 +1,12 @@
 import { z, ZodError } from "zod";
 
+import { getAvailableStartsForService, listServiceStaffIds } from "@/core/availability/any-staff";
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { prisma } from "@/core/database/prisma";
 import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
+
+/** What the form sends when the customer does not care who serves them. */
+export const ANY_STAFF = "any";
 
 const querySchema = z.object({
   branchId: z.string().min(1),
@@ -15,6 +19,18 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
     const query = querySchema.parse(Object.fromEntries(url.searchParams));
+    if (query.staffId === ANY_STAFF) {
+      const staffIds = await listServiceStaffIds(query.branchId, query.serviceId);
+      const starts = await getAvailableStartsForService({
+        branchId: query.branchId,
+        serviceId: query.serviceId,
+        staffIds,
+        from: query.date,
+        days: 1,
+      });
+      return Response.json({ starts: starts.map((value) => value.toISOString()) });
+    }
+
     const service = await prisma.service.findFirst({
       where: {
         id: query.serviceId,

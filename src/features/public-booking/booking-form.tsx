@@ -17,6 +17,8 @@ import { Checkbox } from "@/features/ui-kit/checkbox";
 import { cn } from "@/features/ui-kit/cn";
 import { Field, Input, Label, Select } from "@/features/ui-kit/field";
 import { SelectableCard } from "@/features/ui-kit/selectable-card";
+/** Sent instead of an id when the customer has no preference; the server picks who is free. */
+const ANY_STAFF = "any";
 import { StepProgress } from "@/features/ui-kit/step-progress";
 import type { SupportedLocale } from "@/i18n/translate";
 import { intlLocale, moneyLocale, t } from "@/i18n/translate";
@@ -549,6 +551,22 @@ export function BookingForm({
                 backLabel={t(locale, "booking.back.toService")}
               />
               <div className="grid gap-3 sm:grid-cols-2">
+                {service.staffMembers.length > 1 ? (
+                  <SelectableCard
+                    title={t(locale, "booking.anyStaffTitle")}
+                    subtitle={t(locale, "booking.anyStaffSubtitle")}
+                    selected={staffId === ANY_STAFF}
+                    onClick={() => chooseStaff(ANY_STAFF)}
+                    icon={
+                      <span
+                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 dark:bg-brand-900 dark:text-brand-300"
+                        aria-hidden
+                      >
+                        ★
+                      </span>
+                    }
+                  />
+                ) : null}
                 {service.staffMembers.map((item) => (
                   <SelectableCard
                     key={item.id}
