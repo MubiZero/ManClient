@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Bell, Building2, Calendar, Contact, CreditCard, Hourglass, LayoutDashboard, Menu, MessageCircle, Package, Palette, Percent, Plug, Receipt, Settings, Star, Ticket, Timer, Users } from "lucide-react";
+import { BarChart3, Bell, Building2, Calendar, Contact, CreditCard, Hourglass, LayoutDashboard, Menu, MessageCircle, Package, Palette, Percent, Plug, Plus, Receipt, Settings, Star, Ticket, Timer, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -14,9 +14,9 @@ type DashboardRole = "OWNER" | "ADMIN" | "STAFF";
 type NavigationItem = { href: string; label: string; group: "work" | "settings"; icon: typeof LayoutDashboard; mobile: "primary" | "more"; adminOnly?: boolean };
 
 const allItems: NavigationItem[] = [
-  { href: "/dashboard", label: "Обзор", group: "work", icon: LayoutDashboard, mobile: "primary" },
+  { href: "/dashboard", label: "Обзор", group: "work", icon: LayoutDashboard, mobile: "more" },
   { href: "/dashboard/bookings", label: "Записи", group: "work", icon: Calendar, mobile: "primary" },
-  { href: "/dashboard/payments/review", label: "Проверка чеков", group: "work", icon: Receipt, mobile: "more", adminOnly: true },
+  { href: "/dashboard/payments/review", label: "Проверка чеков", group: "work", icon: Receipt, mobile: "primary", adminOnly: true },
   { href: "/dashboard/analytics", label: "Аналитика", group: "work", icon: BarChart3, mobile: "more", adminOnly: true },
   { href: "/dashboard/customers", label: "Клиенты", group: "work", icon: Contact, mobile: "more", adminOnly: true },
   { href: "/dashboard/waitlist", label: "Лист ожидания", group: "work", icon: Hourglass, mobile: "more", adminOnly: true },
@@ -116,6 +116,7 @@ export function DashboardNav({
   displayName,
   roleLabel,
   availableBusinesses,
+  pendingReceiptCount,
   signOutAction,
   switchBusinessAction,
 }: {
@@ -124,6 +125,8 @@ export function DashboardNav({
   displayName: string;
   roleLabel: string;
   availableBusinesses: Array<{ businessId: string; businessName: string }>;
+  /** Receipts waiting for this business; shown on the bar so money is never buried under "Ещё". */
+  pendingReceiptCount: number;
   signOutAction: () => Promise<void>;
   switchBusinessAction: (formData: FormData) => Promise<void>;
 }) {
@@ -177,10 +180,21 @@ export function DashboardNav({
         </div>
       </header>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-border bg-card md:hidden" aria-label="Основные разделы">
+      {/*
+        The day's work, in the order it happens: today's visits, the receipts holding somebody's slot,
+        and the manual booking for the client on the phone. Everything that is configured once rather
+        than done daily lives behind "Ещё". The bottom inset keeps the row clear of the gesture bar,
+        which used to cover it on phones without hardware buttons.
+      */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+        style={{ gridTemplateColumns: `repeat(${primary.length + 2}, minmax(0, 1fr))` }}
+        aria-label="Основные разделы"
+      >
         {primary.map((item) => {
           const active = isDashboardRouteActive(item.href, pathname);
           const Icon = item.icon;
+          const badge = item.href === "/dashboard/payments/review" ? pendingReceiptCount : 0;
           return (
             <Link
               key={item.href}
@@ -188,11 +202,30 @@ export function DashboardNav({
               aria-current={active ? "page" : undefined}
               className={cn("flex flex-col items-center gap-1 py-2 text-xs font-medium", active ? "text-primary" : "text-muted-foreground")}
             >
-              <Icon className="size-5" aria-hidden />
-              {item.label}
+              <span className="relative">
+                <Icon className="size-5" aria-hidden />
+                {badge > 0 ? (
+                  <span className="absolute -right-2.5 -top-1.5 min-w-4 rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
+                    {badge > 9 ? "9+" : badge}
+                  </span>
+                ) : null}
+              </span>
+              {shortLabel(item.label)}
+              {badge > 0 ? <span className="sr-only">, ожидают проверки: {badge}</span> : null}
             </Link>
           );
         })}
+        <Link
+          href="/dashboard/bookings/new"
+          aria-label="Новая запись"
+          className={cn(
+            "flex flex-col items-center gap-1 py-2 text-xs font-medium",
+            isDashboardRouteActive("/dashboard/bookings/new", pathname) ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          <Plus className="size-5" aria-hidden />
+          Записать
+        </Link>
         <button type="button" onClick={() => setOpen(true)} className="flex flex-col items-center gap-1 py-2 text-xs font-medium text-muted-foreground">
           <Settings className="size-5" aria-hidden />
           Ещё
@@ -220,4 +253,9 @@ export function DashboardNav({
       </Sheet>
     </>
   );
+}
+
+/** Bar labels have one line at 360 px: «Проверка чеков» becomes «Чеки». */
+function shortLabel(label: string): string {
+  return ({ "Проверка чеков": "Чеки" } as Record<string, string>)[label] ?? label;
 }

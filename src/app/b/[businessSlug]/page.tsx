@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { brandPalette } from "@/core/branding/brand-palette";
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 
@@ -74,7 +75,7 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
   const locale = resolveLocale([lang, cookieStore.get(LOCALE_COOKIE)?.value, business.publicPageLocale]);
 
   const brandStyle = business.brandColor
-    ? ({ "--color-primary": business.brandColor, "--color-ring": business.brandColor } as CSSProperties)
+    ? (brandPalette(business.brandColor) as CSSProperties | null) ?? undefined
     : undefined;
 
   const rating = businessHasFeature(business, "REVIEWS")

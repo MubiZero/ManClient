@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { brandPalette } from "@/core/branding/brand-palette";
 import type { CSSProperties } from "react";
 
 import { verifyCustomerBookingToken } from "@/core/bookings/booking-action-token";
@@ -20,7 +21,7 @@ export default async function ReviewPage({ params, searchParams }: PageProps) {
   const existingReview = await prisma.review.findUnique({ where: { bookingId: booking.id }, select: { id: true } });
 
   const brandStyle = booking.business.brandColor
-    ? ({ "--color-primary": booking.business.brandColor, "--color-ring": booking.business.brandColor } as CSSProperties)
+    ? (brandPalette(booking.business.brandColor) as CSSProperties | null) ?? undefined
     : undefined;
 
   async function submit(formData: FormData) {
