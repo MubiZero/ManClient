@@ -54,15 +54,23 @@ describe("web business onboarding", () => {
 
   it("shows one onboarding question at a time", () => {
     const serviceHtml = renderToStaticMarkup(<ServiceSetupForm action={async () => undefined} />);
-    const paymentHtml = renderToStaticMarkup(<PaymentSetupForm action={async () => undefined} />);
+    const paymentHtml = renderToStaticMarkup(<PaymentSetupForm action={async () => undefined} skipAction={async () => undefined} />);
 
     expect(serviceHtml).toContain("Добавьте первую услугу");
     expect(serviceHtml).toContain("Длительность");
     expect(serviceHtml).toContain("Стоимость");
     expect(serviceHtml).not.toContain("Карта DushanbeCity");
     expect(paymentHtml).toContain("Карта DushanbeCity");
-    expect(paymentHtml).toContain("напрямую вашему бизнесу");
     expect(paymentHtml).not.toContain("Длительность");
+  });
+
+  it("offers a way past the payment step for a salon that takes payment on the premises", () => {
+    const html = renderToStaticMarkup(<PaymentSetupForm action={async () => undefined} skipAction={async () => undefined} />);
+
+    expect(html).toContain("Оплата на месте");
+    expect(html).toContain("Пропустить этот шаг");
+    // Two forms, so that skipping never carries a half-typed card number with it.
+    expect(html.match(/<form/g)).toHaveLength(2);
   });
 
   it("marks the current wizard step accessibly", () => {

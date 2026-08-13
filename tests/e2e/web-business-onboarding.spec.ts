@@ -33,9 +33,9 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await page.getByLabel("Стоимость, сомони").fill("50");
   await page.getByRole("button", { name: "Сохранить услугу" }).click();
 
-  await expect(page.getByRole("heading", { name: "Куда принимать оплату" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Как принимаете оплату" })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Куда принимать оплату" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Как принимаете оплату" })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator(".onboarding-progress").getByText("Услуга")).toBeVisible();
   await expect(page.locator(".onboarding-progress").getByText("Оплата")).toBeVisible();
@@ -70,6 +70,34 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await expect(page).toHaveURL(/\/b\//);
   await expect(page.getByText(`Салон ${suffix}`, { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Запишитесь на удобное время" })).toBeVisible();
+});
+
+test("a salon that takes payment on the premises finishes onboarding without a card", async ({ page }) => {
+  const suffix = randomUUID();
+  const phoneSuffix = suffix.replace(/\D/g, "").padEnd(7, "2").slice(0, 7);
+  await page.goto("/register");
+  await page.getByLabel("Ваше имя").fill("Зафар Рахимов");
+  await page.getByLabel("Номер телефона").fill(`91${phoneSuffix}`);
+  await page.getByLabel("Пароль").fill("12345678");
+  await page.getByLabel("Название бизнеса").fill(`Барбершоп ${suffix}`);
+  await page.getByRole("button", { name: "Создать бизнес" }).click();
+
+  await expect(page).toHaveURL(/\/dashboard\/onboarding$/);
+  await page.getByLabel("Название услуги").fill("Стрижка бороды");
+  await page.getByLabel("Стоимость, сомони").fill("40");
+  await page.getByRole("button", { name: "Сохранить услугу" }).click();
+
+  await expect(page.getByRole("heading", { name: "Как принимаете оплату" })).toBeVisible();
+  await page.getByRole("button", { name: "Пропустить этот шаг" }).click();
+
+  await expect(page.getByRole("heading", { name: "Страница записи работает" })).toBeVisible();
+  // The decision sticks: a reload must not drop the owner back onto the step they just answered.
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Страница записи работает" })).toBeVisible();
+
+  // And the card is still reachable for the day this salon turns on a deposit.
+  await page.goto("/dashboard/settings/branches");
+  await expect(page.getByText("Не задана")).toBeVisible();
 });
 
 test("registration form fits a narrow screen", async ({ page }) => {
