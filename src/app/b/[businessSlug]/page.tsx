@@ -86,7 +86,7 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
     <main className="min-h-screen bg-secondary/30" style={brandStyle}>
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 sm:px-6">
-          <PublicBrandMark slug={business.slug} name={business.name} hasLogo={Boolean(business.logoStorageKey)} href="/" />
+          <PublicBrandMark slug={business.slug} name={business.name} hasLogo={Boolean(business.logoStorageKey)} href={`/b/${business.slug}`} />
           <span className="text-sm font-medium text-muted-foreground">{t(locale, "booking.onlineBookingLabel")}</span>
           <nav className="ml-auto flex items-center gap-1 text-xs font-medium" aria-label={t(locale, "booking.languageSwitcherLabel")}>
             <a
