@@ -2,29 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { createPendingBooking } from "@/core/bookings/booking-service";
 import { prisma } from "@/core/database/prisma";
-import { scheduleBookingReminders } from "@/core/notifications/notification-service";
+import { scheduleBookingReminder } from "@/core/notifications/notification-service";
 import { encryptSecret } from "@/core/security/secret-encryption";
 import { sendDueBookingReminders } from "@/jobs/send-booking-reminder";
 import { createBookingFixture } from "@/../tests/helpers/booking-fixture";
 
 describe("sendDueBookingReminders", () => {
   it("sends Telegram reminders with the business bot token", async () => {
-    const encryptionKey = Buffer.alloc(32, 14).toString("base64");
-    process.env.INTEGRATION_ENCRYPTION_KEY = encryptionKey;
     const { bookingId, businessId } = await confirmedTelegramBooking();
-    const booking = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
-    await prisma.businessTelegramIntegration.create({
-      data: {
-        businessId: booking.businessId,
-        publicId: `reminder-${bookingId}`,
-        botId: `reminder-bot-${bookingId}`,
-        botUsername: "reminder_bot",
-        botTokenEncrypted: encryptSecret("10013:tenant-reminder-token", encryptionKey),
-        webhookSecretEncrypted: encryptSecret("reminder-secret", encryptionKey),
-        status: "ACTIVE",
-      },
-    });
-    await scheduleBookingReminders(bookingId);
+    await connectTelegramBot(bookingId, businessId);
+    await scheduleBookingReminder(bookingId);
     await prisma.message.updateMany({ where: { bookingId }, data: { scheduledAt: new Date("2026-08-01T04:00:00.000Z") } });
     const tokens: string[] = [];
 
@@ -34,12 +21,12 @@ describe("sendDueBookingReminders", () => {
       sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     }, { businessId });
 
-    expect(tokens).toEqual(["10013:tenant-reminder-token"]);
+    expect(tokens).toEqual([BOT_TOKEN]);
   });
 
   it("skips an expired reminder instead of messaging after the visit time", async () => {
     const { bookingId, businessId } = await confirmedTelegramBooking();
-    await scheduleBookingReminders(bookingId);
+    await scheduleBookingReminder(bookingId);
 
     await sendDueBookingReminders(new Date("2026-08-02T06:00:00.000Z"), {
       sendTelegram: async () => { throw new Error("must not send"); },
@@ -52,7 +39,10 @@ describe("sendDueBookingReminders", () => {
 
   it("bounds failed delivery attempts and records a safe error", async () => {
     const { bookingId, businessId } = await confirmedTelegramBooking();
-    await scheduleBookingReminders(bookingId);
+    // The bot has to exist for the injected failure to be the one under test: a missing bot is not a
+    // failure the ladder retries, it is a rung the message walks past.
+    await connectTelegramBot(bookingId, businessId);
+    await scheduleBookingReminder(bookingId);
     await prisma.message.updateMany({ where: { bookingId }, data: { scheduledAt: new Date("2026-08-01T04:00:00.000Z"), attempts: 2 } });
 
     await sendDueBookingReminders(new Date("2026-08-01T04:05:00.000Z"), {
@@ -61,7 +51,7 @@ describe("sendDueBookingReminders", () => {
       sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }),
     }, { businessId });
 
-    await expect(prisma.message.findFirstOrThrow({ where: { bookingId } })).resolves.toMatchObject({ status: "FAILED", attempts: 3, lastError: "TELEGRAM delivery failed" });
+    await expect(prisma.message.findFirstOrThrow({ where: { bookingId, channel: "TELEGRAM" } })).resolves.toMatchObject({ status: "FAILED", attempts: 3, lastError: "TELEGRAM delivery failed" });
   });
 
   it.each([
@@ -114,4 +104,23 @@ async function confirmedTelegramBooking() {
   const pending = await createPendingBooking({ businessSlug: fixture.business.slug, branchId: fixture.branch.id, serviceId: fixture.service.id, staffId: fixture.staff.id, resourceIds: [], startsAt: new Date("2026-08-02T05:00:00.000Z"), customer: { name: "Мухаммад", phone: "+992900001122" } }, new Date("2026-08-01T04:00:00.000Z"));
   await prisma.booking.update({ where: { id: pending.bookingId }, data: { status: "CONFIRMED", customer: { update: { telegramChatId: `chat-${pending.bookingId}` } } } });
   return { ...pending, businessId: fixture.business.id };
+}
+
+const BOT_TOKEN = "10013:tenant-reminder-token";
+
+/** An active tenant bot, which is what makes Telegram a rung the ladder can actually stand on. */
+async function connectTelegramBot(bookingId: string, businessId: string) {
+  const encryptionKey = Buffer.alloc(32, 14).toString("base64");
+  process.env.INTEGRATION_ENCRYPTION_KEY = encryptionKey;
+  return prisma.businessTelegramIntegration.create({
+    data: {
+      businessId,
+      publicId: `reminder-${bookingId}`,
+      botId: `reminder-bot-${bookingId}`,
+      botUsername: "reminder_bot",
+      botTokenEncrypted: encryptSecret(BOT_TOKEN, encryptionKey),
+      webhookSecretEncrypted: encryptSecret("reminder-secret", encryptionKey),
+      status: "ACTIVE",
+    },
+  });
 }

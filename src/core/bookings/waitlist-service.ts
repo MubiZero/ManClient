@@ -4,6 +4,7 @@ import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
 import { SUBSCRIPTION_SELECT, businessHasFeature, requirePlanFeature } from "@/core/platform/subscription-plans";
+import { firstChannelFor } from "@/core/notifications/channel-ladder";
 
 const WAITLIST_NOTIFY_LIMIT = 3;
 /** Shared with src/jobs/send-booking-reminder.ts and the payom template table. */
@@ -104,11 +105,17 @@ export async function notifyWaitlistForFreedSlot(
 
   const customers = await database.customer.findMany({ where: { id: { in: candidates.map((entry) => entry.customerId) } } });
   const customerById = new Map(customers.map((customer) => [customer.id, customer]));
-  const business = await database.business.findUnique({
+  const business = await database.business.findUniqueOrThrow({
     where: { id: input.businessId },
-    select: { smsNotificationsEnabled: true, ...SUBSCRIPTION_SELECT },
+    select: {
+      smsNotificationsEnabled: true,
+      whatsappPhoneNumberId: true,
+      whatsappTemplateName: true,
+      whatsappConfirmationTemplateName: true,
+      whatsappCancellationTemplateName: true,
+      ...SUBSCRIPTION_SELECT,
+    },
   });
-  const smsAvailable = Boolean(business?.smsNotificationsEnabled) && businessHasFeature(business!, "SMS");
 
   let notified = 0;
   for (const entry of candidates) {
@@ -121,11 +128,14 @@ export async function notifyWaitlistForFreedSlot(
     notified += 1;
 
     const customer = customerById.get(entry.customerId);
-    const channels = [
-      ...(customer?.telegramChatId ? ["TELEGRAM" as const] : []),
-      ...(smsAvailable ? ["SMS" as const] : []),
-    ];
-    for (const channel of channels) {
+    // One channel, the cheapest that works: somebody who reads the free slot in Telegram must not
+    // also be sent a paid SMS saying the same thing.
+    const channel = firstChannelFor({
+      kind: WAITLIST_MESSAGE_KIND,
+      customer: { telegramChatId: customer?.telegramChatId ?? null },
+      business,
+    });
+    if (channel) {
       await database.message.upsert({
         where: { waitlistEntryId_channel_kind: { waitlistEntryId: entry.id, channel, kind: WAITLIST_MESSAGE_KIND } },
         create: {

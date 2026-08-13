@@ -1,15 +1,11 @@
-import type { Business, BusinessTelegramIntegration, Customer, Prisma } from "@/generated/prisma/client";
+import type { Message, Prisma } from "@/generated/prisma/client";
 
-import { createCustomerBookingToken } from "@/core/bookings/booking-action-token";
-import { WAITLIST_MESSAGE_KIND } from "@/core/bookings/waitlist-service";
+import { nextChannelAfter } from "@/core/notifications/channel-ladder";
+import { defaultDependencies, type DeliveryTarget } from "@/core/notifications/delivery";
+import { SENDERS } from "@/core/notifications/senders";
 import { prisma } from "@/core/database/prisma";
 import { errorText, logger } from "@/core/observability/logger";
 import { reportError } from "@/core/observability/report-error";
-import { decryptSecret } from "@/core/security/secret-encryption";
-import { sendSms, type PayomSmsMessage } from "@/integrations/payom/payom-client";
-import { buildPayomVariables, findPayomTemplateKind } from "@/integrations/payom/payom-templates";
-import { createTelegramApi } from "@/integrations/telegram/telegram-api";
-import { sendTemplateMessage, type WhatsAppTemplateMessage } from "@/integrations/whatsapp/whatsapp-client";
 
 type DeliverableMessage = Prisma.MessageGetPayload<{
   include: {
@@ -18,31 +14,12 @@ type DeliverableMessage = Prisma.MessageGetPayload<{
   };
 }>;
 
-/** A message flattened away from its source, so delivery does not care where it came from. */
-type DeliveryTarget = {
-  bookingId: string | null;
-  customer: Customer;
-  business: Business & { telegramIntegrations: BusinessTelegramIntegration[] };
-  serviceName: string;
-  /** The moment the message is about: the visit, or the slot that came free. */
-  occursAt: Date;
-  /** The branch's timezone — the only one in which "18:00" means anything to the customer. */
-  timeZone: string;
-};
-
-type DeliveryDependencies = {
-  sendTelegram: (token: string, chatId: string, text: string) => Promise<void>;
-  sendWhatsApp: (input: WhatsAppTemplateMessage) => Promise<{ externalId: string }>;
-  sendSms: (input: PayomSmsMessage) => Promise<{ externalId: string; deliveryStatus: string }>;
-};
-
-const defaultDependencies: DeliveryDependencies = {
-  sendTelegram: (token, chatId, text) => createTelegramApi(token).sendMessage(chatId, text),
-  sendWhatsApp: sendTemplateMessage,
-  sendSms,
-};
-
 /**
+ * Sends what is due, one channel per message, and hands a message down the ladder when its channel
+ * turns out not to be able to carry it. The channels themselves live in core/notifications/senders —
+ * this job owns claiming, retrying and escalating, and knows nothing about how a Telegram message
+ * differs from an SMS.
+ *
  * `scope` narrows the sweep to a single business — see expire-pending-bookings.ts for why it exists.
  */
 export async function sendDueBookingReminders(now = new Date(), dependencies = defaultDependencies, scope?: { businessId: string }) {
@@ -85,55 +62,27 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
     });
     const target = resolveTarget(message, now);
     if (!target) {
+      // The news itself is stale — the booking was cancelled under it, the slot was taken. Nothing to
+      // escalate: no channel would improve on saying nothing.
       await prisma.message.update({ where: { id: message.id }, data: { status: "SKIPPED" } });
       processed += 1;
       continue;
     }
 
     try {
-      let externalId: string | undefined;
-      if (message.channel === "TELEGRAM") {
-        const chatId = target.customer.telegramChatId;
-        if (!chatId) throw new Error("Telegram chat is unavailable");
-        const encryptedToken = target.business.telegramIntegrations[0]?.botTokenEncrypted;
-        const encryptionKey = process.env.INTEGRATION_ENCRYPTION_KEY;
-        if (!encryptedToken || !encryptionKey) throw new Error("Business Telegram bot is unavailable");
-        const reviewUrl = message.kind === "REVIEW_REQUEST" && target.bookingId ? buildReviewUrl(target.bookingId, now) : undefined;
-        await dependencies.sendTelegram(decryptSecret(encryptedToken, encryptionKey), chatId, reminderText(message.kind, target, reviewUrl));
-      } else if (message.channel === "SMS") {
-        const templateKind = findPayomTemplateKind(message.kind);
-        // No approved template means this kind cannot go out over SMS at all, so retrying it three
-        // times and burying it in FAILED would be noise. Skip it the same way an ineligible
-        // booking is skipped above.
-        if (!templateKind) {
-          await prisma.message.update({ where: { id: message.id }, data: { status: "SKIPPED" } });
-          processed += 1;
-          continue;
-        }
-        const template = buildPayomVariables(templateKind, target.customer.telegramLocale, {
-          businessName: target.business.name,
-          startsAt: target.occursAt,
-          timeZone: target.timeZone,
+      const outcome = await SENDERS[message.channel]({ kind: message.kind, target, now }, dependencies);
+      if (!outcome.delivered) {
+        await prisma.message.update({
+          where: { id: message.id },
+          data: { status: "SKIPPED", lastError: `${message.channel}: ${outcome.unavailable}`.slice(0, 500) },
         });
-        externalId = (await dependencies.sendSms({ telephone: target.customer.phone, ...template })).externalId;
+        await handDownTheLadder(message, target, outcome.unavailable, now);
       } else {
-        const business = target.business;
-        if (!business.whatsappPhoneNumberId) throw new Error("WhatsApp business settings are unavailable");
-        const templateName = message.kind === "BOOKING_CONFIRMATION"
-          ? business.whatsappConfirmationTemplateName
-          : message.kind === "BOOKING_CANCELLED"
-            ? business.whatsappCancellationTemplateName
-            : business.whatsappTemplateName;
-        if (!templateName) throw new Error("WhatsApp template is unavailable");
-        externalId = (await dependencies.sendWhatsApp({
-          phoneNumberId: business.whatsappPhoneNumberId,
-          to: target.customer.phone,
-          templateName,
-          languageCode: business.whatsappLanguageCode,
-          parameters: [target.customer.name, formatVisitTime(target.occursAt, target.timeZone), target.serviceName],
-        })).externalId;
+        await prisma.message.update({
+          where: { id: message.id },
+          data: { status: "SENT", attempts: { increment: 1 }, externalId: outcome.externalId },
+        });
       }
-      await prisma.message.update({ where: { id: message.id }, data: { status: "SENT", attempts: { increment: 1 }, externalId } });
     } catch (error) {
       const attempts = message.attempts + 1;
       const exhausted = attempts >= message.maxAttempts;
@@ -155,6 +104,9 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
       const context = { messageId: message.id, businessId: message.businessId, channel: message.channel, kind: message.kind, attempts };
       if (exhausted) {
         reportError({ event: "message.delivery_failed", error, context, fingerprint: `message:${message.channel}:${message.kind}` });
+        // A channel that has failed every attempt is a channel that is down, not a message that
+        // cannot be sent. Somebody below it may still reach the customer in time.
+        await handDownTheLadder(message, target, `exhausted after ${attempts} attempts`, now);
       } else {
         logger.warn("message.delivery_retrying", { ...context, error: errorText(error) });
       }
@@ -166,9 +118,46 @@ export async function sendDueBookingReminders(now = new Date(), dependencies = d
 }
 
 /**
+ * Writes the same message for the next channel that could carry it. The row just closed keeps its own
+ * status and error, so what was tried and why stays readable: a separate row per channel is both what
+ * `[bookingId, channel, kind]` needs in order to keep a message from going twice, and the only way to
+ * answer "the customer says nobody told them".
+ */
+async function handDownTheLadder(message: Message, target: DeliveryTarget, reason: string, now: Date): Promise<void> {
+  const next = nextChannelAfter(message.channel, {
+    kind: message.kind,
+    customer: target.customer,
+    business: target.business,
+  });
+
+  const context = { messageId: message.id, businessId: message.businessId, kind: message.kind, from: message.channel, reason };
+  if (!next) {
+    logger.warn("message.ladder_exhausted", context);
+    return;
+  }
+
+  const identity = message.bookingId
+    ? { bookingId_channel_kind: { bookingId: message.bookingId, channel: next, kind: message.kind } }
+    : { waitlistEntryId_channel_kind: { waitlistEntryId: message.waitlistEntryId!, channel: next, kind: message.kind } };
+  await prisma.message.upsert({
+    where: identity,
+    create: {
+      businessId: message.businessId,
+      bookingId: message.bookingId,
+      waitlistEntryId: message.waitlistEntryId,
+      channel: next,
+      kind: message.kind,
+      scheduledAt: now,
+    },
+    update: { status: "SCHEDULED", scheduledAt: now, attempts: 0, lastError: null },
+  });
+  logger.info("message.handed_down", { ...context, to: next });
+}
+
+/**
  * Most messages hang off a booking, but a freed-slot alert hangs off a waitlist entry and has no
- * booking at all. Both are flattened to the same shape here so the delivery branches below stay
- * channel-shaped rather than growing a second copy per source.
+ * booking at all. Both are flattened to the same shape here so the senders stay channel-shaped rather
+ * than growing a second copy per source.
  *
  * Returns null when the message should no longer go out — the booking was cancelled under it, the
  * visit has already happened, the waitlist entry was taken or withdrawn. The caller marks those
@@ -210,39 +199,4 @@ function resolveTarget(message: DeliverableMessage, now: Date): DeliveryTarget |
     occursAt: booking.startsAt,
     timeZone: booking.branch.timeZone,
   };
-}
-
-function buildReviewUrl(bookingId: string, now: Date): string {
-  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60_000);
-  const token = createCustomerBookingToken({ bookingId, action: "review_booking", expiresAt });
-  const appUrl = process.env.APP_URL?.replace(/\/$/, "") ?? "";
-  return `${appUrl}/review/${token}`;
-}
-
-function reminderText(kind: string, target: DeliveryTarget, reviewUrl?: string) {
-  const booking = { customer: target.customer, service: { name: target.serviceName }, startsAt: target.occursAt };
-  const tg = target.customer.telegramLocale === "tg";
-  if (kind === WAITLIST_MESSAGE_KIND) {
-    return tg
-      ? `Вақти озод пайдо шуд: ${formatVisitTime(target.occursAt, target.timeZone, "tg-TJ")}. Лутфан ҳарчи зудтар бо мо тамос гиред.`
-      : `Освободилось время из вашего листа ожидания: ${formatVisitTime(target.occursAt, target.timeZone)}. Свяжитесь с нами, чтобы записаться.`;
-  }
-  if (kind === "REVIEW_REQUEST") {
-    return tg
-      ? `Ташаккур барои ташриф! Лутфан моро баҳо диҳед: ${reviewUrl}`
-      : `Спасибо за визит! Оцените нас: ${reviewUrl}`;
-  }
-  if (kind === "PAYMENT_APPROVED") return tg ? "Пардохт тасдиқ шуд. Сабти шумо тасдиқ шудааст." : "Оплата подтверждена. Запись сохранена.";
-  if (kind === "PAYMENT_REJECTED") return tg ? "Расид тасдиқ нашуд. Лутфан расиди дурустро аз нав фиристед." : "Чек не подтверждён. Откройте запись и отправьте корректный чек ещё раз.";
-  if (kind === "RECEIPT_NEEDS_REVIEW") return tg ? "Расид қабул шуд ва ба маъмур барои санҷиш фиристода шуд." : "Чек получен и передан администратору на проверку.";
-  if (kind === "BOOKING_CANCELLED") return tg ? "Сабт бекор шуд." : "Запись отменена.";
-  if (kind === "BOOKING_RESCHEDULED") return tg ? `Вақти нави сабт: ${formatVisitTime(booking.startsAt, target.timeZone, "tg-TJ")}.` : `Запись перенесена: ${formatVisitTime(booking.startsAt, target.timeZone, "ru-RU")}.`;
-  if (kind === "PAYMENT_REMINDER") {
-    return tg ? `${booking.customer.name}, пардохти сабтро барои ${booking.service.name} ёдрас мекунем: ${formatVisitTime(booking.startsAt, target.timeZone, "tg-TJ")}.` : `${booking.customer.name}, напоминаем об оплате записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt, target.timeZone)}.`;
-  }
-  return tg ? `${booking.customer.name}, сабти шуморо барои ${booking.service.name} ёдрас мекунем: ${formatVisitTime(booking.startsAt, target.timeZone, "tg-TJ")}.` : `${booking.customer.name}, напоминаем о записи на ${booking.service.name}: ${formatVisitTime(booking.startsAt, target.timeZone)}.`;
-}
-
-function formatVisitTime(value: Date, timeZone: string, locale = "ru-RU") {
-  return new Intl.DateTimeFormat(locale, { timeZone, dateStyle: "medium", timeStyle: "short" }).format(value);
 }

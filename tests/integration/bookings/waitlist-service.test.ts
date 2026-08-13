@@ -239,12 +239,22 @@ describe("waitlist notification queueing", () => {
     });
   });
 
-  it("adds SMS when the business has it enabled on a plan that includes it", async () => {
+  it("keeps a customer with Telegram off the paid channel even when SMS is available", async () => {
     const fixture = await createWaitlistFixture();
     const entry = await notifyOne(fixture, { telegram: true, sms: true });
 
+    // A freed slot is worth telling somebody about once. Sending it twice used to cost an SMS on top
+    // of a message the customer had already read.
     const messages = await prisma.message.findMany({ where: { waitlistEntryId: entry.id } });
-    expect(messages.map((message) => message.channel).sort()).toEqual(["SMS", "TELEGRAM"]);
+    expect(messages.map((message) => message.channel)).toEqual(["TELEGRAM"]);
+  });
+
+  it("falls back to SMS for a customer with no Telegram", async () => {
+    const fixture = await createWaitlistFixture();
+    const entry = await notifyOne(fixture, { telegram: false, sms: true });
+
+    const messages = await prisma.message.findMany({ where: { waitlistEntryId: entry.id } });
+    expect(messages.map((message) => message.channel)).toEqual(["SMS"]);
   });
 
   it("does not queue SMS when the plan lacks the feature even with the toggle on", async () => {

@@ -1,7 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 
 import { scheduleBusinessNotification, scheduleUpcomingBusinessVisit } from "@/core/notifications/business-notification-service";
-import { scheduleBookingReminders, scheduleReviewRequest, scheduleSmsConfirmation, scheduleWhatsAppConfirmation } from "@/core/notifications/notification-service";
+import { scheduleBookingReminder, scheduleCustomerMessage, scheduleReviewRequest } from "@/core/notifications/notification-service";
 
 /**
  * Everything that has to happen once a visit is certain: the customer is told, reminded and later asked
@@ -23,10 +23,15 @@ export async function scheduleConfirmationEffects(
   transaction: Prisma.TransactionClient,
   now = new Date(),
 ): Promise<void> {
-  await scheduleBookingReminders(input.bookingId, transaction);
+  await scheduleBookingReminder(input.bookingId, transaction);
   await scheduleReviewRequest(input.bookingId, transaction);
-  await scheduleWhatsAppConfirmation(input.bookingId, transaction);
-  await scheduleSmsConfirmation(input.bookingId, transaction);
+  // One message per event, not one per channel: "we received your money" and "your booking is
+  // confirmed" are the same news to the customer, and the notification kind already says which of the
+  // two wordings they get.
+  await scheduleCustomerMessage(
+    { bookingId: input.bookingId, kind: input.notificationKind === "PAYMENT_APPROVED" ? "PAYMENT_APPROVED" : "BOOKING_CONFIRMATION", scheduledAt: now },
+    transaction,
+  );
   await scheduleBusinessNotification({
     businessId: input.businessId,
     bookingId: input.bookingId,

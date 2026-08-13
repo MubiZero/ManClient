@@ -6,10 +6,9 @@ import { requireSettingsAccess } from "@/core/business-settings/authorize-settin
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { SUBSCRIPTION_SELECT, businessHasFeature } from "@/core/platform/subscription-plans";
-import { scheduleBookingReminders, scheduleReviewRequest, scheduleSmsConfirmation, scheduleSmsPaymentRejected, scheduleWhatsAppConfirmation, scheduleWhatsAppPaymentRejected } from "@/core/notifications/notification-service";
+import { scheduleBookingReminder, scheduleCustomerMessage, scheduleReviewRequest } from "@/core/notifications/notification-service";
 import { getReceipt, type ReceiptObject } from "@/core/payments/receipt-storage";
 import { scheduleBusinessNotification, scheduleUpcomingBusinessVisit } from "@/core/notifications/business-notification-service";
-import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
 
 export class PaymentReviewError extends Error {
   constructor(public readonly code: "INVALID_INPUT" | "FORBIDDEN" | "NOT_FOUND" | "INVALID_STATUS") { super(code); this.name = "PaymentReviewError"; }
@@ -131,13 +130,11 @@ export async function approvePaymentReview(input: ActorInput & { paymentId: stri
     await transaction.booking.update({ where: { id: payment.bookingId }, data: { status: "CONFIRMED", confirmedAt: now, confirmedBy: `membership:${actor.id}`, expiresAt: null } });
     await recordCommissionEntry(transaction, { businessId: input.businessId, bookingId: payment.bookingId, staffId: payment.booking.staffId, amountDiram: payment.amountDiram });
     await writeAuditEvent({ businessId: input.businessId, bookingId: payment.bookingId, type: "payment.review_approved", actorType: "membership", actorId: actor.id, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
-    await scheduleBookingReminders(payment.bookingId, transaction);
+    await scheduleBookingReminder(payment.bookingId, transaction);
     await scheduleReviewRequest(payment.bookingId, transaction);
-    await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
-    await scheduleSmsConfirmation(payment.bookingId, transaction);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: now }, transaction);
     await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
-    await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now }, transaction);
+    await scheduleCustomerMessage({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now }, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
   return result;
@@ -167,9 +164,7 @@ export async function rejectPaymentReview(input: ActorInput & { paymentId: strin
     await transaction.receiptSubmission.update({ where: { id: submission.id }, data: { status: "REJECTED", reviewedAt: now, reviewedBy: `membership:${actor.id}`, reviewNote: reason } });
     await writeAuditEvent({ businessId: input.businessId, bookingId: payment.bookingId, type: "payment.review_rejected", actorType: "membership", actorId: actor.id, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", deduplicationKey: `payment:${payment.id}:rejected`, scheduledAt: now }, transaction);
-    await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
-    await scheduleWhatsAppPaymentRejected(payment.bookingId, transaction);
-    await scheduleSmsPaymentRejected(payment.bookingId, transaction);
+    await scheduleCustomerMessage({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
 }
@@ -196,13 +191,11 @@ export async function approvePaymentAsPlatformAdmin(input: { paymentId: string; 
     await transaction.booking.update({ where: { id: payment.bookingId }, data: { status: "CONFIRMED", confirmedAt: now, confirmedBy: `platform_admin:${input.actorUserId}`, expiresAt: null } });
     await recordCommissionEntry(transaction, { businessId: payment.businessId, bookingId: payment.bookingId, staffId: payment.booking.staffId, amountDiram: payment.amountDiram });
     await writeAuditEvent({ businessId: payment.businessId, bookingId: payment.bookingId, type: "payment.review_approved", actorType: "platform_admin", actorId: input.actorUserId, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
-    await scheduleBookingReminders(payment.bookingId, transaction);
+    await scheduleBookingReminder(payment.bookingId, transaction);
     await scheduleReviewRequest(payment.bookingId, transaction);
-    await scheduleWhatsAppConfirmation(payment.bookingId, transaction);
-    await scheduleSmsConfirmation(payment.bookingId, transaction);
     await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", deduplicationKey: `payment:${payment.id}:approved`, scheduledAt: now }, transaction);
     await scheduleUpcomingBusinessVisit({ businessId: payment.businessId, bookingId: payment.bookingId, startsAt: payment.booking.startsAt }, transaction);
-    await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now }, transaction);
+    await scheduleCustomerMessage({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now }, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
 }
@@ -229,9 +222,7 @@ export async function rejectPaymentAsPlatformAdmin(input: { paymentId: string; a
     await transaction.receiptSubmission.update({ where: { id: submission.id }, data: { status: "REJECTED", reviewedAt: now, reviewedBy: `platform_admin:${input.actorUserId}`, reviewNote: reason } });
     await writeAuditEvent({ businessId: payment.businessId, bookingId: payment.bookingId, type: "payment.review_rejected", actorType: "platform_admin", actorId: input.actorUserId, metadata: { reason, attentionReason: payment.attentionReason ?? "UNKNOWN" } }, transaction);
     await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", deduplicationKey: `payment:${payment.id}:rejected`, scheduledAt: now }, transaction);
-    await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
-    await scheduleWhatsAppPaymentRejected(payment.bookingId, transaction);
-    await scheduleSmsPaymentRejected(payment.bookingId, transaction);
+    await scheduleCustomerMessage({ bookingId: payment.bookingId, kind: "PAYMENT_REJECTED", scheduledAt: now }, transaction);
     return { bookingId: payment.bookingId, changed: true };
   });
 }

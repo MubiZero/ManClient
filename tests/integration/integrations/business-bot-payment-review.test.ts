@@ -301,11 +301,11 @@ describe("business bot payment review", () => {
     expect(replay.text).toContain("уже подтверждена");
     await expect(prisma.payment.findUniqueOrThrow({ where: { id: review.payment.id } })).resolves.toMatchObject({ status: "RECEIPT_ACCEPTED" });
     await expect(prisma.auditEvent.count({ where: { bookingId: review.booking.id, type: "payment.review_approved" } })).resolves.toBe(1);
+    // One message per piece of news, each on the cheapest channel that can carry it. This workspace
+    // has WhatsApp configured too, and the approval used to produce four messages for two facts.
     await expect(prisma.message.findMany({ where: { bookingId: review.booking.id }, orderBy: [{ channel: "asc" }, { kind: "asc" }] })).resolves.toMatchObject([
       { channel: "TELEGRAM", kind: "BOOKING_REMINDER", status: "SCHEDULED" },
       { channel: "TELEGRAM", kind: "PAYMENT_APPROVED", status: "SCHEDULED" },
-      { channel: "WHATSAPP", kind: "BOOKING_CONFIRMATION", status: "SCHEDULED" },
-      { channel: "WHATSAPP", kind: "BOOKING_REMINDER", status: "SCHEDULED" },
     ]);
   });
 
@@ -387,14 +387,13 @@ describe("business bot payment review", () => {
     expect(["RECEIPT_ACCEPTED", "REJECTED"]).toContain(payment.status);
     expect(audit).toHaveLength(1);
     expect(audit[0]?.type).toBe(payment.status === "RECEIPT_ACCEPTED" ? "payment.review_approved" : "payment.review_rejected");
-    // Either side of the race may win, so assert on the winner's own fan-out. Spelling the channels
-    // out rather than counting them means adding a channel fails here with what actually changed.
-    // This workspace has WhatsApp configured and the customer has Telegram, so both sides send twice
-    // over — the losing transaction must leave nothing behind.
+    // Either side of the race may win, so assert on the winner's own messages. Spelling the channel
+    // out rather than counting means a change in what the ladder picks fails here with what actually
+    // changed. The customer has Telegram, so nothing here should reach a paid channel at all.
     expect(schedules.map(message => `${message.channel}:${message.kind}`).sort()).toEqual(
       payment.status === "RECEIPT_ACCEPTED"
-        ? ["TELEGRAM:BOOKING_REMINDER", "TELEGRAM:PAYMENT_APPROVED", "WHATSAPP:BOOKING_CONFIRMATION", "WHATSAPP:BOOKING_REMINDER"]
-        : ["TELEGRAM:PAYMENT_REJECTED", "WHATSAPP:PAYMENT_REJECTED"],
+        ? ["TELEGRAM:BOOKING_REMINDER", "TELEGRAM:PAYMENT_APPROVED"]
+        : ["TELEGRAM:PAYMENT_REJECTED"],
     );
   });
 
