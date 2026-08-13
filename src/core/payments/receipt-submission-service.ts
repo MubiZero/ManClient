@@ -7,8 +7,8 @@ import { prisma } from "@/core/database/prisma";
 import { recognizeDushanbeCityReceipt } from "@/core/payments/dushanbe-city-receipt-recognizer";
 import { confirmFromReceipt, DuplicateOperationError } from "@/core/payments/payment-service";
 import { getReceipt, storeReceipt } from "@/core/payments/receipt-storage";
+import { scheduleCustomerMessage } from "@/core/notifications/notification-service";
 import { scheduleBusinessNotification } from "@/core/notifications/business-notification-service";
-import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
 
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 const MAX_RECEIPT_PIXELS = 24_000_000;
@@ -145,7 +145,7 @@ async function markNeedsReview(
     await transaction.payment.update({ where: { id: submission.paymentId }, data: { status: "NEEDS_ATTENTION", attentionReason: reason, receiptStorageKey: submission.storageKey } });
     await writeAuditEvent({ businessId: submission.businessId, bookingId: submission.payment.bookingId, type: "receipt.needs_review", actorType: "system", metadata: { submissionId: submission.id, reason } }, transaction);
     await scheduleBusinessNotification({ businessId: submission.businessId, bookingId: submission.payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW", deduplicationKey: `receipt:${submission.id}:needs-review`, scheduledAt: now }, transaction);
-    await scheduleCustomerTelegramNotification({ bookingId: submission.payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW", scheduledAt: now }, transaction);
+    await scheduleCustomerMessage({ bookingId: submission.payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW", scheduledAt: now }, transaction);
   });
   return prisma.receiptSubmission.findUniqueOrThrow({ where: { id: submission.id } });
 }

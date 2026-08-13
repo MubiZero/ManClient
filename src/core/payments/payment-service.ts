@@ -6,8 +6,8 @@ import { scheduleConfirmationEffects } from "@/core/bookings/confirm-booking-eff
 import { decryptCardNumber } from "@/core/payments/card-encryption";
 import { receiptInputSchema, type ReceiptInput } from "@/core/payments/receipt-recognizer";
 import { createPaymentUrl } from "@/integrations/dushanbe-city/payment-link";
+import { scheduleCustomerMessage } from "@/core/notifications/notification-service";
 import { scheduleBusinessNotification } from "@/core/notifications/business-notification-service";
-import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
 
 export class DuplicateOperationError extends Error {
   readonly code = "DUPLICATE_OPERATION";
@@ -127,7 +127,7 @@ export async function confirmFromReceipt(input: ReceiptInput) {
           },
         });
         await scheduleBusinessNotification({ businessId: payment.businessId, bookingId: payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW", deduplicationKey: `payment:${payment.id}:needs-review:${receipt.operationNumber}`, scheduledAt: new Date() }, transaction);
-        await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW" }, transaction);
+        await scheduleCustomerMessage({ bookingId: payment.bookingId, kind: "RECEIPT_NEEDS_REVIEW" }, transaction);
         return needsAttention;
       }
 
@@ -168,7 +168,6 @@ export async function confirmFromReceipt(input: ReceiptInput) {
         notificationKind: "PAYMENT_APPROVED",
         deduplicationKey: `payment:${payment.id}:approved`,
       }, transaction);
-      await scheduleCustomerTelegramNotification({ bookingId: payment.bookingId, kind: "PAYMENT_APPROVED" }, transaction);
 
       return confirmedPayment;
     }, { isolationLevel: "Serializable" });
