@@ -18,6 +18,8 @@
   "booking.headings.selectBranch": "Филиалро интихоб кунед",
   "booking.headings.selectService": "Хизматро интихоб кунед",
   "booking.headings.selectStaff": "Мутахассисро интихоб кунед",
+  "booking.anyStaffTitle": "Ҳар устои озод",
+  "booking.anyStaffSubtitle": "Вақти ҳамаи устоҳоро нишон медиҳем",
   "booking.headings.selectTime": "Вақтро интихоб кунед",
   "booking.headings.enterContacts": "Маълумоти тамосро гузоред",
   "booking.back.default": "Бозгашт",

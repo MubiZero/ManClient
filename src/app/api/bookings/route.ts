@@ -8,6 +8,8 @@ import { getPaymentUrl, PaymentConfigurationError } from "@/core/payments/paymen
 import { assertPhoneVerified, spendPhoneVerification } from "@/core/security/phone-verification-gate";
 import { PhoneVerificationError } from "@/core/security/phone-verification-service";
 import { assertRateLimit, clientIdentifier, rateLimitedResponse, RateLimitedError } from "@/core/security/rate-limit";
+import { ANY_STAFF } from "@/app/api/availability/route";
+import { resolveStaffForStart } from "@/core/availability/any-staff";
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -22,9 +24,25 @@ export async function POST(request: Request): Promise<Response> {
     if (phone) await assertRateLimit("booking.create", `phone:${phone}`);
     await assertPhoneVerified({ phone, verificationId });
 
+    const startsAt = new Date(String(payload.startsAt));
+    // "Anyone" is answered here rather than inside the booking: a booking always names a specialist,
+    // and choosing one before it is created keeps that true. Nobody free is the customer's answer,
+    // not a reason to hand the visit to somebody who is busy.
+    const staffId = payload.staffId === ANY_STAFF || !payload.staffId
+      ? await resolveStaffForStart({
+          branchId: String(payload.branchId),
+          serviceId: String(payload.serviceId),
+          startsAt,
+        })
+      : String(payload.staffId);
+    if (!staffId) {
+      return Response.json({ error: "SLOT_UNAVAILABLE" }, { status: 409 });
+    }
+
     const booking = await createPendingBooking({
       ...payload,
-      startsAt: new Date(String(payload.startsAt)),
+      staffId,
+      startsAt,
     } as Parameters<typeof createPendingBooking>[0]);
     await spendPhoneVerification({ phone, verificationId });
     // Nothing due means no card to transfer to and no reservation to race: the booking is already

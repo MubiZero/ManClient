@@ -18,6 +18,8 @@
   "booking.headings.selectBranch": "Выберите филиал",
   "booking.headings.selectService": "Выберите услугу",
   "booking.headings.selectStaff": "Выберите специалиста",
+  "booking.anyStaffTitle": "Любой свободный",
+  "booking.anyStaffSubtitle": "Покажем время всех мастеров",
   "booking.headings.selectTime": "Выберите время",
   "booking.headings.enterContacts": "Оставьте контакты",
   "booking.back.default": "Назад",
