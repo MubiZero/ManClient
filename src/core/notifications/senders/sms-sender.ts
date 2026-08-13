@@ -1,4 +1,5 @@
 import type { Sender } from "@/core/notifications/delivery";
+import { recordSmsCharge } from "@/core/observability/sms-ledger";
 import { buildPayomVariables, findPayomTemplateKind } from "@/integrations/payom/payom-templates";
 
 /**
@@ -16,5 +17,7 @@ export const sendOnSms: Sender = async ({ kind, target }, dependencies) => {
     timeZone: target.timeZone,
   });
   const { externalId } = await dependencies.sendSms({ telephone: target.customer.phone, ...template });
+  // Booked against the business after the gateway took it: a send that threw was never charged for.
+  await recordSmsCharge({ businessId: target.business.id, purpose: "NOTIFICATION" });
   return { delivered: true, externalId };
 };
