@@ -16,7 +16,7 @@ import {
   scheduleBusinessNotificationSafely,
   scheduleUpcomingBusinessVisit,
 } from "@/core/notifications/business-notification-service";
-import { scheduleBookingReminders } from "@/core/notifications/notification-service";
+import { scheduleBookingReminder } from "@/core/notifications/notification-service";
 import { SUBSCRIPTION_SELECT, requirePlanFeature } from "@/core/platform/subscription-plans";
 
 const RESERVATION_MINUTES = 15;
@@ -157,7 +157,7 @@ export async function createRecurringBooking(input: CreateRecurringBookingInput,
       created.push(updated);
 
       if (isDashboard) {
-        await scheduleBookingReminders(booking.id);
+        await scheduleBookingReminder(booking.id);
         await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CONFIRMED", deduplicationKey: `booking:${booking.id}:confirmed`, scheduledAt: now });
         await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id, startsAt: occurrenceStartsAt });
       } else {

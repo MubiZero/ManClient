@@ -11,7 +11,7 @@ import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
 import { localDateTimeToUtc } from "@/core/formatting/dushanbe-date";
-import { scheduleBookingReminders, scheduleReviewRequest, scheduleSmsCancellation, scheduleWhatsAppCancellation } from "@/core/notifications/notification-service";
+import { scheduleBookingReminder, scheduleCustomerMessage, scheduleReviewRequest } from "@/core/notifications/notification-service";
 import {
   scheduleBusinessNotification,
   scheduleUpcomingBusinessVisit,
@@ -37,7 +37,7 @@ export async function createManualBooking(input: ActorInput & z.input<typeof man
   const customer = await prisma.customer.upsert({ where: { businessId_phone: { businessId: input.businessId, phone } }, create: { businessId: input.businessId, name: value.customer.name, phone }, update: { name: value.customer.name } });
   try {
     const booking = await reserveAllocation({ branchId: value.branchId, serviceId: value.serviceId, staffId: value.staffId, customerId: customer.id, resourceIds, startsAt: value.startsAt, durationMinutes: service.durationMinutes, expiresAt: null, createdAt: now, amountDiram: service.amountDiram, status: "CONFIRMED", source: "DASHBOARD", actor: { type: "membership", id: scope.id }, confirmedAt: now, confirmedBy: `membership:${scope.id}` });
-    await scheduleBookingReminders(booking.id);
+    await scheduleBookingReminder(booking.id);
     await scheduleReviewRequest(booking.id);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CONFIRMED", deduplicationKey: `booking:${booking.id}:confirmed`, scheduledAt: now });
     await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id, startsAt: value.startsAt });
@@ -62,7 +62,7 @@ export async function confirmBusinessBooking(input: ActorInput & { bookingId: st
     return { id: booking.id, changed: true };
   });
   if (result.changed) {
-    await scheduleBookingReminders(result.id);
+    await scheduleBookingReminder(result.id);
     await scheduleReviewRequest(result.id);
   }
   return { bookingId: result.id };
@@ -118,7 +118,7 @@ export async function rescheduleBusinessBooking(input: ActorInput & { bookingId:
         await scheduleBusinessNotification({ businessId: input.businessId, bookingId: current.id, kind: "BOOKING_RESCHEDULED", deduplicationKey: `booking:${current.id}:rescheduled:${input.startsAt.toISOString()}`, scheduledAt: now }, transaction);
         await scheduleUpcomingBusinessVisit({ businessId: input.businessId, bookingId: current.id, startsAt: input.startsAt }, transaction);
       }, { isolationLevel: "Serializable" });
-      await scheduleBookingReminders(input.bookingId);
+      await scheduleBookingReminder(input.bookingId);
       return { bookingId: input.bookingId };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034" && attempt < 2) continue;
@@ -141,8 +141,7 @@ export async function cancelBusinessBooking(input: ActorInput & { bookingId: str
     await transaction.message.updateMany({ where: { bookingId: booking.id, status: "SCHEDULED" }, data: { status: "SKIPPED", lastError: "BOOKING_CANCELLED" } });
     await skipUpcomingBusinessVisit({ businessId: input.businessId, bookingId: booking.id }, transaction);
     await scheduleBusinessNotification({ businessId: input.businessId, bookingId: booking.id, kind: "BOOKING_CANCELLED", deduplicationKey: `booking:${booking.id}:cancelled`, scheduledAt: now }, transaction);
-    await scheduleWhatsAppCancellation(booking.id, transaction);
-    await scheduleSmsCancellation(booking.id, transaction);
+    await scheduleCustomerMessage({ bookingId: booking.id, kind: "BOOKING_CANCELLED", scheduledAt: now }, transaction);
     await writeAuditEvent({ businessId: input.businessId, bookingId: booking.id, type: "booking.cancelled", actorType: "membership", actorId: scope.id, metadata: { cancelledAt: now.toISOString(), reason } }, transaction);
     await notifyWaitlistForFreedSlot(
       { businessId: input.businessId, branchId: booking.branchId, serviceId: booking.serviceId, staffId: booking.staffId, freedStartsAt: booking.startsAt, freedEndsAt: booking.endsAt },

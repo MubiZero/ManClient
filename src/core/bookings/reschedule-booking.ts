@@ -6,7 +6,7 @@ import { assertCustomerMayReschedule, getCustomerBookingPolicy } from "@/core/bo
 import { getAvailableStarts } from "@/core/availability/availability-service";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
-import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
+import { scheduleCustomerMessage } from "@/core/notifications/notification-service";
 
 type RescheduleBookingInput = { bookingId: string; customerId: string; startsAt: Date };
 
@@ -80,7 +80,7 @@ export async function rescheduleBooking(input: RescheduleBookingInput, now = new
           actorId: input.customerId,
           metadata: { previousStartsAt: current.startsAt.toISOString(), startsAt: input.startsAt.toISOString() },
         }, transaction);
-        await scheduleCustomerTelegramNotification({ bookingId: current.id, kind: "BOOKING_RESCHEDULED" }, transaction);
+        await scheduleCustomerMessage({ bookingId: current.id, kind: "BOOKING_RESCHEDULED" }, transaction);
         return updated;
       }, { isolationLevel: "Serializable" });
     } catch (error) {

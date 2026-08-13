@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createPendingBooking } from "@/core/bookings/booking-service";
 import { prisma } from "@/core/database/prisma";
-import { scheduleCustomerTelegramNotification } from "@/core/notifications/customer-telegram-notification-service";
+import { scheduleCustomerMessage } from "@/core/notifications/notification-service";
 import { encryptSecret } from "@/core/security/secret-encryption";
 import { sendDueBookingReminders } from "@/jobs/send-booking-reminder";
 import { createBookingFixture } from "@/../tests/helpers/booking-fixture";
@@ -20,7 +20,7 @@ describe("customer Telegram notifications", () => {
     process.env.INTEGRATION_ENCRYPTION_KEY = key;
     await prisma.businessTelegramIntegration.create({ data: { businessId: fixture.business.id, publicId: `public-${pending.bookingId}`, botId: `bot-${pending.bookingId}`, botUsername: "customer_notice_bot", botTokenEncrypted: encryptSecret("100:tenant-token", key), status: "ACTIVE" } });
     const now = new Date("2026-08-01T04:10:00.000Z");
-    await scheduleCustomerTelegramNotification({ bookingId: pending.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now });
+    await scheduleCustomerMessage({ bookingId: pending.bookingId, kind: "PAYMENT_APPROVED", scheduledAt: now });
     const delivered: string[] = [];
 
     await sendDueBookingReminders(now, { sendTelegram: async (_token, _chatId, text) => { delivered.push(text); }, sendWhatsApp: async () => ({ externalId: "unused" }), sendSms: async () => ({ externalId: "unused", deliveryStatus: "SENT" }) });
