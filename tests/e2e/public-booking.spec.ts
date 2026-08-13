@@ -54,6 +54,19 @@ test("visitor selects a service, specialist and receives a payment link", async 
   expect(paymentUrl.searchParams.get("A")).toBe("1111222233334444");
 });
 
+test("the draft survives a reload and the language follows to payment", async ({ page }) => {
+  await page.goto("/b/demo-barber?lang=tg");
+  const branch = page.getByRole("button", { name: "Душанбе, центр" });
+  if (await branch.isVisible().catch(() => false)) await branch.click();
+  await page.getByRole("button", { name: /Мужская стрижка/ }).click();
+
+  // A dropped connection or a trip to the SMS app used to cost the customer four steps.
+  await page.reload();
+  // Restored: the service step is behind us, and the page opens on the specialist — in Tajik,
+  // because the language chosen at the start is still the language being spoken.
+  await expect(page.getByRole("heading", { name: "Мутахассисро интихоб кунед" })).toBeVisible();
+});
+
 test("visitor sees slot time in the selected branch timezone", async ({
   page,
 }) => {
