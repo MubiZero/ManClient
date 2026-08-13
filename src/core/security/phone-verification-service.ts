@@ -50,16 +50,16 @@ export class PhoneVerificationError extends Error {
  * makes the SMS make sense to them. Account recovery has no single business to name: the owner may have
  * several, and signing a login code with one salon's name would be both wrong and a phishing pattern.
  */
-async function resolveSmsLabel(businessSlug: string | null | undefined): Promise<string> {
-  if (!businessSlug) return PLATFORM_SMS_LABEL;
-  const business = await prisma.business.findUnique({ where: { slug: businessSlug }, select: { name: true } });
+async function resolveSender(businessSlug: string | null | undefined): Promise<{ id: string | null; label: string }> {
+  if (!businessSlug) return { id: null, label: PLATFORM_SMS_LABEL };
+  const business = await prisma.business.findUnique({ where: { slug: businessSlug }, select: { id: true, name: true } });
   if (!business) {
     // An unknown slug falls back to the platform rather than failing: the customer still gets their code,
     // and no SMS goes out under a name nobody verified.
     logger.warn("phone_verification.unknown_business", { businessSlug });
-    return PLATFORM_SMS_LABEL;
+    return { id: null, label: PLATFORM_SMS_LABEL };
   }
-  return business.name;
+  return { id: business.id, label: business.name };
 }
 
 export function isPhoneVerificationConfigured(): boolean {
@@ -121,11 +121,14 @@ export async function requestPhoneVerification(
 
   // Resolved from the database by slug, never taken as text from the caller: the name goes into an SMS,
   // and accepting it verbatim would let anyone send codes signed with somebody else's salon.
-  const label = await resolveSmsLabel(input.businessSlug);
+  const sender = await resolveSender(input.businessSlug);
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const verification = await prisma.phoneVerification.create({
     data: {
       phone,
+      // Stored so the code can only be spent where it was asked for. The SMS says a salon's name, and a
+      // customer who agreed to prove their number to one salon did not agree to prove it to every other.
+      businessId: sender.id,
       purpose: input.purpose,
       codeHash: codeHash(code),
       maxAttempts: MAX_ATTEMPTS,
@@ -136,7 +139,7 @@ export async function requestPhoneVerification(
   });
 
   try {
-    await dependencies.sendSms({ telephone: phone, ...buildPhoneVerificationSms(code, label) });
+    await dependencies.sendSms({ telephone: phone, ...buildPhoneVerificationSms(code, sender.label) });
   } catch (error) {
     // The row is expired rather than left PENDING: an undelivered code must not consume the user's
     // one live code and make the next request look like a resend.
@@ -145,7 +148,7 @@ export async function requestPhoneVerification(
     throw new PhoneVerificationError("SMS_FAILED");
   }
 
-  logger.info("phone_verification.sent", { phone: maskPhone(phone), purpose: input.purpose, verificationId: verification.id });
+  logger.info("phone_verification.sent", { phone: maskPhone(phone), purpose: input.purpose, verificationId: verification.id, businessId: sender.id ?? undefined });
   return { verificationId: verification.id, expiresAt: verification.expiresAt, resendAvailableInSeconds: RESEND_COOLDOWN_MS / 1000 };
 }
 

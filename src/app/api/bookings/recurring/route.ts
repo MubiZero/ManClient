@@ -20,7 +20,12 @@ export async function POST(request: Request): Promise<Response> {
 
     await assertRateLimit("booking.recurring", `ip:${clientIdentifier(request)}`);
     if (phone) await assertRateLimit("booking.recurring", `phone:${phone}`);
-    await assertPhoneVerified({ phone, verificationId, sessionPhone: await readCustomerPhone() });
+    await assertPhoneVerified({
+      phone,
+      verificationId,
+      businessSlug: typeof payload.businessSlug === "string" ? payload.businessSlug : null,
+      sessionPhone: await readCustomerPhone(),
+    });
 
     if (typeof payload.businessSlug !== "string") {
       return Response.json({ error: "INVALID_BOOKING" }, { status: 400 });

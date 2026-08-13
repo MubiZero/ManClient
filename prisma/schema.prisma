@@ -251,6 +251,7 @@ model Business {
   commissionEntries                CommissionEntry[]
   reviews                          Review[]
   promoCodes                       PromoCode[]
+  phoneVerifications               PhoneVerification[]
   createdAt                        DateTime                      @default(now())
   updatedAt                        DateTime                      @updatedAt
 }
@@ -1086,6 +1087,11 @@ enum PhoneVerificationStatus {
 model PhoneVerification {
   id          String                   @id @default(cuid())
   phone       String
+  /// The salon whose page asked for this code, and whose name went out in the SMS. Null for codes that
+  /// belong to no single business — account recovery, where the owner may have several — and for rows
+  /// written before this column existed.
+  businessId  String?
+  business    Business?                @relation(fields: [businessId], references: [id], onDelete: Cascade)
   purpose     PhoneVerificationPurpose
   codeHash    String
   status      PhoneVerificationStatus  @default(PENDING)
@@ -1100,4 +1106,6 @@ model PhoneVerification {
 
   @@index([phone, purpose, status])
   @@index([status, expiresAt])
+  /// Every code costs the platform an SMS. This is how many a given salon's page has spent.
+  @@index([businessId, createdAt])
 }

@@ -23,7 +23,12 @@ export async function POST(request: Request): Promise<Response> {
     // Also per phone: one script rotating through proxies still cannot fill a calendar under a single
     // number, and a customer who legitimately rebooks four times in ten minutes is unaffected.
     if (phone) await assertRateLimit("booking.create", `phone:${phone}`);
-    await assertPhoneVerified({ phone, verificationId, sessionPhone: await readCustomerPhone() });
+    await assertPhoneVerified({
+      phone,
+      verificationId,
+      businessSlug: typeof payload.businessSlug === "string" ? payload.businessSlug : null,
+      sessionPhone: await readCustomerPhone(),
+    });
 
     const startsAt = new Date(String(payload.startsAt));
     // "Anyone" is answered here rather than inside the booking: a booking always names a specialist,
