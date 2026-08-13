@@ -1,5 +1,5 @@
+import { matchesWebhookSecret } from "@/core/security/webhook-auth";
 import { handlePlatformTelegramUpdate } from "@/integrations/telegram/platform-update-handler";
-import { matchesWebhookSecret } from "@/integrations/telegram/webhook-auth";
 
 export async function POST(request: Request) {
   if (!matchesWebhookSecret(
