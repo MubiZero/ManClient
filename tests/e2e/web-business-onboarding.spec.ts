@@ -45,7 +45,7 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await expect(page.getByLabel("Название услуги")).toHaveValue("Мужская стрижка");
   await page.getByRole("button", { name: "Сохранить и перейти к оплате" }).click();
 
-  await page.getByLabel("Карта DushanbeCity").fill("9762000128351953");
+  await page.getByLabel("Карта DushanbeCity").fill("9762000000000000");
   await page.getByRole("button", { name: "Сохранить карту" }).click();
   await expect(page.getByRole("heading", { name: "Страница записи работает" })).toBeVisible();
   await expect(page.locator(".onboarding-progress").getByText("Запуск")).toBeVisible();

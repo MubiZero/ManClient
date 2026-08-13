@@ -60,11 +60,22 @@ export async function updateBookingPolicySettings(input: {
         freeCancellationHours: parsed.data.freeCancellationHours,
         maxCustomerReschedules: parsed.data.maxCustomerReschedules ?? null,
         cancellationPolicy: parsed.data.cancellationPolicy ?? null,
-        prepaymentMode: parsed.data.prepaymentMode,
-        // Cleared together with the mode: leaving a stale deposit amount behind would resurrect it the
-        // next time somebody switched the mode back, with a number nobody had looked at in months.
-        depositPercent: parsed.data.prepaymentMode === "DEPOSIT" ? parsed.data.depositPercent ?? null : null,
-        depositAmountDiram: parsed.data.prepaymentMode === "DEPOSIT" && parsed.data.depositSomoni ? parseSomoniToDiram(parsed.data.depositSomoni) : null,
+        // Only written when the caller said something about it. Everything else on this form is a
+        // rule about time; this one is about money, and it must not change because a field was left
+        // out of a request.
+        ...(parsed.data.prepaymentMode
+          ? {
+              prepaymentMode: parsed.data.prepaymentMode,
+              // Cleared together with the mode: leaving a stale deposit amount behind would resurrect it
+              // the next time somebody switched the mode back, with a number nobody had looked at in
+              // months.
+              depositPercent: parsed.data.prepaymentMode === "DEPOSIT" ? parsed.data.depositPercent ?? null : null,
+              depositAmountDiram:
+                parsed.data.prepaymentMode === "DEPOSIT" && parsed.data.depositSomoni
+                  ? parseSomoniToDiram(parsed.data.depositSomoni)
+                  : null,
+            }
+          : {}),
       },
       select: POLICY_SELECTION,
     });

@@ -45,7 +45,9 @@ export const notificationSettingsSchema = z.object({
  * somoni everywhere a person types it — diram exists for arithmetic, not for forms.
  */
 const prepaymentFields = {
-  prepaymentMode: z.enum(["FULL", "DEPOSIT", "NONE"]).default("FULL"),
+  // No default: an absent field means the caller is not touching the money rule, and guessing one
+  // here used to impose the harshest setting on a salon that never asked for it.
+  prepaymentMode: z.enum(["FULL", "DEPOSIT", "NONE"]).optional(),
   depositPercent: z.preprocess(
     value => value === "" || value === null ? undefined : value,
     z.coerce.number().int().min(1).max(100).optional(),
