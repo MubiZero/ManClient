@@ -29,6 +29,7 @@
   "booking.noSlotsForDate": "На эту дату свободного времени нет. Выберите другой день.",
   "booking.availableTimesAriaLabel": "Свободное время",
   "booking.dateLabel": "Дата записи",
+  "booking.daysAriaLabel": "Ближайшие дни",
   "booking.nameLabel": "Имя",
   "booking.phoneLabel": "Телефон",
   "booking.holdNotice": "После записи слот будет удерживаться 15 минут для оплаты. Деньги поступят напрямую бизнесу.",

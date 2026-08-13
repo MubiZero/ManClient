@@ -29,6 +29,7 @@
   "booking.noSlotsForDate": "Барои ин сана вақти холӣ нест. Рӯзи дигарро интихоб кунед.",
   "booking.availableTimesAriaLabel": "Вақти холӣ",
   "booking.dateLabel": "Санаи сабт",
+  "booking.daysAriaLabel": "Рӯзҳои наздик",
   "booking.nameLabel": "Ном",
   "booking.phoneLabel": "Телефон",
   "booking.holdNotice": "Пас аз сабт слот 15 дақиқа барои пардохт нигоҳ дошта мешавад. Пул мустақим ба бизнес мерасад.",
