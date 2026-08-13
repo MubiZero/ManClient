@@ -252,6 +252,7 @@ model Business {
   reviews                          Review[]
   promoCodes                       PromoCode[]
   phoneVerifications               PhoneVerification[]
+  smsCharges                       SmsCharge[]
   createdAt                        DateTime                      @default(now())
   updatedAt                        DateTime                      @updatedAt
 }
@@ -1084,6 +1085,30 @@ enum PhoneVerificationStatus {
  * The code itself is never stored — only a hash — because this table is inside the same database an
  * SQL injection or a leaked dump would expose, and a plaintext code is a live session.
  */
+/// One line per SMS the platform paid payom for. It exists because neither table that knows about an SMS
+/// can answer what a month cost: `Message` holds one row however many attempts reached the gateway, and
+/// a `PhoneVerification` is deleted a day after its code dies, since keeping the hash of a code nobody
+/// will present again is pure liability. This row carries no phone and no code — only who it was for and
+/// when — so it can be kept as long as the accounting needs it.
+model SmsCharge {
+  id         String          @id @default(cuid())
+  /// Null when no single business owns the send: account recovery, where the owner may have several.
+  businessId String?
+  purpose    SmsChargePurpose
+  sentAt     DateTime        @default(now())
+  business   Business?       @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, sentAt])
+  @@index([sentAt])
+}
+
+enum SmsChargePurpose {
+  /// A message to a customer that came down the channel ladder as far as SMS.
+  NOTIFICATION
+  /// A one-time code, whether for booking or for account recovery.
+  VERIFICATION
+}
+
 model PhoneVerification {
   id          String                   @id @default(cuid())
   phone       String

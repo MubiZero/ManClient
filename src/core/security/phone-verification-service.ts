@@ -3,6 +3,7 @@ import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import type { PhoneVerificationPurpose, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/core/database/prisma";
 import { logger, maskPhone } from "@/core/observability/logger";
+import { recordSmsCharge } from "@/core/observability/sms-ledger";
 import { assertRateLimit } from "@/core/security/rate-limit";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
 import { sendSms } from "@/integrations/payom/payom-client";
@@ -147,6 +148,7 @@ export async function requestPhoneVerification(
     logger.warn("phone_verification.sms_failed", { phone: maskPhone(phone), purpose: input.purpose, error: error instanceof Error ? error.message : String(error) });
     throw new PhoneVerificationError("SMS_FAILED");
   }
+  await recordSmsCharge({ businessId: sender.id, purpose: "VERIFICATION" }, now);
 
   logger.info("phone_verification.sent", { phone: maskPhone(phone), purpose: input.purpose, verificationId: verification.id, businessId: sender.id ?? undefined });
   return { verificationId: verification.id, expiresAt: verification.expiresAt, resendAvailableInSeconds: RESEND_COOLDOWN_MS / 1000 };

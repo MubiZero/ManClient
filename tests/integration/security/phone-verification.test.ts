@@ -260,6 +260,21 @@ describe("phone verification", () => {
     await expect(assertPhoneVerified({ phone, verificationId: requested.verificationId, businessSlug: business.slug }, now)).resolves.toBeUndefined();
   });
 
+  it("books every code it sends against the salon, and books nothing when the send fails", async () => {
+    const business = await prisma.business.create({ data: { name: "Салон Ганч", slug: `ganch-${randomUUID()}` } });
+    businessIds.push(business.id);
+    const sentAt = new Date("2026-08-04T10:00:00.000Z");
+
+    await requestPhoneVerification({ phone: uniquePhone(), purpose: "BOOKING", businessSlug: business.slug }, sentAt, { sendSms });
+    await expect(prisma.smsCharge.count({ where: { businessId: business.id, purpose: "VERIFICATION" } })).resolves.toBe(1);
+
+    // An SMS the gateway refused was never paid for, and must not appear in what a salon is billed.
+    const failing = { sendSms: async () => { throw new Error("gateway unreachable"); } };
+    await expect(requestPhoneVerification({ phone: uniquePhone(), purpose: "BOOKING", businessSlug: business.slug }, sentAt, failing))
+      .rejects.toMatchObject({ code: "SMS_FAILED" });
+    await expect(prisma.smsCharge.count({ where: { businessId: business.id, purpose: "VERIFICATION" } })).resolves.toBe(1);
+  });
+
   it("never turns a failed spend into an error for the caller", async () => {
     // The booking already exists by the time this runs; a stale id must not surface as a 500.
     await expect(spendPhoneVerification({ phone: uniquePhone(), verificationId: "missing-id" })).resolves.toBeUndefined();
