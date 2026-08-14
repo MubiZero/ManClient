@@ -48,20 +48,26 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
       subscriptionPlan: true,
       subscriptionStatus: true,
       subscriptionEndsAt: true,
+      // The same conditions availability and booking enforce, applied to what the customer is offered
+      // in the first place. A service is a draft until it is published — `isPublished` starts false —
+      // and an archived one is history, so both used to appear in the picker and then refuse to yield
+      // a single free time, which reads to the customer as a salon with no room left.
       branches: {
+        where: { archivedAt: null },
         orderBy: { name: "asc" },
         select: {
           id: true,
           name: true,
           timeZone: true,
           services: {
+            where: { archivedAt: null, isPublished: true },
             orderBy: { name: "asc" },
             select: {
               id: true,
               name: true,
               durationMinutes: true,
               amountDiram: true,
-              staffMembers: { orderBy: { displayName: "asc" }, select: { id: true, displayName: true } },
+              staffMembers: { where: { archivedAt: null }, orderBy: { displayName: "asc" }, select: { id: true, displayName: true } },
               resources: { select: { resourceId: true } },
             },
           },
@@ -88,6 +94,10 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
   // the session already proves the number, no second SMS on the way to the same booking.
   const signedInPhone = await readCustomerPhone();
   const signedInCustomer = signedInPhone ? { phone: signedInPhone, name: await findCustomerName(signedInPhone) } : null;
+
+  // A branch with nothing published is not a choice. Offering it puts the customer on a service step
+  // with an empty list and no way to tell whether the floor is closed or the page is broken.
+  const bookableBranches = business.branches.filter(({ services }) => services.length > 0);
 
   return (
     <main className="min-h-screen bg-secondary/30" style={brandStyle}>
@@ -138,7 +148,7 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
             title={t(locale, "booking.suspendedTitle")}
             description={t(locale, "booking.suspendedDescription")}
           />
-        ) : business.branches.length === 0 || business.branches.every(({ services }) => services.length === 0) ? (
+        ) : bookableBranches.length === 0 ? (
           <EmptyState
             title={t(locale, "booking.comingSoonTitle")}
             description={t(locale, "booking.comingSoonDescription")}
@@ -147,7 +157,7 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
           <>
             <BookingForm
               businessSlug={business.slug}
-              branches={business.branches}
+              branches={bookableBranches}
               locale={locale}
               canRepeat={businessHasFeature(business, "RECURRING_BOOKINGS")}
               canUsePromoCodes={businessHasFeature(business, "PROMO_CODES")}
