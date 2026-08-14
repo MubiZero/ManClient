@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// The panel refreshes the page itself once a receipt settles the invoice, so rendering it outside a
+// router is what the app never does — the same stub the booking components use.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined, refresh: () => undefined }) }));
 
 import { GraceBanner } from "@/features/dashboard/subscription/grace-banner";
 import { InvoicePaymentPanel } from "@/features/dashboard/subscription/invoice-payment-panel";
