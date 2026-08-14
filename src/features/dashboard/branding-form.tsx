@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
@@ -26,12 +26,23 @@ export function BrandingForm({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  // A blob URL lives until it is revoked or the document goes away, so every logo the owner tried on
+  // stayed in memory with its image decoded. The ref holds the one currently on screen — state would
+  // be a render behind, and the URL to release is the previous one.
+  const previewUrlRef = useRef<string | null>(null);
+  useEffect(() => () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); }, []);
+
   const displaySrc = preview ?? (hasLogo ? `/api/public/businesses/${businessSlug}/logo?v=${logoVersion}` : null);
 
-  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const next = event.target.files?.[0] ?? null;
+  function replacePreview(next: File | null) {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = next ? URL.createObjectURL(next) : null;
     setFile(next);
-    setPreview(next ? URL.createObjectURL(next) : null);
+    setPreview(previewUrlRef.current);
+  }
+
+  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
+    replacePreview(event.target.files?.[0] ?? null);
   }
 
   async function save() {
@@ -47,8 +58,7 @@ export function BrandingForm({
       if (!response.ok) throw new Error(result.error);
       setHasLogo(Boolean(result.hasLogo));
       setLogoVersion(Date.now());
-      setFile(null);
-      setPreview(null);
+      replacePreview(null);
       setNotice("Брендинг сохранён");
     } catch (caught) {
       setError(errorMessage(caught));
