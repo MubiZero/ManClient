@@ -173,16 +173,25 @@ async function bindPaymentDeepLink(
     const action = verifyBookingActionToken(token, dependencies.now(), "link_payment");
     const payment = await prisma.payment.findFirst({
       where: { id: action.paymentId, businessId, booking: { status: "PENDING_PAYMENT" } },
-      include: { booking: true },
+      include: { booking: { include: { customer: { select: { telegramLocale: true } } } } },
     });
     if (!payment) throw new Error("Payment is unavailable");
+    // Following a payment link is not a language choice. Only a locale the customer picked in this chat
+    // may be written back; otherwise the stored one — their earlier choice, or the column default —
+    // decides how the payment screen reads and stays exactly as it is.
+    const session = await getActiveConversationSession(businessId, conversationId);
+    const chosenLocale = session.data.locale;
+    const locale: ConversationLocale = chosenLocale ?? (payment.booking.customer.telegramLocale === "tg" ? "tg" : "ru");
     await prisma.$transaction([
-      prisma.customer.update({ where: { id: payment.booking.customerId }, data: { telegramChatId: chatId, telegramLocale: "ru" } }),
+      prisma.customer.update({
+        where: { id: payment.booking.customerId },
+        data: { telegramChatId: chatId, ...(chosenLocale ? { telegramLocale: chosenLocale } : {}) },
+      }),
       prisma.conversationSession.updateMany({
         where: { conversationId, active: true },
         data: {
           state: "AWAITING_PAYMENT",
-          data: { locale: "ru", bookingId: payment.bookingId, paymentId: payment.id },
+          data: { locale, bookingId: payment.bookingId, paymentId: payment.id },
           expiresAt: sessionExpiry(dependencies.now()),
           version: { increment: 1 },
         },
