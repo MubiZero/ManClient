@@ -16,7 +16,7 @@ describe("BranchForm", () => {
   });
 
   it("renders edit values and an inline error", () => {
-    const html = renderToStaticMarkup(<BranchForm action={action} branch={{ id: "branch-1", name: "Центр", address: "Рудаки, 42", phone: "+992900001122", timeZone: "Asia/Dushanbe" }} error="Проверьте номер телефона." />);
+    const html = renderToStaticMarkup(<BranchForm action={action} branch={{ id: "branch-1", name: "Центр", address: "Рудаки, 42", phone: "+992900001122", timeZone: "Asia/Dushanbe", recipientCardLast4: "4321" }} error="Проверьте номер телефона." />);
     expect(html).toContain('value="Центр"');
     expect(html).toContain('role="alert"');
     expect(html).toContain("Сохранить филиал");

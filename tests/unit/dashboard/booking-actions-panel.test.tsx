@@ -9,6 +9,7 @@ describe("BookingActionsPanel", () => {
     render(
       <BookingActionsPanel
         canConfirm
+        canMarkNoShow
         branchId="branch-1"
         serviceId="service-1"
         staffId="staff-1"
@@ -17,6 +18,7 @@ describe("BookingActionsPanel", () => {
         confirmAction={() => undefined}
         rescheduleAction={() => undefined}
         cancelAction={() => undefined}
+        noShowAction={() => undefined}
       />,
     );
 
