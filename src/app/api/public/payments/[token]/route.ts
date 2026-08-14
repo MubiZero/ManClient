@@ -1,6 +1,6 @@
 import { verifyBookingActionToken } from "@/core/bookings/booking-action-token";
 import { extendPaymentHold } from "@/core/bookings/hold-extension";
-import { getPublicPayment } from "@/core/payments/receipt-submission-service";
+import { getPublicPaymentView } from "@/features/public-payment/public-payment-view";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
@@ -8,7 +8,7 @@ export async function GET(_: Request, context: RouteContext) {
   try {
     const { token } = await context.params;
     const action = verifyBookingActionToken(token, new Date(), "view_payment");
-    const payment = await getPublicPayment(action.paymentId);
+    const payment = await getPublicPaymentView(action.paymentId);
     if (!payment) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
     return Response.json(payment, { headers: { "cache-control": "no-store" } });
   } catch {
@@ -26,7 +26,7 @@ export async function POST(_: Request, context: RouteContext) {
     const { token } = await context.params;
     const action = verifyBookingActionToken(token, new Date(), "view_payment");
     await extendPaymentHold(action.paymentId);
-    const payment = await getPublicPayment(action.paymentId);
+    const payment = await getPublicPaymentView(action.paymentId);
     if (!payment) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
     return Response.json(payment, { headers: { "cache-control": "no-store" } });
   } catch {
