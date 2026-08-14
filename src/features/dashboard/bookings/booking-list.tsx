@@ -72,8 +72,12 @@ export function BookingList({ items, filtered }: { items: BookingItem[]; filtere
                 </div>
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {booking.service.name} · {booking.staff.displayName} · {booking.branch.name}
-                {booking.resources?.length ? ` · ${booking.resources.map((item) => item.resource.name).join(", ")}` : ""}
+                {/* Above the row overlay for the same reason the phone is: it is a line somebody copies
+                    into a message. The empty space beside it still opens the visit. */}
+                <span className="relative z-10 w-fit cursor-text">
+                  {booking.service.name} · {booking.staff.displayName} · {booking.branch.name}
+                  {booking.resources?.length ? ` · ${booking.resources.map((item) => item.resource.name).join(", ")}` : ""}
+                </span>
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-1">

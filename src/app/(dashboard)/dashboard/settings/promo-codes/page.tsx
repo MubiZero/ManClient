@@ -6,6 +6,7 @@ import { SettingsError } from "@/core/business-settings/settings-error";
 import { formatSomoni } from "@/core/formatting/money";
 import { businessHasFeature, PLAN_LABELS } from "@/core/platform/subscription-plans";
 import { createPromoCode, deactivatePromoCode, listPromoCodes } from "@/core/promotions/promo-code-service";
+import { errorSearchParams, fieldErrorMap } from "@/features/dashboard/form-error";
 import { Badge } from "@/features/ui-kit/badge";
 import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui-kit/card";
@@ -15,7 +16,7 @@ import { PageHeader } from "@/features/ui-kit/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 import { ToastEmitter } from "@/features/ui-kit/toast-emitter";
 
-type PageProps = { searchParams: Promise<{ notice?: string; error?: string }> };
+type PageProps = { searchParams: Promise<{ notice?: string; error?: string; field?: string }> };
 
 export default async function PromoCodesPage({ searchParams }: PageProps) {
   const membership = await requireBusinessAdmin();
@@ -38,6 +39,9 @@ export default async function PromoCodesPage({ searchParams }: PageProps) {
 
   const query = await searchParams;
   const promoCodes = await listPromoCodes(membership.businessId);
+  const formError = errorMessage(query.error);
+  // The schema names the code or the discount size; anything else stays above the form.
+  const fieldErrors = fieldErrorMap(query.field, formError);
 
   async function create(formData: FormData) {
     "use server";
@@ -56,7 +60,7 @@ export default async function PromoCodesPage({ searchParams }: PageProps) {
       });
     } catch (error) {
       const code = error instanceof SettingsError ? (error.details?.reason ?? error.code) : "INVALID_INPUT";
-      redirect(`/dashboard/settings/promo-codes?error=${String(code)}`);
+      redirect(`/dashboard/settings/promo-codes?${errorSearchParams(String(code), error)}`);
     }
     redirect("/dashboard/settings/promo-codes?notice=created");
   }
@@ -70,7 +74,7 @@ export default async function PromoCodesPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <ToastEmitter notice={noticeMessage(query.notice)} error={errorMessage(query.error)} />
+      <ToastEmitter notice={noticeMessage(query.notice)} error={fieldErrors ? undefined : formError} />
       <PageHeader eyebrow="Настройки" title="Промокоды" description="Скидки для клиентов при онлайн-записи." />
 
       <Card>
@@ -79,22 +83,22 @@ export default async function PromoCodesPage({ searchParams }: PageProps) {
         </CardHeader>
         <CardContent>
           <form action={create} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <Field label="Код" htmlFor="code">
+            <Field label="Код" htmlFor="code" error={fieldErrors?.code}>
               <Input id="code" name="code" placeholder="LETO2026" required minLength={3} maxLength={32} />
             </Field>
-            <Field label="Тип скидки" htmlFor="discountType">
+            <Field label="Тип скидки" htmlFor="discountType" error={fieldErrors?.discountType}>
               <Select id="discountType" name="discountType" defaultValue="PERCENT">
                 <option value="PERCENT">Процент</option>
                 <option value="FIXED">Фиксированная (дирам)</option>
               </Select>
             </Field>
-            <Field label="Размер" htmlFor="discountValue">
+            <Field label="Размер" htmlFor="discountValue" error={fieldErrors?.discountValue}>
               <Input id="discountValue" name="discountValue" type="number" min={1} required />
             </Field>
-            <Field label="Лимит применений" htmlFor="maxRedemptions" hint="Пусто — без лимита">
+            <Field label="Лимит применений" htmlFor="maxRedemptions" error={fieldErrors?.maxRedemptions} hint="Пусто — без лимита">
               <Input id="maxRedemptions" name="maxRedemptions" type="number" min={1} placeholder="Без лимита" />
             </Field>
-            <Field label="Действует до" htmlFor="expiresAt">
+            <Field label="Действует до" htmlFor="expiresAt" error={fieldErrors?.expiresAt}>
               <Input id="expiresAt" name="expiresAt" type="date" />
             </Field>
             <div className="flex items-end">

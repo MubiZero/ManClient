@@ -5,9 +5,9 @@ import { useState } from "react";
 
 import { DEFAULT_TIME_ZONE } from "@/core/formatting/dushanbe-date";
 import { formatSomoni } from "@/core/formatting/money";
-import { pluralRu } from "@/core/formatting/plural";
 import { formatTimeAgo } from "@/core/formatting/relative-time";
 import { attentionReasonLabel } from "@/features/receipt-review/attention-reason";
+import { receiptCount } from "@/features/receipt-review/receipt-count";
 import { ReceiptDecisionDialog } from "@/features/receipt-review/receipt-decision-dialog";
 import { Badge } from "@/features/ui-kit/badge";
 import { Checkbox } from "@/features/ui-kit/checkbox";
@@ -60,7 +60,7 @@ export function AttentionPaymentsQueue({
   const selectedPaymentIds = selected.map((payment) => payment.id);
   const selectedTotalDiram = selected.reduce((total, payment) => total + payment.amountDiram, 0);
   const allSelected = selected.length === payments.length && payments.length > 0;
-  const countLabel = `${selected.length} ${pluralRu(selected.length, { one: "чек", few: "чека", many: "чеков" })}`;
+  const countLabel = receiptCount(selected.length);
   const bulkSummary = [
     { label: "Чеков", value: String(selected.length) },
     { label: "Общая сумма", value: formatSomoni(selectedTotalDiram) },
@@ -69,7 +69,7 @@ export function AttentionPaymentsQueue({
   const bulkDetails = [
     ...selected.slice(0, NAMED_IN_BULK).map((payment) => `${payment.business.name} — ${payment.booking.customer.name}, ${formatSomoni(payment.amountDiram)}`),
     ...(selected.length > NAMED_IN_BULK
-      ? [`и ещё ${selected.length - NAMED_IN_BULK} ${pluralRu(selected.length - NAMED_IN_BULK, { one: "чек", few: "чека", many: "чеков" })}`]
+      ? [`и ещё ${receiptCount(selected.length - NAMED_IN_BULK)}`]
       : []),
   ];
 

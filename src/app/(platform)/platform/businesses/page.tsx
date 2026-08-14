@@ -4,7 +4,7 @@ import Link from "next/link";
 import { listBusinesses } from "@/core/platform/business-directory";
 import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { Badge } from "@/features/ui-kit/badge";
-import { Button } from "@/features/ui-kit/button";
+import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { Input } from "@/features/ui-kit/field";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
@@ -20,11 +20,9 @@ export default async function PlatformBusinessesPage({ searchParams }: { searchP
       <PageHeader
         eyebrow="Платформа"
         title="Бизнесы"
-        description={trail.length ? `Страница ${trail.length + 1}` : `Показаны первые ${businesses.length}`}
+        description={trail.length ? `Страница ${trail.length + 1}` : businesses.length ? `Показаны первые ${businesses.length}` : "Все бизнесы платформы"}
         action={
-          <Link href="/platform/businesses/new">
-            <Button type="button">Создать бизнес</Button>
-          </Link>
+          <ButtonLink href="/platform/businesses/new">Создать бизнес</ButtonLink>
         }
       />
 
@@ -36,7 +34,11 @@ export default async function PlatformBusinessesPage({ searchParams }: { searchP
       </form>
 
       {businesses.length === 0 ? (
-        <EmptyState title="Бизнесы не найдены" description="Измените запрос поиска." />
+        <EmptyState
+          title={q ? "Бизнесы не найдены" : "Бизнесов пока нет"}
+          description={q ? "Попробуйте изменить запрос поиска." : "Здесь появятся компании, как только они зарегистрируются."}
+          action={q ? <ButtonLink href="/platform/businesses" variant="secondary" size="sm">Сбросить поиск</ButtonLink> : undefined}
+        />
       ) : (
         <Table>
           <TableHeader>

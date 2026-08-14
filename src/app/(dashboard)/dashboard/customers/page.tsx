@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { listCustomers } from "@/core/dashboard/customer-directory";
 import { formatSomoni } from "@/core/formatting/money";
+import { Button } from "@/features/ui-kit/button";
 import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { Badge } from "@/features/ui-kit/badge";
 import { EmptyState } from "@/features/ui-kit/empty-state";
@@ -31,9 +32,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
           Поиск
         </label>
         <Input id="customer-search" name="search" defaultValue={search ?? ""} placeholder="Имя или телефон" className="w-64" />
-        <button type="submit" className="rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary">
-          Найти
-        </button>
+        <Button type="submit" variant="secondary">Найти</Button>
         {search ? (
           <Link href="/dashboard/customers" className="text-sm font-medium text-muted-foreground hover:text-foreground">
             Сбросить

@@ -2,8 +2,8 @@ import { ExternalLink, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 
 import { formatSomoni } from "@/core/formatting/money";
-import { pluralRu } from "@/core/formatting/plural";
 import { formatTimeAgo } from "@/core/formatting/relative-time";
+import { receiptCount } from "@/features/receipt-review/receipt-count";
 import { attentionReasonLabel } from "@/features/receipt-review/attention-reason";
 import { ReceiptComparison } from "@/features/receipt-review/receipt-comparison";
 import { ReceiptDecisionDialog } from "@/features/receipt-review/receipt-decision-dialog";
@@ -54,7 +54,7 @@ export function PaymentReviewQueue({
       <Card aria-label="Чеки, ожидающие проверки">
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>
-            {payments.length} {reviewCountLabel(payments.length)}
+            {receiptCount(payments.length)}
           </CardTitle>
           <span className="text-xs text-muted-foreground">Сначала давние</span>
         </CardHeader>
@@ -229,6 +229,4 @@ function cardSuffix(value: string | null) {
 function formatDateTime(value: Date, timeZone: string) {
   return new Intl.DateTimeFormat("ru-TJ", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(value);
 }
-function reviewCountLabel(value: number) {
-  return pluralRu(value, { one: "чек", few: "чека", many: "чеков" });
-}
+
