@@ -62,7 +62,11 @@ export function BookingList({ items, filtered }: { items: BookingItem[]; filtere
                 </Link>
               </TableCell>
               <TableCell>
-                <div className="flex flex-col">
+                {/* The row-wide link is an overlay, and an overlay eats the drag that selects text under it.
+                    A phone number exists to be copied out — into a dialer, into a messenger — so the contact
+                    block sits above the overlay and keeps a text caret; the rest of the row stays clickable.
+                    `w-fit` keeps the raised area on the text itself instead of the empty end of the cell. */}
+                <div className="relative z-10 flex w-fit cursor-text flex-col">
                   <strong className="text-foreground">{booking.customer.name}</strong>
                   <span className="text-xs text-muted-foreground">{booking.customer.phone}</span>
                 </div>
