@@ -18,30 +18,38 @@ type DecisionNote = {
 
 /**
  * A receipt decision is money and a confirmed booking, and neither can be taken back — so it is asked
- * twice, the way the Telegram bot already asks before the same approval. The summary repeats whose
- * receipt is being decided: in a queue of look-alike rows, the misclick is on the neighbour.
+ * twice, the way the Telegram bot already asks before the same approval. The summary repeats what is
+ * being decided: in a queue of look-alike rows, the misclick is on the neighbour, and for a decision
+ * over several receipts at once the reader needs its size — how many, for how much, and whose.
  */
 export function ReceiptDecisionDialog({
   action,
   idField,
-  idValue,
+  idValues,
   triggerLabel,
+  triggerSize,
+  disabled,
   variant,
   title,
   description,
   summary,
+  details,
   note,
   confirmLabel,
   pendingLabel,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   idField: string;
-  idValue: string;
+  idValues: string[];
   triggerLabel: string;
+  triggerSize?: "sm" | "md";
+  disabled?: boolean;
   variant: "primary" | "destructive";
   title: string;
   description: string;
   summary: DecisionSummaryItem[];
+  /** Who the decision touches, already trimmed by the caller to a readable head plus "и ещё N". */
+  details?: string[];
   note?: DecisionNote;
   confirmLabel: string;
   pendingLabel: string;
@@ -50,7 +58,7 @@ export function ReceiptDecisionDialog({
 
   return (
     <>
-      <Button type="button" variant={variant} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+      <Button type="button" size={triggerSize} variant={variant} disabled={disabled} aria-haspopup="dialog" onClick={() => setOpen(true)}>
         {triggerLabel}
       </Button>
 
@@ -61,7 +69,9 @@ export function ReceiptDecisionDialog({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <form action={action} className="flex flex-col gap-4">
-            <input type="hidden" name={idField} value={idValue} />
+            {idValues.map((value) => (
+              <input key={value} type="hidden" name={idField} value={value} />
+            ))}
             <dl className="flex flex-col gap-1 rounded-md bg-secondary px-3 py-2 text-sm">
               {summary.map((item) => (
                 <div key={item.label} className="flex flex-wrap items-baseline justify-between gap-x-4">
@@ -70,6 +80,13 @@ export function ReceiptDecisionDialog({
                 </div>
               ))}
             </dl>
+            {details?.length ? (
+              <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto text-sm text-muted-foreground">
+                {details.map((line, index) => (
+                  <li key={index}>{line}</li>
+                ))}
+              </ul>
+            ) : null}
             {note ? (
               <Field label={note.label} hint={note.hint}>
                 <Textarea

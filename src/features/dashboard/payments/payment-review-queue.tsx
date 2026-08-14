@@ -2,7 +2,9 @@ import { ExternalLink, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 
 import { formatSomoni } from "@/core/formatting/money";
+import { pluralRu } from "@/core/formatting/plural";
 import { formatTimeAgo } from "@/core/formatting/relative-time";
+import { attentionReasonLabel } from "@/features/receipt-review/attention-reason";
 import { ReceiptComparison } from "@/features/receipt-review/receipt-comparison";
 import { ReceiptDecisionDialog } from "@/features/receipt-review/receipt-decision-dialog";
 import { ReceiptLightbox } from "@/features/receipt-review/receipt-lightbox";
@@ -183,7 +185,7 @@ function PaymentReviewCard({ payment, approveAction, rejectAction }: { payment: 
           <ReceiptDecisionDialog
             action={approveAction}
             idField="paymentId"
-            idValue={payment.id}
+            idValues={[payment.id]}
             variant="primary"
             triggerLabel="Подтвердить оплату"
             title="Подтвердить оплату?"
@@ -200,7 +202,7 @@ function PaymentReviewCard({ payment, approveAction, rejectAction }: { payment: 
           <ReceiptDecisionDialog
             action={rejectAction}
             idField="paymentId"
-            idValue={payment.id}
+            idValues={[payment.id]}
             variant="destructive"
             triggerLabel="Отклонить чек"
             title="Отклонить чек?"
@@ -221,10 +223,6 @@ function PaymentReviewCard({ payment, approveAction, rejectAction }: { payment: 
   );
 }
 
-function attentionReasonLabel(reason: string | null) {
-  return ({ AMOUNT_MISMATCH: "Сумма не совпадает", RECIPIENT_MISMATCH: "Карта не совпадает", OPERATION_TIME_MISMATCH: "Время операции не совпадает", RECEIPT_NOT_SUCCESSFUL: "Оплата неуспешна", BOOKING_NOT_PENDING: "Статус записи изменился", OCR_FAILED: "Чек не распознан", OCR_UNRELIABLE: "Чек не распознан", RECEIPT_MISMATCH: "Данные не совпадают" } as Record<string, string>)[reason ?? ""] ?? "Нужна проверка";
-}
-
 function cardSuffix(value: string | null) {
   return value ? `•••• ${value}` : "Не распознана";
 }
@@ -232,7 +230,5 @@ function formatDateTime(value: Date, timeZone: string) {
   return new Intl.DateTimeFormat("ru-TJ", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(value);
 }
 function reviewCountLabel(value: number) {
-  const mod10 = value % 10;
-  const mod100 = value % 100;
-  return mod10 === 1 && mod100 !== 11 ? "чек" : mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14) ? "чека" : "чеков";
+  return pluralRu(value, { one: "чек", few: "чека", many: "чеков" });
 }

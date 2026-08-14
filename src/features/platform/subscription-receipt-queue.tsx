@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DEFAULT_TIME_ZONE } from "@/core/formatting/dushanbe-date";
 import { formatSomoni } from "@/core/formatting/money";
+import { pluralRu } from "@/core/formatting/plural";
 import { formatTimeAgo } from "@/core/formatting/relative-time";
 import { PERIOD_LABELS, PLAN_LABELS } from "@/core/platform/plan-labels";
 import type { BillingPeriod, SubscriptionPlan } from "@/generated/prisma/client";
@@ -131,7 +132,7 @@ function SubscriptionReceiptCard({
             <ReceiptDecisionDialog
               action={approveAction}
               idField="receiptId"
-              idValue={receipt.id}
+              idValues={[receipt.id]}
               variant="primary"
               triggerLabel="Подтвердить оплату"
               title="Подтвердить оплату и продлить подписку?"
@@ -143,7 +144,7 @@ function SubscriptionReceiptCard({
             <ReceiptDecisionDialog
               action={rejectAction}
               idField="receiptId"
-              idValue={receipt.id}
+              idValues={[receipt.id]}
               variant="destructive"
               triggerLabel="Отклонить чек"
               title="Отклонить чек?"
@@ -188,7 +189,5 @@ function formatDateTime(value: Date) {
 }
 
 function receiptCountLabel(value: number) {
-  const mod10 = value % 10;
-  const mod100 = value % 100;
-  return mod10 === 1 && mod100 !== 11 ? "чек" : mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14) ? "чека" : "чеков";
+  return pluralRu(value, { one: "чек", few: "чека", many: "чеков" });
 }
