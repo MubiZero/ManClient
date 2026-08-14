@@ -25,9 +25,10 @@ describe("business bot renderer", () => {
     const staff = mainMenuView({ role: "STAFF" });
 
     expect(buttons(owner).flat().map((button) => button.text)).toEqual([
-      "Сегодня", "Записи", "Проверить чеки", "Настройки",
+      "Сегодня", "Записи", "Проверить чеки", "Язык",
     ]);
-    expect(buttons(staff).flat().map((button) => button.text)).toEqual(["Сегодня", "Записи"]);
+    // Staff read the bot in Tajik too, so the language switch is on their keyboard as well.
+    expect(buttons(staff).flat().map((button) => button.text)).toEqual(["Сегодня", "Записи", "Язык"]);
     expectNoMoreThanTwoButtonsPerRow(owner);
     expectNoMoreThanTwoButtonsPerRow(staff);
   });
@@ -38,9 +39,9 @@ describe("business bot renderer", () => {
 
     expect(owner.text).toBe("Менюи асосӣ");
     expect(buttons(owner).flat().map((button) => button.text)).toEqual([
-      "Имрӯз", "Сабтҳо", "Санҷиши чек", "Танзимот",
+      "Имрӯз", "Сабтҳо", "Санҷиши чек", "Забон",
     ]);
-    expect(buttons(staff).flat().map((button) => button.text)).toEqual(["Имрӯз", "Сабтҳо"]);
+    expect(buttons(staff).flat().map((button) => button.text)).toEqual(["Имрӯз", "Сабтҳо", "Забон"]);
     expectNoMoreThanTwoButtonsPerRow(owner);
     expectNoMoreThanTwoButtonsPerRow(staff);
   });

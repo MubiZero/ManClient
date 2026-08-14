@@ -44,7 +44,8 @@ describe("platform business bot handler", () => {
     await handleBusinessBotUpdate(fixture.actor, callbackUpdate("pending", pendingAction!), dependencies);
     expect(output[0]).toMatchObject({ kind: "answer", callbackId: "pending" });
     expect(output.at(-1)?.text).toContain("Мухаммад");
-    const bookingAction = findCallback(output.at(-1), "Открыть");
+    // Every row used to open under an identical «Открыть»; the button now names whose visit it is.
+    const bookingAction = findCallback(output.at(-1), "Мухаммад");
 
     output.length = 0;
     await handleBusinessBotUpdate(fixture.actor, callbackUpdate("booking", bookingAction!), dependencies);

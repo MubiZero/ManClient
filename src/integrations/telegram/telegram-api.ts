@@ -170,8 +170,9 @@ export function createTelegramApi(token: string, fetcher: typeof fetch = fetch) 
       return multipartMessageRef(chatId, "sendPhoto", form);
     },
 
-    async setMyCommands(commands: TelegramBotCommand[]): Promise<void> {
-      await call("setMyCommands", { commands });
+    /** Without `languageCode` Telegram stores the set as the fallback shown to every other language. */
+    async setMyCommands(commands: TelegramBotCommand[], languageCode?: string): Promise<void> {
+      await call("setMyCommands", languageCode ? { commands, language_code: languageCode } : { commands });
     },
 
     async getFile(fileId: string): Promise<{ filePath: string }> {

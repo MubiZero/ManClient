@@ -39,6 +39,7 @@ import {
   currentStatePaymentNotice,
   customerBotStatusLabel,
   mainMenuSummaryText,
+  openBookingButtonText,
   openPaymentButtonText,
   paymentRejectedNoticeText,
   paymentsQueueListText,
@@ -133,6 +134,7 @@ export async function handleBusinessBotUpdate(
       await showCustomerLink(actor, dependencies);
       return;
     case "/language":
+    case botMessage(locale, "keyboardLanguage"):
       await showLanguagePicker(actor, dependencies);
       return;
     case "/help":
@@ -141,7 +143,9 @@ export async function handleBusinessBotUpdate(
       await showHelp(actor, dependencies);
       return;
     default:
-      await showHelp(actor, dependencies);
+      // A manager typing a customer's name expects a search; silently answering with help reads as the
+      // bot ignoring them, so say the text was not understood and put the menu back in reach.
+      await showMainMenu(actor, dependencies, undefined, botMessage(locale, "unknownCommandText"));
   }
 }
 
@@ -345,23 +349,21 @@ async function showMainMenu(
   actor: BusinessBotPlatformActor,
   dependencies: BusinessBotHandlerDependencies,
   message?: NonNullable<BusinessBotUpdate["callback_query"]>["message"],
+  notice?: string,
 ) {
   const locale = resolveBotLocale(actor);
   const summary = await getBusinessBotSummary(actor, dependencies.now());
   const base = mainMenuView({ role: actor.role, locale });
-  const keyboard = base.replyMarkup && "keyboard" in base.replyMarkup
-    ? base.replyMarkup.keyboard
-      .map(row => row.filter(button => button.text !== botMessage(locale, "keyboardSettings")))
-      .filter(row => row.length > 0)
-    : [];
+  const keyboard = base.replyMarkup && "keyboard" in base.replyMarkup ? base.replyMarkup.keyboard : [];
   const customerBotLabel = customerBotStatusLabel(locale, summary.customerBotStatus === "ACTIVE" ? "ACTIVE" : "INACTIVE", summary.customerBotUsername);
-  const text = mainMenuSummaryText(locale, {
+  const summaryText = mainMenuSummaryText(locale, {
     businessName: actor.business.name,
     todayCount: summary.todayCount,
     pendingPaymentCount: summary.pendingPaymentCount,
     needsAttentionCount: actor.role === "STAFF" ? null : summary.needsAttentionCount,
     customerBotLabel,
   });
+  const text = notice ? `${notice}\n\n${summaryText}` : summaryText;
   const replyMarkup: TelegramReplyMarkup = {
     keyboard: [
       ...keyboard,
@@ -416,7 +418,7 @@ async function showBookingList(
     actor,
     "booking.open",
     { bookingId: booking.id },
-    botMessage(locale, "buttonOpen"),
+    openBookingButtonText(formatVisitStamp(booking.startsAt, booking.branch.timeZone, locale), booking.customer.name),
     dependencies.now(),
   )));
   const view = bookingListView({
@@ -1066,6 +1068,11 @@ function formatDate(value: string, timeZone: string, locale: BotLocale) {
 
 function formatTime(value: Date, timeZone: string, locale: BotLocale) {
   return new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" }).format(value);
+}
+
+/** Day and time without the year: the lists never reach beyond the coming weeks. */
+function formatVisitStamp(value: Date, timeZone: string, locale: BotLocale) {
+  return new Intl.DateTimeFormat(locale === "tg" ? "tg-TJ" : "ru-RU", { timeZone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(value);
 }
 
 function pairRows(actions: BusinessBotAction[]) {

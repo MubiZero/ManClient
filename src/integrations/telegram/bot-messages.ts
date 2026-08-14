@@ -6,7 +6,7 @@ export const botMessagesRu = {
   keyboardCreateCustomerBot: "Создать клиентского бота",
   keyboardMainMenu: "Главное меню",
   keyboardCheckReceipts: "Проверить чеки",
-  keyboardSettings: "Настройки",
+  keyboardLanguage: "Язык",
   keyboardCustomerLink: "Ссылка для клиентов",
   keyboardMore: "Ещё",
   keyboardHelp: "Помощь",
@@ -17,15 +17,18 @@ export const botMessagesRu = {
   managedBotCreationPrompt: "Telegram покажет создание клиентского бота. Бот сразу будет принадлежать вам, а ManClient подключит его автоматически.",
   managedBotIntentMissing: "Не удалось определить бизнес для этого бота. Откройте нужный бизнес в ManClient и запустите создание ещё раз.",
   managedBotFailed: "Бот создан и принадлежит вам, но ManClient пока не смог подключить его. Повторите подключение позже — создавать нового бота не нужно.",
-  loginPrompt: "ManClient — помощник для управления записью вашего бизнеса. Войдите в кабинет, чтобы подключить компанию.",
-  loginButton: "Войти в кабинет",
+  // The chat is linked only by a one-time deep link issued in the dashboard, so the message names that
+  // path step by step instead of sending the person to a login screen that changes nothing by itself.
+  linkChatPrompt: "ManClient — рабочий бот владельцев и сотрудников. Этот чат ещё не привязан к бизнесу.\n\n1. Войдите в кабинет ManClient.\n2. Откройте «Настройки → Интеграции».\n3. Нажмите «Привязать мой Telegram» — по ссылке оттуда чат подключится сам.",
+  linkChatButton: "Открыть Telegram в кабинете",
 
   // business-bot-handler.ts — static text
   bookingsFilterPrompt: "Какие записи показать?",
   staleActionText: "Это действие уже недействительно. Обновите данные или откройте актуальное меню.",
   staleActionSimpleText: "Это действие уже недействительно. Откройте актуальное меню.",
   checksAccessDenied: "Проверка чеков доступна владельцу и администратору.",
-  helpText: "Используйте меню для записей и рабочего дня. Бизнес создаёт только одного бота — клиентского; владельцы и команда работают здесь, в общем @manclient_bot.",
+  helpText: "Используйте меню для записей и рабочего дня. Команды: /menu, /today, /bookings, /checks, /language. Бизнес создаёт только одного бота — клиентского; владельцы и команда работают здесь, в общем @manclient_bot.",
+  unknownCommandText: "Не понял эту команду — я отвечаю только на кнопки меню и команды из /help. Вот главное меню:",
   customerLinkPrompt: "Ссылка для записи клиентов:",
   customerLinkButton: "Открыть запись",
   receiptPhotoUnavailable: "Фото чека временно недоступно. Обновите карточку и попробуйте снова.",
@@ -66,7 +69,6 @@ export const botMessagesRu = {
   buttonPending: "Ожидают оплату",
   buttonShowMore: "Показать ещё",
   buttonRefresh: "Обновить",
-  buttonOpen: "Открыть",
   buttonBack: "Назад",
   buttonBackToDates: "К датам",
   buttonBackToQueue: "К очереди",
@@ -121,7 +123,7 @@ export const botMessagesTg = {
   keyboardCreateCustomerBot: "Сохтани боти муштарӣ",
   keyboardMainMenu: "Менюи асосӣ",
   keyboardCheckReceipts: "Санҷиши чек",
-  keyboardSettings: "Танзимот",
+  keyboardLanguage: "Забон",
   keyboardCustomerLink: "Пайванд барои мизоҷон",
   keyboardMore: "Боз",
   keyboardHelp: "Кӯмак",
@@ -132,14 +134,15 @@ export const botMessagesTg = {
   managedBotCreationPrompt: "Telegram сохтани боти муштариро нишон медиҳад. Бот дарҳол аз они шумо мешавад, ManClient онро худкор пайваст мекунад.",
   managedBotIntentMissing: "Бизнес барои ин бот муайян нашуд. Бизнеси лозимаро дар ManClient кушоед ва сохтанро аз нав оғоз кунед.",
   managedBotFailed: "Бот сохта шуд ва аз они шумост, аммо ManClient ҳоло онро пайваст карда натавонист. Дертар аз нав кӯшиш кунед — сохтани боти нав лозим нест.",
-  loginPrompt: "ManClient — ёрдамчӣ барои идораи сабти бизнеси шумо. Барои пайваст кардани ширкат ба кабинет ворид шавед.",
-  loginButton: "Ворид ба кабинет",
+  linkChatPrompt: "ManClient — боти корӣ барои соҳибон ва кормандон. Ин чат ҳанӯз ба бизнес пайваст нашудааст.\n\n1. Ба кабинети ManClient ворид шавед.\n2. «Танзимот → Интегратсияҳо»-ро кушоед.\n3. «Telegram-и худро пайваст кунед»-ро пахш кунед — пайванди он ҷо чатро худаш пайваст мекунад.",
+  linkChatButton: "Кушодани Telegram дар кабинет",
 
   bookingsFilterPrompt: "Кадом сабтҳоро нишон диҳам?",
   staleActionText: "Ин амал дигар эътибор надорад. Маълумотро нав кунед ё менюи актуалиро кушоед.",
   staleActionSimpleText: "Ин амал дигар эътибор надорад. Менюи актуалиро кушоед.",
   checksAccessDenied: "Санҷиши чекҳо танҳо барои соҳиб ва маъмур дастрас аст.",
-  helpText: "Барои сабтҳо ва рӯзи корӣ менюро истифода баред. Бизнес танҳо як бот месозад — боти муштарӣ; соҳибон ва даста дар ин ҷо, дар @manclient_bot умумӣ кор мекунанд.",
+  helpText: "Барои сабтҳо ва рӯзи корӣ менюро истифода баред. Фармонҳо: /menu, /today, /bookings, /checks, /language. Бизнес танҳо як бот месозад — боти муштарӣ; соҳибон ва даста дар ин ҷо, дар @manclient_bot умумӣ кор мекунанд.",
+  unknownCommandText: "Ин фармонро нафаҳмидам — ман танҳо ба тугмаҳои меню ва фармонҳои /help ҷавоб медиҳам. Ин менюи асосӣ:",
   customerLinkPrompt: "Пайванд барои сабти муштариён:",
   customerLinkButton: "Кушодани сабт",
   receiptPhotoUnavailable: "Акси чек ҳоло дастрас нест. Корти сабтро нав кунед ва бори дигар кӯшиш кунед.",
@@ -180,7 +183,6 @@ export const botMessagesTg = {
   buttonPending: "Мунтазири пардохт",
   buttonShowMore: "Боз нишон диҳед",
   buttonRefresh: "Нав кардан",
-  buttonOpen: "Кушодан",
   buttonBack: "Бозгашт",
   buttonBackToDates: "Ба санаҳо",
   buttonBackToQueue: "Ба навбат",
@@ -277,8 +279,34 @@ export function mainMenuSummaryText(locale: BotLocale, input: {
   ].join("\n");
 }
 
+const buttonTextByteLimit = 64;
+
+/**
+ * Telegram rejects a button whose text is longer than 64 bytes, and Cyrillic costs two bytes a letter —
+ * a customer named «Абдурахмон» next to a service name is already close to the edge. Cutting on a code
+ * point boundary keeps a Tajik letter from being split into an invalid half.
+ */
+export function fitButtonText(value: string, limit = buttonTextByteLimit): string {
+  const encoder = new TextEncoder();
+  if (encoder.encode(value).length <= limit) return value;
+  let kept = "";
+  for (const character of value) {
+    if (encoder.encode(`${kept}${character}…`).length > limit) break;
+    kept += character;
+  }
+  return `${kept.trimEnd()}…`;
+}
+
 export function openPaymentButtonText(locale: BotLocale, customerName: string): string {
-  return locale === "tg" ? `Кушодан · ${customerName}` : `Открыть · ${customerName}`;
+  return fitButtonText(locale === "tg" ? `Кушодан · ${customerName}` : `Открыть · ${customerName}`);
+}
+
+/**
+ * One booking among a dozen identical «Открыть» buttons is unhittable, so the label carries what the
+ * list line above shows: when the visit is, and whose it is.
+ */
+export function openBookingButtonText(visitLabel: string, customerName: string): string {
+  return fitButtonText(`${visitLabel} · ${customerName}`);
 }
 
 export function paymentsQueueListText(locale: BotLocale, items: Array<{

@@ -124,7 +124,9 @@ export async function handlePlatformTelegramUpdate(
     return;
   }
 
-  const loginUrl = `${requiredAppUrl()}/login`;
+  // The integrations page, not the login screen: signing in connects nothing, the one-time deep link
+  // issued there does. An unauthenticated visitor is bounced to the login screen by the page itself.
+  const integrationsUrl = `${requiredAppUrl()}/dashboard/settings/integrations`;
   const platformActor = await getPlatformTelegramActor(actor);
   if (platformActor) {
     const locale = resolveBotLocale(platformActor);
@@ -150,8 +152,8 @@ export async function handlePlatformTelegramUpdate(
     });
     return;
   }
-  await dependencies.sendMessage(actor.chatId, botMessage("ru", "loginPrompt"), {
-    inline_keyboard: [[{ text: botMessage("ru", "loginButton"), url: loginUrl }]],
+  await dependencies.sendMessage(actor.chatId, botMessage("ru", "linkChatPrompt"), {
+    inline_keyboard: [[{ text: botMessage("ru", "linkChatButton"), url: integrationsUrl }]],
   });
 }
 

@@ -8,7 +8,7 @@ import { createTelegramApi, TelegramApiError, type TelegramIdentity } from "@/in
 export type BusinessTelegramApi = {
   getMe(): Promise<TelegramIdentity>;
   setWebhook(url: string, secretToken: string): Promise<void>;
-  setMyCommands(commands: Array<{ command: string; description: string }>): Promise<void>;
+  setMyCommands(commands: Array<{ command: string; description: string }>, languageCode?: string): Promise<void>;
   deleteWebhook(): Promise<void>;
 };
 
@@ -65,7 +65,7 @@ export async function connectBusinessTelegramBot(
   });
 
   try {
-    await telegram.setMyCommands(clientCommands);
+    await registerClientCommands(telegram);
     await telegram.setWebhook(webhookUrl(publicId), webhookSecret);
   } catch {
     await prisma.businessTelegramIntegration.delete({ where: { id: pending.id } });
@@ -109,7 +109,7 @@ export async function rotateBusinessTelegramBot(
   const publicId = randomBytes(24).toString("base64url");
   const webhookSecret = randomBytes(32).toString("base64url");
   try {
-    await replacementTelegram.setMyCommands(clientCommands);
+    await registerClientCommands(replacementTelegram);
     await replacementTelegram.setWebhook(webhookUrl(publicId), webhookSecret);
   } catch {
     throw new BusinessTelegramIntegrationError("TELEGRAM_UNAVAILABLE");
@@ -220,7 +220,7 @@ export async function retryBusinessTelegramWebhook(
   const webhookSecret = decryptSecret(integration.webhookSecretEncrypted, encryptionKey);
   const telegram = telegramFactory(token);
   try {
-    await telegram.setMyCommands(clientCommands);
+    await registerClientCommands(telegram);
     await telegram.setWebhook(webhookUrl(integration.publicId), webhookSecret);
   } catch {
     throw new BusinessTelegramIntegrationError("TELEGRAM_UNAVAILABLE");
@@ -338,3 +338,20 @@ const clientCommands = [
   { command: "language", description: "Сменить язык" },
   { command: "help", description: "Помощь" },
 ];
+
+const clientCommandsTg = [
+  { command: "start", description: "Менюи асосӣ" },
+  { command: "book", description: "Сабти нав" },
+  { command: "bookings", description: "Сабтҳои ман" },
+  { command: "language", description: "Иваз кардани забон" },
+  { command: "help", description: "Кӯмак" },
+];
+
+/**
+ * Telegram serves the command list by the client's interface language, so a Tajik-speaking customer
+ * reads Tajik descriptions while everyone else falls back to the Russian set.
+ */
+async function registerClientCommands(telegram: BusinessTelegramApi) {
+  await telegram.setMyCommands(clientCommands);
+  await telegram.setMyCommands(clientCommandsTg, "tg");
+}

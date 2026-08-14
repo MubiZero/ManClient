@@ -1,3 +1,23 @@
+const platformCommandsRu = [
+  { command: "start", description: "Подключить бизнес или открыть меню" },
+  { command: "menu", description: "Главное меню" },
+  { command: "today", description: "Записи на сегодня" },
+  { command: "bookings", description: "Все записи" },
+  { command: "checks", description: "Чеки на проверке" },
+  { command: "language", description: "Сменить язык бота" },
+  { command: "help", description: "Помощь" },
+];
+
+const platformCommandsTg = [
+  { command: "start", description: "Пайвасти бизнес ё кушодани меню" },
+  { command: "menu", description: "Менюи асосӣ" },
+  { command: "today", description: "Сабтҳои имрӯза" },
+  { command: "bookings", description: "Ҳамаи сабтҳо" },
+  { command: "checks", description: "Чекҳо дар навбати санҷиш" },
+  { command: "language", description: "Иваз кардани забони бот" },
+  { command: "help", description: "Кӯмак" },
+];
+
 async function main() {
   const appUrl = requiredEnv("APP_URL").replace(/\/$/, "");
   const webhookUrl = `${appUrl}/api/webhooks/telegram/platform`;
@@ -11,16 +31,10 @@ async function main() {
   if (!identity.can_manage_bots) {
     throw new Error("Telegram bot Management Mode is disabled; enable it in @BotFather before registering the platform webhook");
   }
-  await telegramCall(token, "setMyCommands", {
-    commands: [
-      { command: "start", description: "Подключить бизнес или открыть меню" },
-      { command: "menu", description: "Главное меню" },
-      { command: "today", description: "Записи на сегодня" },
-      { command: "bookings", description: "Все записи" },
-      { command: "checks", description: "Чеки на проверке" },
-      { command: "help", description: "Помощь" },
-    ],
-  });
+  // Telegram picks the set by the client's interface language, so the Tajik team sees a Tajik command
+  // list instead of a Russian one they have to guess their way through.
+  await telegramCall(token, "setMyCommands", { commands: platformCommandsRu });
+  await telegramCall(token, "setMyCommands", { commands: platformCommandsTg, language_code: "tg" });
   await telegramCall(token, "setWebhook", {
     url: webhookUrl,
     secret_token: secretToken,

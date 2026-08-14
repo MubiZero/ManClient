@@ -67,9 +67,13 @@ export type PaymentReviewViewModel = {
 
 export function mainMenuView(input: { role: BusinessBotRole; locale?: BotLocale }): BusinessBotView {
   const locale = input.locale ?? "ru";
+  // Staff never review receipts, but they do read the bot in Tajik: the language button stays on every
+  // keyboard, because /language alone is invisible to someone who cannot read the Russian menu.
   const menu = [
     [{ text: botMessage(locale, "buttonToday") }, { text: botMessage(locale, "buttonBookings") }],
-    ...(input.role === "STAFF" ? [] : [[{ text: botMessage(locale, "keyboardCheckReceipts") }, { text: botMessage(locale, "keyboardSettings") }]]),
+    input.role === "STAFF"
+      ? [{ text: botMessage(locale, "keyboardLanguage") }]
+      : [{ text: botMessage(locale, "keyboardCheckReceipts") }, { text: botMessage(locale, "keyboardLanguage") }],
   ];
   return { text: locale === "tg" ? "Менюи асосӣ" : "Главное меню", replyMarkup: { keyboard: menu, resize_keyboard: true } };
 }
@@ -96,7 +100,7 @@ export function bookingCardView(input: BookingCardViewModel): BusinessBotView {
     `${escapeTelegramHtml(input.serviceName)} · ${escapeTelegramHtml(input.staffName)}`,
     `${escapeTelegramHtml(input.branchName)} · ${formatDateTime(input.startsAt, input.timeZone, locale)}`,
     `Телефон: ${escapeTelegramHtml(input.customerPhone)}`,
-    `Статус: <b>${bookingStatusLabel(input.bookingStatus, locale)}</b>`,
+    `Ҳолат: <b>${bookingStatusLabel(input.bookingStatus, locale)}</b>`,
     `Пардохт: ${paymentStatusLabel(input.paymentStatus, locale)} · <b>${formatSomoni(input.amountDiram, "tg-TJ")}</b>`,
   ] : [
     `Запись: <b>${escapeTelegramHtml(input.customerName)}</b>`,
