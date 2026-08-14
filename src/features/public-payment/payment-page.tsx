@@ -9,6 +9,7 @@ import type { PaymentInstructions } from "@/core/payments/payment-service";
 import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { cn } from "@/features/ui-kit/cn";
+import { LocaleSwitcher } from "@/features/public-booking/locale-switcher";
 import { PublicBrandMark } from "@/features/public-booking/public-brand-mark";
 import type { SupportedLocale } from "@/i18n/translate";
 import { intlLocale, moneyLocale, t } from "@/i18n/translate";
@@ -169,25 +170,7 @@ export function PaymentPage({
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4">
           <PublicBrandMark slug={payment.business.slug} name={payment.business.name} hasLogo={Boolean(payment.business.logoStorageKey)} href={`/b/${payment.business.slug}`} />
           <span className="text-sm font-medium text-muted-foreground">{t(locale, "payment.securePaymentLabel")}</span>
-          <nav className="ml-auto flex items-center gap-1 text-xs font-medium" aria-label={t(locale, "booking.languageSwitcherLabel")}>
-            <a
-              href="?lang=ru"
-              aria-current={locale === "ru" ? "true" : undefined}
-              className={locale === "ru" ? "text-foreground underline underline-offset-2" : "text-muted-foreground hover:text-foreground"}
-            >
-              RU
-            </a>
-            <span className="text-muted-foreground" aria-hidden>
-              /
-            </span>
-            <a
-              href="?lang=tg"
-              aria-current={locale === "tg" ? "true" : undefined}
-              className={locale === "tg" ? "text-foreground underline underline-offset-2" : "text-muted-foreground hover:text-foreground"}
-            >
-              TG
-            </a>
-          </nav>
+          <LocaleSwitcher locale={locale} />
         </div>
       </header>
       <div className="mx-auto w-full max-w-md flex-1 px-4 py-8">
