@@ -1,4 +1,4 @@
-import { commissionPercentSchema, staffInputSchema } from "@/core/business-settings/setting-schemas";
+import { commissionPercentSchema, staffInputSchema, invalidInputFor } from "@/core/business-settings/setting-schemas";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
@@ -26,10 +26,10 @@ export function updateStaff(input: StaffInput & { staffId: string }) { return sa
 
 async function saveStaff(input: StaffInput & { staffId?: string }) {
   const parsed = staffInputSchema.safeParse({ displayName: input.displayName, phone: input.phone, branchIds: input.branchIds, primaryBranchId: input.primaryBranchId, serviceIds: input.serviceIds });
-  if (!parsed.success) throw new SettingsError("INVALID_INPUT");
+  if (!parsed.success) throw invalidInputFor(parsed.error);
   const value = parsed.data;
   const commissionParsed = commissionPercentSchema.safeParse(input.commissionPercent ?? null);
-  if (!commissionParsed.success) throw new SettingsError("INVALID_INPUT");
+  if (!commissionParsed.success) throw new SettingsError("INVALID_INPUT", undefined, "commissionPercent");
   const result = await prisma.$transaction(async transaction => {
     await requireSettingsAccess(transaction, input);
     const business = await transaction.business.findUniqueOrThrow({ where: { id: input.businessId }, select: SUBSCRIPTION_SELECT });

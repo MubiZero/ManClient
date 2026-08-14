@@ -10,6 +10,7 @@ import {
 } from "@/core/business-settings/resource-service";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
+import { errorSearchParams, fieldErrorMap } from "@/features/dashboard/form-error";
 import { ArchiveConfirmDialog } from "@/features/dashboard/archive-confirm-dialog";
 import { EntityListPage } from "@/features/dashboard/entity-list-page";
 import { ResourceForm } from "@/features/dashboard/resource-form";
@@ -26,6 +27,7 @@ type PageProps = {
     edit?: string;
     archive?: string;
     error?: string;
+    field?: string;
     notice?: string;
   }>;
 };
@@ -41,6 +43,8 @@ const resourceKindLabels: Record<string, string> = {
 export default async function ResourcesPage({ searchParams }: PageProps) {
   const member = await requireBusinessAdmin();
   const query = await searchParams;
+  const formError = errorMessage(query.error);
+  const formFieldErrors = fieldErrorMap(query.field, formError);
   const [items, branches, services] = await Promise.all([
     prisma.resource.findMany({
       where: { branch: { businessId: member.businessId } },
@@ -69,7 +73,7 @@ export default async function ResourcesPage({ searchParams }: PageProps) {
     try {
       await createResource({ businessId: current.businessId, actorUserId: current.userId, ...resourceValues(formData) });
     } catch (error) {
-      redirect(`/dashboard/settings/resources?action=new&error=${errorCode(error)}`);
+      redirect(`/dashboard/settings/resources?action=new&${errorSearchParams(errorCode(error), error)}`);
     }
     redirect("/dashboard/settings/resources?notice=created");
   }
@@ -81,7 +85,7 @@ export default async function ResourcesPage({ searchParams }: PageProps) {
     try {
       await updateResource({ businessId: current.businessId, actorUserId: current.userId, resourceId, ...resourceValues(formData) });
     } catch (error) {
-      redirect(`/dashboard/settings/resources?edit=${encodeURIComponent(resourceId)}&error=${errorCode(error)}`);
+      redirect(`/dashboard/settings/resources?edit=${encodeURIComponent(resourceId)}&${errorSearchParams(errorCode(error), error)}`);
     }
     redirect("/dashboard/settings/resources?notice=updated");
   }
@@ -92,7 +96,7 @@ export default async function ResourcesPage({ searchParams }: PageProps) {
     try {
       await archiveResource({ businessId: current.businessId, actorUserId: current.userId, resourceId: String(formData.get("resourceId") ?? "") });
     } catch (error) {
-      redirect(`/dashboard/settings/resources?error=${errorCode(error)}`);
+      redirect(`/dashboard/settings/resources?${errorSearchParams(errorCode(error), error)}`);
     }
     redirect("/dashboard/settings/resources?notice=archived");
   }
@@ -175,7 +179,7 @@ export default async function ResourcesPage({ searchParams }: PageProps) {
       )}
 
       <SettingsSheet open={query.action === "new"} closeHref="/dashboard/settings/resources" title="Новый ресурс" visuallyHiddenTitle>
-        <ResourceForm action={create} branches={branches} services={services} error={errorMessage(query.error)} />
+        <ResourceForm action={create} branches={branches} services={services} error={formFieldErrors ? undefined : formError} fieldErrors={formFieldErrors} />
       </SettingsSheet>
       <SettingsSheet open={Boolean(editing)} closeHref="/dashboard/settings/resources" title="Изменить ресурс" visuallyHiddenTitle>
         {editing ? (
@@ -192,7 +196,7 @@ export default async function ResourcesPage({ searchParams }: PageProps) {
               isAvailable: editing.isAvailable,
               serviceIds: editing.services.map((item) => item.serviceId),
             }}
-            error={errorMessage(query.error)}
+            error={formFieldErrors ? undefined : formError} fieldErrors={formFieldErrors}
           />
         ) : null}
       </SettingsSheet>

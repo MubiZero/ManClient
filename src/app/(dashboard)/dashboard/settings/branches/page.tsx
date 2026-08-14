@@ -4,6 +4,7 @@ import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { archiveBranch, createBranch, restoreBranch, updateBranch } from "@/core/business-settings/branch-service";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
+import { errorSearchParams, fieldErrorMap } from "@/features/dashboard/form-error";
 import { BranchForm } from "@/features/dashboard/branch-form";
 import { EntityListPage } from "@/features/dashboard/entity-list-page";
 import { SettingsSheet } from "@/features/dashboard/settings-sheet";
@@ -15,11 +16,13 @@ import { EmptyState } from "@/features/ui-kit/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 import { MoreHorizontal } from "lucide-react";
 
-type BranchesPageProps = { searchParams: Promise<{ action?: string; edit?: string; archive?: string; error?: string; notice?: string }> };
+type BranchesPageProps = { searchParams: Promise<{ action?: string; edit?: string; archive?: string; error?: string; field?: string; notice?: string }> };
 
 export default async function BranchesPage({ searchParams }: BranchesPageProps) {
   const member = await requireBusinessAdmin();
   const query = await searchParams;
+  const formError = messageForError(query.error);
+  const formFieldErrors = fieldErrorMap(query.field, formError);
   // Explicit selection: the encrypted card has no business leaving the database for a page that only
   // ever shows four digits of it.
   const branches = await prisma.branch.findMany({
@@ -36,7 +39,7 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
     try {
       await createBranch({ businessId: current.businessId, actorUserId: current.userId, ...branchValues(formData) });
     } catch (error) {
-      redirect(`/dashboard/settings/branches?action=new&error=${errorCode(error)}`);
+      redirect(`/dashboard/settings/branches?action=new&${errorSearchParams(errorCode(error), error)}`);
     }
     redirect("/dashboard/settings/branches?notice=created");
   }
@@ -48,7 +51,7 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
     try {
       await updateBranch({ businessId: current.businessId, actorUserId: current.userId, branchId, ...branchValues(formData) });
     } catch (error) {
-      redirect(`/dashboard/settings/branches?edit=${encodeURIComponent(branchId)}&error=${errorCode(error)}`);
+      redirect(`/dashboard/settings/branches?edit=${encodeURIComponent(branchId)}&${errorSearchParams(errorCode(error), error)}`);
     }
     redirect("/dashboard/settings/branches?notice=updated");
   }
@@ -60,7 +63,7 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
     try {
       await archiveBranch({ businessId: current.businessId, actorUserId: current.userId, branchId });
     } catch (error) {
-      redirect(`/dashboard/settings/branches?error=${errorCode(error)}`);
+      redirect(`/dashboard/settings/branches?${errorSearchParams(errorCode(error), error)}`);
     }
     redirect("/dashboard/settings/branches?notice=archived");
   }
@@ -141,10 +144,10 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
       )}
 
       <SettingsSheet open={query.action === "new"} closeHref="/dashboard/settings/branches" title="Новый филиал" visuallyHiddenTitle>
-        <BranchForm action={create} error={messageForError(query.error)} />
+        <BranchForm action={create} error={formFieldErrors ? undefined : formError} fieldErrors={formFieldErrors} />
       </SettingsSheet>
       <SettingsSheet open={Boolean(editing)} closeHref="/dashboard/settings/branches" title="Изменить филиал" visuallyHiddenTitle>
-        {editing ? <BranchForm action={update} branch={editing} error={messageForError(query.error)} /> : null}
+        {editing ? <BranchForm action={update} branch={editing} error={formFieldErrors ? undefined : formError} fieldErrors={formFieldErrors} /> : null}
       </SettingsSheet>
 
       <ArchiveConfirmDialog

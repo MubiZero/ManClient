@@ -7,7 +7,7 @@ type BranchOption = { id: string; name: string };
 type ServiceOption = { id: string; name: string; branchId: string };
 type StaffValue = { id: string; displayName: string; phone: string | null; branchIds: string[]; primaryBranchId: string; serviceIds: string[]; commissionPercent?: number | null };
 
-export function StaffForm({ action, branches, services, staff, error, commissionEnabled }: { action: (formData: FormData) => void | Promise<void>; branches: BranchOption[]; services: ServiceOption[]; staff?: StaffValue; error?: string; commissionEnabled?: boolean }) {
+export function StaffForm({ action, branches, services, staff, error, fieldErrors, commissionEnabled }: { action: (formData: FormData) => void | Promise<void>; branches: BranchOption[]; services: ServiceOption[]; staff?: StaffValue; error?: string; fieldErrors?: Record<string, string>; commissionEnabled?: boolean }) {
   const editing = Boolean(staff);
   return (
     <form className="flex flex-col gap-6" action={action}>
@@ -18,10 +18,10 @@ export function StaffForm({ action, branches, services, staff, error, commission
       </div>
       {staff ? <input type="hidden" name="staffId" value={staff.id} /> : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Имя специалиста"><Input name="displayName" required minLength={2} maxLength={120} defaultValue={staff?.displayName} /></Field>
-        <Field label="Телефон"><Input name="phone" type="tel" inputMode="tel" placeholder="+992 90 000 00 00" defaultValue={staff?.phone ?? ""} /></Field>
+        <Field label="Имя специалиста" error={fieldErrors?.displayName}><Input name="displayName" required minLength={2} maxLength={120} defaultValue={staff?.displayName} /></Field>
+        <Field label="Телефон" error={fieldErrors?.phone}><Input name="phone" type="tel" inputMode="tel" placeholder="+992 90 000 00 00" defaultValue={staff?.phone ?? ""} /></Field>
         {commissionEnabled ? (
-          <Field label="Комиссия за услугу, %">
+          <Field label="Комиссия за услугу, %" error={fieldErrors?.commissionPercent}>
             <Input name="commissionPercent" type="number" inputMode="numeric" min={0} max={100} step={1} defaultValue={staff?.commissionPercent ?? ""} />
           </Field>
         ) : null}
@@ -35,7 +35,7 @@ export function StaffForm({ action, branches, services, staff, error, commission
           </label>
         ))}
       </fieldset>
-      <Field label="Основной филиал">
+      <Field label="Основной филиал" error={fieldErrors?.primaryBranchId}>
         <Select name="primaryBranchId" defaultValue={staff?.primaryBranchId ?? branches[0]?.id}>
           {branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </Select>

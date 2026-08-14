@@ -1,7 +1,23 @@
 import { z } from "zod";
 
 import { MAX_BUFFER_MINUTES } from "@/core/availability/booking-window";
+import { SettingsError } from "@/core/business-settings/settings-error";
 import { normalizeTajikPhone } from "@/core/formatting/tajik-phone";
+
+/**
+ * Turns a refused parse into the error the actions already redirect on, keeping the name of the first
+ * control that failed. Zod knows exactly which key it rejected; that knowledge used to be discarded on
+ * the line below every `safeParse`, leaving the owner with a whole sheet marked "проверьте поля".
+ *
+ * Only a path of exactly one string segment is carried, because only that names a control the form
+ * actually renders. An issue deeper in (`rules.3.startsAt`) starts with a key too — `rules` — but no
+ * input holds it, and marking that would move the message away from the row that failed.
+ */
+export function invalidInputFor(error: z.ZodError): SettingsError {
+  const path = error.issues[0]?.path;
+  const field = path?.length === 1 && typeof path[0] === "string" ? path[0] : undefined;
+  return new SettingsError("INVALID_INPUT", undefined, field);
+}
 
 const idSchema = z.string().trim().min(1).max(128);
 const nameSchema = z.string().trim().min(2).max(120);

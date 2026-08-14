@@ -8,6 +8,7 @@ import { prisma } from "@/core/database/prisma";
 import { formatSomoni } from "@/core/formatting/money";
 import { ArchiveConfirmDialog } from "@/features/dashboard/archive-confirm-dialog";
 import { EntityListPage } from "@/features/dashboard/entity-list-page";
+import { errorSearchParams, fieldErrorMap } from "@/features/dashboard/form-error";
 import { ServiceForm } from "@/features/dashboard/service-form";
 import { SettingsSheet } from "@/features/dashboard/settings-sheet";
 import { Badge } from "@/features/ui-kit/badge";
@@ -16,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 
-type PageProps = { searchParams: Promise<{ action?: string; edit?: string; archive?: string; error?: string; notice?: string }> };
+type PageProps = { searchParams: Promise<{ action?: string; edit?: string; archive?: string; error?: string; field?: string; notice?: string }> };
 
 export default async function ServicesPage({ searchParams }: PageProps) {
   const member = await requireBusinessAdmin();
@@ -27,13 +28,15 @@ export default async function ServicesPage({ searchParams }: PageProps) {
     prisma.staffMember.findMany({ where: { businessId: member.businessId, archivedAt: null }, include: { branches: { include: { branch: true } } }, orderBy: { displayName: "asc" } }),
     prisma.resource.findMany({ where: { branch: { businessId: member.businessId }, archivedAt: null }, select: { id: true, name: true, branchId: true }, orderBy: { name: "asc" } }),
   ]);
+  const formError = errorMessage(query.error);
+  const formFieldErrors = fieldErrorMap(query.field, formError);
   const editing = query.edit ? items.find((item) => item.id === query.edit) : undefined;
   const archiving = query.archive ? items.find((item) => item.id === query.archive && !item.archivedAt) : undefined;
   const formStaff = staff.map((item) => ({ id: item.id, displayName: item.displayName, branchNames: item.branches.map(({ branch }) => branch.name) }));
 
-  async function create(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); try { await createService({ businessId: current.businessId, actorUserId: current.userId, ...serviceValues(formData) }); } catch (error) { redirect(`/dashboard/settings/services?action=new&error=${errorCode(error)}`); } redirect("/dashboard/settings/services?notice=created"); }
-  async function update(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); const serviceId = String(formData.get("serviceId") ?? ""); try { await updateService({ businessId: current.businessId, actorUserId: current.userId, serviceId, ...serviceValues(formData) }); } catch (error) { redirect(`/dashboard/settings/services?edit=${encodeURIComponent(serviceId)}&error=${errorCode(error)}`); } redirect("/dashboard/settings/services?notice=updated"); }
-  async function archive(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); try { await archiveService({ businessId: current.businessId, actorUserId: current.userId, serviceId: String(formData.get("serviceId") ?? "") }); } catch (error) { redirect(`/dashboard/settings/services?error=${errorCode(error)}`); } redirect("/dashboard/settings/services?notice=archived"); }
+  async function create(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); try { await createService({ businessId: current.businessId, actorUserId: current.userId, ...serviceValues(formData) }); } catch (error) { redirect(`/dashboard/settings/services?action=new&${errorSearchParams(errorCode(error), error)}`); } redirect("/dashboard/settings/services?notice=created"); }
+  async function update(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); const serviceId = String(formData.get("serviceId") ?? ""); try { await updateService({ businessId: current.businessId, actorUserId: current.userId, serviceId, ...serviceValues(formData) }); } catch (error) { redirect(`/dashboard/settings/services?edit=${encodeURIComponent(serviceId)}&${errorSearchParams(errorCode(error), error)}`); } redirect("/dashboard/settings/services?notice=updated"); }
+  async function archive(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); try { await archiveService({ businessId: current.businessId, actorUserId: current.userId, serviceId: String(formData.get("serviceId") ?? "") }); } catch (error) { redirect(`/dashboard/settings/services?${errorSearchParams(errorCode(error), error)}`); } redirect("/dashboard/settings/services?notice=archived"); }
   async function restore(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); await restoreService({ businessId: current.businessId, actorUserId: current.userId, serviceId: String(formData.get("serviceId") ?? "") }); redirect("/dashboard/settings/services?notice=restored"); }
   async function duplicate(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); await duplicateService({ businessId: current.businessId, actorUserId: current.userId, serviceId: String(formData.get("serviceId") ?? "") }); redirect("/dashboard/settings/services?notice=duplicated"); }
 
@@ -118,7 +121,7 @@ export default async function ServicesPage({ searchParams }: PageProps) {
       )}
 
       <SettingsSheet open={query.action === "new"} closeHref="/dashboard/settings/services" title="Новая услуга" visuallyHiddenTitle>
-        <ServiceForm action={create} branches={branches} staff={formStaff} resources={resources} error={errorMessage(query.error)} />
+        <ServiceForm action={create} branches={branches} staff={formStaff} resources={resources} error={formFieldErrors ? undefined : formError} fieldErrors={formFieldErrors} />
       </SettingsSheet>
       <SettingsSheet open={Boolean(editing)} closeHref="/dashboard/settings/services" title="Изменить услугу" visuallyHiddenTitle>
         {editing ? (
@@ -128,7 +131,8 @@ export default async function ServicesPage({ searchParams }: PageProps) {
             staff={formStaff}
             resources={resources}
             service={{ id: editing.id, branchId: editing.branchId, name: editing.name, description: editing.description, durationMinutes: editing.durationMinutes, bufferBeforeMinutes: editing.bufferBeforeMinutes, bufferAfterMinutes: editing.bufferAfterMinutes, amountDiram: editing.amountDiram, prepaymentMode: editing.prepaymentMode, depositPercent: editing.depositPercent, depositAmountDiram: editing.depositAmountDiram, isPublished: editing.isPublished, staffIds: editing.staffMembers.map((item) => item.id), resourceIds: editing.resources.map((item) => item.resourceId) }}
-            error={errorMessage(query.error)}
+            error={formFieldErrors ? undefined : formError}
+            fieldErrors={formFieldErrors}
           />
         ) : null}
       </SettingsSheet>

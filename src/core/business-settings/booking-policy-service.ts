@@ -1,5 +1,5 @@
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
-import { bookingPolicySchema } from "@/core/business-settings/setting-schemas";
+import { bookingPolicySchema, invalidInputFor } from "@/core/business-settings/setting-schemas";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { prisma } from "@/core/database/prisma";
@@ -48,7 +48,7 @@ export async function updateBookingPolicySettings(input: {
     depositPercent: input.depositPercent,
     depositSomoni: input.depositSomoni,
   });
-  if (!parsed.success) throw new SettingsError("INVALID_INPUT");
+  if (!parsed.success) throw invalidInputFor(parsed.error);
 
   return prisma.$transaction(async (transaction) => {
     await requireSettingsAccess(transaction, input);

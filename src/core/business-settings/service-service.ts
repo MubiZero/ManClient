@@ -1,4 +1,4 @@
-import { serviceInputSchema } from "@/core/business-settings/setting-schemas";
+import { serviceInputSchema, invalidInputFor } from "@/core/business-settings/setting-schemas";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
@@ -28,7 +28,7 @@ export function updateService(input: ServiceInput & { serviceId: string }) { ret
 
 async function saveService(input: ServiceInput & { serviceId?: string }) {
   const parsed = serviceInputSchema.safeParse(pickInput(input));
-  if (!parsed.success) throw new SettingsError("INVALID_INPUT");
+  if (!parsed.success) throw invalidInputFor(parsed.error);
   const value = parsed.data;
   const amountDiram = parseSomoniToDiram(value.amountSomoni);
   // Only meaningful alongside a mode of its own: a service that follows the business must not carry a

@@ -5,7 +5,7 @@ import { SubmitButton } from "@/features/ui-kit/submit-button";
 
 type BranchValue = { id: string; name: string; address: string | null; phone: string | null; timeZone: string; recipientCardLast4: string | null };
 
-export function BranchForm({ action, branch, error }: { action: (formData: FormData) => void | Promise<void>; branch?: BranchValue; error?: string }) {
+export function BranchForm({ action, branch, error, fieldErrors }: { action: (formData: FormData) => void | Promise<void>; branch?: BranchValue; error?: string; fieldErrors?: Record<string, string> }) {
   const editing = Boolean(branch);
   return (
     <form className="flex flex-col gap-6" action={action}>
@@ -16,19 +16,19 @@ export function BranchForm({ action, branch, error }: { action: (formData: FormD
       </div>
       {branch ? <input type="hidden" name="branchId" value={branch.id} /> : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Название филиала"><Input name="name" required minLength={2} maxLength={120} defaultValue={branch?.name} /></Field>
-        <Field label="Контактный телефон"><Input name="phone" type="tel" inputMode="tel" placeholder="+992 90 000 00 00" defaultValue={branch?.phone ? formatTajikPhoneInput(branch.phone) : ""} /></Field>
+        <Field label="Название филиала" error={fieldErrors?.name}><Input name="name" required minLength={2} maxLength={120} defaultValue={branch?.name} /></Field>
+        <Field label="Контактный телефон" error={fieldErrors?.phone}><Input name="phone" type="tel" inputMode="tel" placeholder="+992 90 000 00 00" defaultValue={branch?.phone ? formatTajikPhoneInput(branch.phone) : ""} /></Field>
         <div className="sm:col-span-2">
-          <Field label="Адрес"><Input name="address" maxLength={240} defaultValue={branch?.address ?? ""} /></Field>
+          <Field label="Адрес" error={fieldErrors?.address}><Input name="address" maxLength={240} defaultValue={branch?.address ?? ""} /></Field>
         </div>
-        <Field label="Часовой пояс">
+        <Field label="Часовой пояс" error={fieldErrors?.timeZone}>
           <Select name="timeZone" defaultValue={branch?.timeZone ?? "Asia/Dushanbe"}>
             <option value="Asia/Dushanbe">Душанбе (UTC+5)</option>
           </Select>
         </Field>
         {/* The stored number is never sent back to the browser, so the field starts empty and an empty
             field means "leave it as it is" — the four digits below are all the confirmation there is. */}
-        <Field label="Карта DushanbeCity для предоплаты" hint={branch?.recipientCardLast4 ? `Сейчас •••• ${branch.recipientCardLast4}. Оставьте пустым, чтобы не менять.` : "Нужна, только если берёте предоплату или депозит."}>
+        <Field label="Карта DushanbeCity для предоплаты" hint={branch?.recipientCardLast4 ? `Сейчас •••• ${branch.recipientCardLast4}. Оставьте пустым, чтобы не менять.` : "Нужна, только если берёте предоплату или депозит."} error={fieldErrors?.recipientCard}>
           <Input name="recipientCard" inputMode="numeric" autoComplete="off" pattern="[0-9 ]{16,23}" placeholder="9762 0000 0000 0000" defaultValue="" />
         </Field>
       </div>

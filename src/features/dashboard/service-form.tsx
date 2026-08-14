@@ -8,7 +8,7 @@ type StaffOption = { id: string; displayName: string; branchNames: string[] };
 type ResourceOption = { id: string; name: string; branchId: string };
 type ServiceValue = { id: string; branchId: string; name: string; description: string | null; durationMinutes: number; bufferBeforeMinutes: number; bufferAfterMinutes: number; amountDiram: number; prepaymentMode: "FULL" | "DEPOSIT" | "NONE" | null; depositPercent: number | null; depositAmountDiram: number | null; isPublished: boolean; staffIds: string[]; resourceIds: string[] };
 
-export function ServiceForm({ action, branches, staff, resources, service, error }: { action: (formData: FormData) => void | Promise<void>; branches: Option[]; staff: StaffOption[]; resources: ResourceOption[]; service?: ServiceValue; error?: string }) {
+export function ServiceForm({ action, branches, staff, resources, service, error, fieldErrors }: { action: (formData: FormData) => void | Promise<void>; branches: Option[]; staff: StaffOption[]; resources: ResourceOption[]; service?: ServiceValue; error?: string; fieldErrors?: Record<string, string> }) {
   const editing = Boolean(service);
   return (
     <form className="flex flex-col gap-6" action={action}>
@@ -19,24 +19,24 @@ export function ServiceForm({ action, branches, staff, resources, service, error
       </div>
       {service ? <input type="hidden" name="serviceId" value={service.id} /> : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Название услуги"><Input name="name" required minLength={2} maxLength={120} defaultValue={service?.name} /></Field>
-        <Field label="Филиал">
+        <Field label="Название услуги" error={fieldErrors?.name}><Input name="name" required minLength={2} maxLength={120} defaultValue={service?.name} /></Field>
+        <Field label="Филиал" error={fieldErrors?.branchId}>
           <Select name="branchId" defaultValue={service?.branchId ?? branches[0]?.id} required>
             {branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </Select>
         </Field>
-        <Field label="Длительность, минут"><Input name="durationMinutes" type="number" min={5} max={720} step={5} required defaultValue={service?.durationMinutes ?? 45} /></Field>
-        <Field label="Стоимость, сомони"><Input name="amountSomoni" inputMode="decimal" required defaultValue={service ? (service.amountDiram / 100).toFixed(2) : ""} placeholder="50,00" /></Field>
-        <Field label="Подготовка до визита, минут" hint="Время занято у специалиста и ресурса, но клиенту не показывается и не оплачивается.">
+        <Field label="Длительность, минут" error={fieldErrors?.durationMinutes}><Input name="durationMinutes" type="number" min={5} max={720} step={5} required defaultValue={service?.durationMinutes ?? 45} /></Field>
+        <Field label="Стоимость, сомони" error={fieldErrors?.amountSomoni}><Input name="amountSomoni" inputMode="decimal" required defaultValue={service ? (service.amountDiram / 100).toFixed(2) : ""} placeholder="50,00" /></Field>
+        <Field label="Подготовка до визита, минут" hint="Время занято у специалиста и ресурса, но клиенту не показывается и не оплачивается." error={fieldErrors?.bufferBeforeMinutes}>
           <Input name="bufferBeforeMinutes" type="number" min={0} max={240} step={5} defaultValue={service?.bufferBeforeMinutes ?? 0} />
         </Field>
-        <Field label="Уборка после визита, минут" hint="Например, мойка кресла или выезд машины из бокса.">
+        <Field label="Уборка после визита, минут" hint="Например, мойка кресла или выезд машины из бокса." error={fieldErrors?.bufferAfterMinutes}>
           <Input name="bufferAfterMinutes" type="number" min={0} max={240} step={5} defaultValue={service?.bufferAfterMinutes ?? 0} />
         </Field>
         <div className="sm:col-span-2">
           <fieldset className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-3">
             <legend className="px-1.5 text-sm font-semibold text-foreground">Предоплата этой услуги</legend>
-            <Field label="Правило" hint="По умолчанию — как настроено для всего бизнеса.">
+            <Field label="Правило" hint="По умолчанию — как настроено для всего бизнеса." error={fieldErrors?.prepaymentMode}>
               <Select name="prepaymentMode" defaultValue={service?.prepaymentMode ?? ""}>
                 <option value="">По правилам бизнеса</option>
                 <option value="FULL">Полная стоимость</option>
@@ -44,16 +44,16 @@ export function ServiceForm({ action, branches, staff, resources, service, error
                 <option value="NONE">Оплата на месте</option>
               </Select>
             </Field>
-            <Field label="Депозит, %" hint="Учитывается только при правиле «Депозит».">
+            <Field label="Депозит, %" hint="Учитывается только при правиле «Депозит»." error={fieldErrors?.depositPercent}>
               <Input name="depositPercent" type="number" min={1} max={100} defaultValue={service?.depositPercent ?? ""} placeholder="30" />
             </Field>
-            <Field label="Депозит, сомони" hint="Если заполнено, используется вместо процента.">
+            <Field label="Депозит, сомони" hint="Если заполнено, используется вместо процента." error={fieldErrors?.depositSomoni}>
               <Input name="depositSomoni" inputMode="decimal" defaultValue={service?.depositAmountDiram === null || service?.depositAmountDiram === undefined ? "" : (service.depositAmountDiram / 100).toFixed(2)} placeholder="50,00" />
             </Field>
           </fieldset>
         </div>
         <div className="sm:col-span-2">
-          <Field label="Описание"><Textarea name="description" maxLength={1000} defaultValue={service?.description ?? ""} /></Field>
+          <Field label="Описание" error={fieldErrors?.description}><Textarea name="description" maxLength={1000} defaultValue={service?.description ?? ""} /></Field>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -6,6 +6,7 @@ import { SettingsError } from "@/core/business-settings/settings-error";
 import { archiveStaff, createStaff, restoreStaff, updateStaff } from "@/core/business-settings/staff-service";
 import { prisma } from "@/core/database/prisma";
 import { businessHasFeature } from "@/core/platform/subscription-plans";
+import { errorSearchParams, fieldErrorMap } from "@/features/dashboard/form-error";
 import { ArchiveConfirmDialog } from "@/features/dashboard/archive-confirm-dialog";
 import { EntityListPage } from "@/features/dashboard/entity-list-page";
 import { SettingsSheet } from "@/features/dashboard/settings-sheet";
@@ -16,12 +17,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 
-type PageProps = { searchParams: Promise<{ action?: string; edit?: string; archive?: string; error?: string; notice?: string }> };
+type PageProps = { searchParams: Promise<{ action?: string; edit?: string; archive?: string; error?: string; field?: string; notice?: string }> };
 
 export default async function StaffPage({ searchParams }: PageProps) {
   const member = await requireBusinessAdmin();
   const commissionEnabled = businessHasFeature(member.business, "STAFF_COMMISSIONS");
   const query = await searchParams;
+  const formError = errorMessage(query.error);
+  const formFieldErrors = fieldErrorMap(query.field, formError);
   const [items, branches, services] = await Promise.all([
     prisma.staffMember.findMany({ where: { businessId: member.businessId }, include: { membership: true, branches: { include: { branch: true }, orderBy: { isPrimary: "desc" } }, services: true }, orderBy: [{ archivedAt: "asc" }, { displayName: "asc" }] }),
     prisma.branch.findMany({ where: { businessId: member.businessId, archivedAt: null }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
@@ -31,9 +34,9 @@ export default async function StaffPage({ searchParams }: PageProps) {
   const archiving = query.archive ? items.find((item) => item.id === query.archive && !item.archivedAt) : undefined;
   const editingPrimary = editing?.branches.find((item) => item.isPrimary) ?? editing?.branches[0];
 
-  async function create(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); try { await createStaff({ businessId: current.businessId, actorUserId: current.userId, ...staffValues(formData) }); } catch (error) { redirect(`/dashboard/settings/staff?action=new&error=${errorCode(error)}`); } redirect("/dashboard/settings/staff?notice=created"); }
-  async function update(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); const staffId = String(formData.get("staffId") ?? ""); try { await updateStaff({ businessId: current.businessId, actorUserId: current.userId, staffId, ...staffValues(formData) }); } catch (error) { redirect(`/dashboard/settings/staff?edit=${encodeURIComponent(staffId)}&error=${errorCode(error)}`); } redirect("/dashboard/settings/staff?notice=updated"); }
-  async function archive(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); try { await archiveStaff({ businessId: current.businessId, actorUserId: current.userId, staffId: String(formData.get("staffId") ?? "") }); } catch (error) { redirect(`/dashboard/settings/staff?error=${errorCode(error)}`); } redirect("/dashboard/settings/staff?notice=archived"); }
+  async function create(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); try { await createStaff({ businessId: current.businessId, actorUserId: current.userId, ...staffValues(formData) }); } catch (error) { redirect(`/dashboard/settings/staff?action=new&${errorSearchParams(errorCode(error), error)}`); } redirect("/dashboard/settings/staff?notice=created"); }
+  async function update(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); const staffId = String(formData.get("staffId") ?? ""); try { await updateStaff({ businessId: current.businessId, actorUserId: current.userId, staffId, ...staffValues(formData) }); } catch (error) { redirect(`/dashboard/settings/staff?edit=${encodeURIComponent(staffId)}&${errorSearchParams(errorCode(error), error)}`); } redirect("/dashboard/settings/staff?notice=updated"); }
+  async function archive(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); try { await archiveStaff({ businessId: current.businessId, actorUserId: current.userId, staffId: String(formData.get("staffId") ?? "") }); } catch (error) { redirect(`/dashboard/settings/staff?${errorSearchParams(errorCode(error), error)}`); } redirect("/dashboard/settings/staff?notice=archived"); }
   async function restore(formData: FormData) { "use server"; const current = await requireBusinessAdmin(); await restoreStaff({ businessId: current.businessId, actorUserId: current.userId, staffId: String(formData.get("staffId") ?? "") }); redirect("/dashboard/settings/staff?notice=restored"); }
 
   return (
@@ -109,7 +112,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
       )}
 
       <SettingsSheet open={query.action === "new"} closeHref="/dashboard/settings/staff" title="Новый специалист" visuallyHiddenTitle>
-        <StaffForm action={create} branches={branches} services={services} error={errorMessage(query.error)} commissionEnabled={commissionEnabled} />
+        <StaffForm action={create} branches={branches} services={services} error={formFieldErrors ? undefined : formError} fieldErrors={formFieldErrors} commissionEnabled={commissionEnabled} />
       </SettingsSheet>
       <SettingsSheet open={Boolean(editing)} closeHref="/dashboard/settings/staff" title="Изменить специалиста" visuallyHiddenTitle>
         {editing ? (
@@ -118,7 +121,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
             branches={branches}
             services={services}
             staff={{ id: editing.id, displayName: editing.displayName, phone: editing.phone, branchIds: editing.branches.map((item) => item.branchId), primaryBranchId: editingPrimary?.branchId ?? branches[0]?.id ?? "", serviceIds: editing.services.map((item) => item.id), commissionPercent: editing.commissionPercent }}
-            error={errorMessage(query.error)}
+            error={formFieldErrors ? undefined : formError} fieldErrors={formFieldErrors}
             commissionEnabled={commissionEnabled}
           />
         ) : null}

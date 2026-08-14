@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { branchInputSchema } from "@/core/business-settings/setting-schemas";
+import { branchInputSchema, invalidInputFor } from "@/core/business-settings/setting-schemas";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
@@ -86,7 +86,7 @@ function parseBranch(input: BranchInput) {
     timeZone: input.timeZone,
     ...(recipientCard ? { recipientCard } : {}),
   });
-  if (!parsed.success) throw new SettingsError("INVALID_INPUT");
+  if (!parsed.success) throw invalidInputFor(parsed.error);
   const { recipientCard: card, ...value } = parsed.data;
   return { ...value, card: card ? encryptedCard(card) : undefined };
 }

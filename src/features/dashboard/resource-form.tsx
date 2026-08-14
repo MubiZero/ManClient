@@ -7,7 +7,7 @@ type BranchOption = { id: string; name: string };
 type ServiceOption = { id: string; name: string; branchId: string };
 type ResourceValue = { id: string; branchId: string; name: string; kind: string; capacity: number; isAvailable: boolean; serviceIds: string[] };
 
-export function ResourceForm({ action, branches, services, resource, error }: { action: (formData: FormData) => void | Promise<void>; branches: BranchOption[]; services: ServiceOption[]; resource?: ResourceValue; error?: string }) {
+export function ResourceForm({ action, branches, services, resource, error, fieldErrors }: { action: (formData: FormData) => void | Promise<void>; branches: BranchOption[]; services: ServiceOption[]; resource?: ResourceValue; error?: string; fieldErrors?: Record<string, string> }) {
   const editing = Boolean(resource);
   return (
     <form className="flex flex-col gap-6" action={action}>
@@ -18,13 +18,13 @@ export function ResourceForm({ action, branches, services, resource, error }: { 
       </div>
       {resource ? <input type="hidden" name="resourceId" value={resource.id} /> : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Название ресурса"><Input name="name" required minLength={2} maxLength={120} defaultValue={resource?.name} /></Field>
-        <Field label="Филиал">
+        <Field label="Название ресурса" error={fieldErrors?.name}><Input name="name" required minLength={2} maxLength={120} defaultValue={resource?.name} /></Field>
+        <Field label="Филиал" error={fieldErrors?.branchId}>
           <Select name="branchId" defaultValue={resource?.branchId ?? branches[0]?.id}>
             {branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </Select>
         </Field>
-        <Field label="Тип ресурса">
+        <Field label="Тип ресурса" error={fieldErrors?.kind}>
           <Select name="kind" defaultValue={resource?.kind ?? "OTHER"}>
             <option value="WORKSTATION">Рабочее место</option>
             <option value="ROOM">Кабинет или комната</option>
@@ -33,7 +33,7 @@ export function ResourceForm({ action, branches, services, resource, error }: { 
             <option value="OTHER">Другое</option>
           </Select>
         </Field>
-        <Field label="Вместимость"><Input name="capacity" type="number" min={1} max={100} required defaultValue={resource?.capacity ?? 1} /></Field>
+        <Field label="Вместимость" error={fieldErrors?.capacity}><Input name="capacity" type="number" min={1} max={100} required defaultValue={resource?.capacity ?? 1} /></Field>
       </div>
       <fieldset className="flex min-w-0 flex-col gap-1 rounded-md border border-border p-4">
         <legend className="px-1.5 text-sm font-semibold text-foreground">Услуги</legend>

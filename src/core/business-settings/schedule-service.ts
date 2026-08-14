@@ -1,4 +1,4 @@
-import { weeklyScheduleSchema } from "@/core/business-settings/setting-schemas";
+import { weeklyScheduleSchema, invalidInputFor } from "@/core/business-settings/setting-schemas";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
@@ -81,7 +81,7 @@ export async function removeScheduleException(input: { businessId: string; actor
 
 function parseSchedule(input: ScheduleInput) {
   const parsed = weeklyScheduleSchema.safeParse({ rules: input.rules, breaks: input.breaks });
-  if (!parsed.success) throw new SettingsError("INVALID_INPUT");
+  if (!parsed.success) throw invalidInputFor(parsed.error);
   return parsed.data;
 }
 

@@ -1,4 +1,4 @@
-import { resourceInputSchema } from "@/core/business-settings/setting-schemas";
+import { resourceInputSchema, invalidInputFor } from "@/core/business-settings/setting-schemas";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
@@ -20,7 +20,7 @@ export function updateResource(input: ResourceInput & { resourceId: string }) { 
 
 async function saveResource(input: ResourceInput & { resourceId?: string }) {
   const parsed = resourceInputSchema.safeParse(pickInput(input));
-  if (!parsed.success) throw new SettingsError("INVALID_INPUT");
+  if (!parsed.success) throw invalidInputFor(parsed.error);
   const value = parsed.data;
   return prisma.$transaction(async transaction => {
     await requireSettingsAccess(transaction, input);
