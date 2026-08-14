@@ -2,6 +2,7 @@ import { commissionPercentSchema, staffInputSchema } from "@/core/business-setti
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
+import { publishFirstServiceWhenReady } from "@/core/onboarding/publish-first-service";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 import { SUBSCRIPTION_SELECT, businessHasFeature } from "@/core/platform/subscription-plans";
 
@@ -29,7 +30,7 @@ async function saveStaff(input: StaffInput & { staffId?: string }) {
   const value = parsed.data;
   const commissionParsed = commissionPercentSchema.safeParse(input.commissionPercent ?? null);
   if (!commissionParsed.success) throw new SettingsError("INVALID_INPUT");
-  return prisma.$transaction(async transaction => {
+  const result = await prisma.$transaction(async transaction => {
     await requireSettingsAccess(transaction, input);
     const business = await transaction.business.findUniqueOrThrow({ where: { id: input.businessId }, select: SUBSCRIPTION_SELECT });
     const commissionPercent = businessHasFeature(business, "STAFF_COMMISSIONS") ? commissionParsed.data ?? null : null;
@@ -51,6 +52,10 @@ async function saveStaff(input: StaffInput & { staffId?: string }) {
     await writeAuditEvent({ businessId: input.businessId, type: input.staffId ? "staff.updated" : "staff.created", actorType: "USER", actorId: input.actorUserId, metadata: { staffId } }, transaction);
     return { id: staffId };
   });
+  // The other half of what onboarding's first service waits on: a specialist to work it. Assigning one
+  // here is the same decision the wizard would have made, so the service stops hiding at the same time.
+  await publishFirstServiceWhenReady(input.businessId);
+  return result;
 }
 
 export function archiveStaff(input: { businessId: string; actorUserId: string; staffId: string }) { return setArchived(input, true); }

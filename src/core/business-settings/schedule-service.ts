@@ -2,6 +2,7 @@ import { weeklyScheduleSchema } from "@/core/business-settings/setting-schemas";
 import { requireSettingsAccess } from "@/core/business-settings/authorize-settings";
 import { SettingsError } from "@/core/business-settings/settings-error";
 import { prisma } from "@/core/database/prisma";
+import { publishFirstServiceWhenReady } from "@/core/onboarding/publish-first-service";
 import { writeAuditEvent } from "@/core/audit/audit-service";
 
 type Interval = { dayOfWeek: number; startsAt: string; endsAt: string };
@@ -9,7 +10,7 @@ type ScheduleInput = { businessId: string; actorUserId: string; branchId: string
 
 export async function replaceBranchSchedule(input: ScheduleInput) {
   const schedule = parseSchedule(input);
-  return prisma.$transaction(async transaction => {
+  const result = await prisma.$transaction(async transaction => {
     await requireSettingsAccess(transaction, input);
     const branch = await transaction.branch.findFirst({ where: { id: input.branchId, businessId: input.businessId, archivedAt: null }, select: { id: true } });
     if (!branch) throw new SettingsError("NOT_FOUND");
@@ -20,6 +21,11 @@ export async function replaceBranchSchedule(input: ScheduleInput) {
     await audit(transaction, input, "schedule.branch.updated", { branchId: input.branchId });
     return { branchId: input.branchId };
   });
+  // Opening hours are one of the two things onboarding's first service waits on, and they are set here
+  // rather than in the wizard — a salon that fills them in months later should not have to go back and
+  // publish by hand to make its own booking link work.
+  await publishFirstServiceWhenReady(input.businessId);
+  return result;
 }
 
 export async function replaceStaffSchedule(input: ScheduleInput & { staffId: string }) {
