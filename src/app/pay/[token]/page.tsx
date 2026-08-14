@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { verifyBookingActionToken } from "@/core/bookings/booking-action-token";
 import { prisma } from "@/core/database/prisma";
 import { getPaymentInstructions } from "@/core/payments/payment-service";
-import { getPublicPayment } from "@/core/payments/receipt-submission-service";
+import { getPublicPaymentView } from "@/core/payments/public-payment-view";
 import { PaymentPage } from "@/features/public-payment/payment-page";
 import { resolveLocale } from "@/i18n/translate";
 
@@ -34,7 +34,7 @@ export default async function PublicPaymentPage({ params, searchParams }: PagePr
 async function loadPayment(token: string) {
   try {
     const action = verifyBookingActionToken(token, new Date(), "view_payment");
-    const payment = await getPublicPayment(action.paymentId);
+    const payment = await getPublicPaymentView(action.paymentId);
     if (!payment) return null;
     // A booking that asked for no money has no payment details, and demanding them here would 404
     // the page that is supposed to confirm the visit.

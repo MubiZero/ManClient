@@ -6,8 +6,10 @@ import { useState } from "react";
 import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Field, Textarea } from "@/features/ui-kit/field";
+import type { SupportedLocale } from "@/i18n/translate";
+import { t } from "@/i18n/translate";
 
-export function ReviewForm({ submitAction }: { submitAction: (formData: FormData) => Promise<void> }) {
+export function ReviewForm({ submitAction, locale }: { submitAction: (formData: FormData) => Promise<void>; locale: SupportedLocale }) {
   const [rating, setRating] = useState(0);
 
   return (
@@ -16,15 +18,15 @@ export function ReviewForm({ submitAction }: { submitAction: (formData: FormData
         <form action={submitAction} className="flex flex-col gap-4">
           <input type="hidden" name="rating" value={rating} />
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-foreground">Ваша оценка</span>
-            <div className="flex gap-1" role="radiogroup" aria-label="Оценка от 1 до 5 звёзд">
+            <span className="text-sm font-medium text-foreground">{t(locale, "review.ratingLabel")}</span>
+            <div className="flex gap-1" role="radiogroup" aria-label={t(locale, "review.ratingGroupLabel")}>
               {[1, 2, 3, 4, 5].map((value) => (
                 <button
                   key={value}
                   type="button"
                   role="radio"
                   aria-checked={rating === value}
-                  aria-label={`${value} из 5`}
+                  aria-label={t(locale, "review.starAriaLabel", { value })}
                   onClick={() => setRating(value)}
                   className="rounded-md p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -36,12 +38,12 @@ export function ReviewForm({ submitAction }: { submitAction: (formData: FormData
               ))}
             </div>
           </div>
-          <Field label="Комментарий (необязательно)" htmlFor="review-comment">
-            <Textarea id="review-comment" name="comment" maxLength={1000} placeholder="Расскажите о своём визите" />
+          <Field label={t(locale, "review.commentLabel")} htmlFor="review-comment">
+            <Textarea id="review-comment" name="comment" maxLength={1000} placeholder={t(locale, "review.commentPlaceholder")} />
           </Field>
           <div className="flex justify-end">
             <Button type="submit" disabled={rating < 1}>
-              Отправить отзыв
+              {t(locale, "review.submitCta")}
             </Button>
           </div>
         </form>

@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Field, Input } from "@/features/ui-kit/field";
+import type { SupportedLocale } from "@/i18n/translate";
+import { intlLocale, t } from "@/i18n/translate";
 
-export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone }: { token: string; branchId: string; serviceId: string; staffId: string; timeZone: string }) {
+export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone, locale }: { token: string; branchId: string; serviceId: string; staffId: string; timeZone: string; locale: SupportedLocale }) {
   const [starts, setStarts] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const requestRef = useRef<AbortController | null>(null);
@@ -26,30 +28,30 @@ export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone }
       const data = (await response.json()) as { starts?: string[] };
       if (requestRef.current !== request) return;
       setStarts(data.starts ?? []);
-      if (!data.starts?.length) setMessage("На эту дату свободного времени нет. Выберите другой день.");
+      if (!data.starts?.length) setMessage(t(locale, "booking.noSlotsForDate"));
     } catch {
       if (request.signal.aborted || requestRef.current !== request) return;
-      setMessage("Не удалось загрузить свободное время. Проверьте соединение и попробуйте ещё раз.");
+      setMessage(t(locale, "booking.errors.slotsLoadFailed"));
     }
   }
 
   async function select(startsAt: string) {
     const response = await fetch("/api/bookings/reschedule", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, startsAt }) });
-    if (response.ok) { setStarts([]); setMessage("Запись перенесена. Новое время сохранено."); return; }
-    if (response.status === 409) { setMessage("Это время только что заняли. Выберите другой слот."); return; }
+    if (response.ok) { setStarts([]); setMessage(t(locale, "reschedule.moved")); return; }
+    if (response.status === 409) { setMessage(t(locale, "booking.errors.slotTaken")); return; }
     if (response.status === 422) {
       const data = (await response.json()) as { error?: string; limit?: number };
       setStarts([]);
-      setMessage(policyMessage(data.error, data.limit));
+      setMessage(policyMessage(locale, data.error, data.limit));
       return;
     }
-    setMessage("Ссылка истекла или запись уже недоступна для переноса.");
+    setMessage(t(locale, "reschedule.linkExpired"));
   }
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-4 p-6">
-        <Field label="Новая дата" htmlFor="reschedule-date">
+        <Field label={t(locale, "reschedule.dateLabel")} htmlFor="reschedule-date">
           <Input
             id="reschedule-date"
             type="date"
@@ -59,7 +61,7 @@ export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone }
           />
         </Field>
         {starts.length > 0 ? (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label="Свободное время">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label={t(locale, "booking.availableTimesAriaLabel")}>
             {starts.map((value) => (
               <button
                 data-slot
@@ -68,7 +70,7 @@ export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone }
                 onClick={() => void select(value)}
                 className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/50 hover:bg-secondary"
               >
-                {new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(value))}
+                {new Intl.DateTimeFormat(intlLocale(locale), { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(value))}
               </button>
             ))}
           </div>
@@ -87,12 +89,12 @@ export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone }
  * The refusal has to name the rule. "Перенос недоступен" sends the customer to the phone; "не позднее
  * чем за 4 часа" tells them what happened and that the business can still help.
  */
-function policyMessage(code: string | undefined, limit: number | undefined): string {
+function policyMessage(locale: SupportedLocale, code: string | undefined, limit: number | undefined): string {
   if (code === "RESCHEDULE_LIMIT_REACHED") {
-    return `Эту запись уже переносили ${limit ?? 0} раз(а) — больше переносов бизнес не разрешает. Свяжитесь с бизнесом, если время не подходит.`;
+    return t(locale, "reschedule.limitReached", { limit: limit ?? 0 });
   }
   if (code === "RESCHEDULE_WINDOW_CLOSED") {
-    return `Перенести запись можно не позднее чем за ${limit ?? 0} ч до визита. Свяжитесь с бизнесом напрямую.`;
+    return t(locale, "reschedule.windowClosed", { hours: limit ?? 0 });
   }
-  return "Перенос этой записи сейчас недоступен. Свяжитесь с бизнесом напрямую.";
+  return t(locale, "reschedule.unavailable");
 }

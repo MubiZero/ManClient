@@ -9,6 +9,7 @@ import type { PaymentInstructions } from "@/core/payments/payment-service";
 import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { cn } from "@/features/ui-kit/cn";
+import { LocaleSwitcher } from "@/features/public-booking/locale-switcher";
 import { PublicBrandMark } from "@/features/public-booking/public-brand-mark";
 import type { SupportedLocale } from "@/i18n/translate";
 import { intlLocale, moneyLocale, t } from "@/i18n/translate";
@@ -30,6 +31,8 @@ type PaymentView = {
   };
   submissions: Array<{ status: string; createdAt: Date | string }>;
   business: { name: string; slug: string; logoStorageKey: string | null; brandColor: string | null };
+  /** Why the business turned the last receipt down. Only ever sent while the payment is rejected. */
+  reviewReason?: string | null;
 };
 
 export function PaymentPage({
@@ -48,7 +51,9 @@ export function PaymentPage({
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  const [selectedReceipt, setSelectedReceipt] = useState<{ name: string; url: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const complete = payment.status === "RECEIPT_ACCEPTED" || payment.booking.status === "CONFIRMED";
   const prepaymentSkipped = payment.status === "NOT_REQUIRED";
   // What the business collects at the visit: the whole price when no deposit was taken, the remainder
@@ -111,8 +116,23 @@ export function PaymentPage({
     return () => window.clearInterval(timer);
   }, [complete, payment.booking.expiresAt, reviewing]);
 
+  /** The blob URL outlives the render that made it, so it is released by hand, not by the browser. */
+  useEffect(() => () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); }, []);
+
+  /**
+   * Show the photo back before it is sent. On a mobile connection the upload can take half a minute,
+   * and without the file on screen there is nothing to tell the customer whether the camera roll
+   * handed anything over — the usual answer being to pick a second photo on top of the first.
+   */
+  function showSelectedReceipt(file: File) {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = URL.createObjectURL(file);
+    setSelectedReceipt({ name: file.name, url: previewUrlRef.current });
+  }
+
   async function upload(file: File | undefined) {
     if (!file) return;
+    showSelectedReceipt(file);
     setUploading(true); setMessage("");
     const body = new FormData(); body.set("receipt", file);
     try {
@@ -150,25 +170,7 @@ export function PaymentPage({
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4">
           <PublicBrandMark slug={payment.business.slug} name={payment.business.name} hasLogo={Boolean(payment.business.logoStorageKey)} href={`/b/${payment.business.slug}`} />
           <span className="text-sm font-medium text-muted-foreground">{t(locale, "payment.securePaymentLabel")}</span>
-          <nav className="ml-auto flex items-center gap-1 text-xs font-medium" aria-label={t(locale, "booking.languageSwitcherLabel")}>
-            <a
-              href="?lang=ru"
-              aria-current={locale === "ru" ? "true" : undefined}
-              className={locale === "ru" ? "text-foreground underline underline-offset-2" : "text-muted-foreground hover:text-foreground"}
-            >
-              RU
-            </a>
-            <span className="text-muted-foreground" aria-hidden>
-              /
-            </span>
-            <a
-              href="?lang=tg"
-              aria-current={locale === "tg" ? "true" : undefined}
-              className={locale === "tg" ? "text-foreground underline underline-offset-2" : "text-muted-foreground hover:text-foreground"}
-            >
-              TG
-            </a>
-          </nav>
+          <LocaleSwitcher locale={locale} />
         </div>
       </header>
       <div className="mx-auto w-full max-w-md flex-1 px-4 py-8">
@@ -219,6 +221,11 @@ export function PaymentPage({
                 tone="success"
                 title={t(locale, "payment.completeTitle")}
                 description={t(locale, prepaymentSkipped ? "payment.notRequiredDescription" : "payment.completeDescription")}
+                action={
+                  <ButtonLink href={`/my?lang=${locale}`} variant="secondary" size="sm">
+                    {t(locale, "visits.linkLabel")}
+                  </ButtonLink>
+                }
               />
             ) : reviewing ? (
               <StatusPanel
@@ -233,6 +240,11 @@ export function PaymentPage({
                 tone="danger"
                 title={t(locale, "payment.holdExpiredPanelTitle")}
                 description={t(locale, "payment.holdExpiredPanelDescription")}
+                action={
+                  <ButtonLink href={`/b/${payment.business.slug}?lang=${locale}`} variant="secondary" size="sm">
+                    {t(locale, "visits.bookAgain")}
+                  </ButtonLink>
+                }
               />
             ) : (
               <>
@@ -249,7 +261,18 @@ export function PaymentPage({
                     role="alert"
                     tone="danger"
                     title={t(locale, "payment.rejectedPanelTitle")}
-                    description={t(locale, "payment.rejectedPanelDescription")}
+                    description={
+                      // The business had to write down what was wrong with the receipt before it could
+                      // reject it. Without that sentence the customer re-sends the very same photo.
+                      payment.reviewReason
+                        ? t(locale, "payment.rejectedPanelDescriptionWithReason", { reason: payment.reviewReason })
+                        : t(locale, "payment.rejectedPanelDescription")
+                    }
+                    action={
+                      <Button type="button" variant="secondary" size="sm" onClick={() => inputRef.current?.click()}>
+                        {t(locale, "payment.rejectedCta")}
+                      </Button>
+                    }
                   />
                 ) : null}
                 <ol className="list-decimal pl-5 text-sm text-muted-foreground">
@@ -293,6 +316,23 @@ export function PaymentPage({
                     {uploading ? t(locale, "payment.checkingImage") : t(locale, "payment.attachReceipt")}
                   </span>
                   <span className="text-xs text-muted-foreground">{t(locale, "payment.fileHint")}</span>
+                  {selectedReceipt ? (
+                    <span className="mt-1 flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- a blob URL from the customer's phone is not an optimizable public asset */}
+                      <img
+                        src={selectedReceipt.url}
+                        alt={t(locale, "payment.receiptPreviewAlt")}
+                        className="size-12 shrink-0 rounded-md border border-border object-cover"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{selectedReceipt.name}</span>
+                      {uploading ? (
+                        <span
+                          className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </span>
+                  ) : null}
                   <input
                     ref={inputRef}
                     type="file"
@@ -319,16 +359,23 @@ export function PaymentPage({
   );
 }
 
+/**
+ * A finished state always offers the next step. Each of these panels used to end the page: the
+ * customer who lost the hold was told to book again with nothing to press, and the one who had just
+ * paid was left on a dead screen. The action slot is what keeps them inside the product.
+ */
 function StatusPanel({
   role,
   tone,
   title,
   description,
+  action,
 }: {
   role: "status" | "alert";
   tone: "success" | "info" | "danger";
   title: string;
   description: string;
+  action?: ReactNode;
 }): ReactNode {
   return (
     <div
@@ -351,6 +398,7 @@ function StatusPanel({
         {title}
       </strong>
       <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      {action ? <div className="mt-3">{action}</div> : null}
     </div>
   );
 }
