@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { pluralRu } from "@/core/formatting/plural";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Field, Input } from "@/features/ui-kit/field";
 import type { SupportedLocale } from "@/i18n/translate";
@@ -91,7 +92,10 @@ export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone, 
  */
 function policyMessage(locale: SupportedLocale, code: string | undefined, limit: number | undefined): string {
   if (code === "RESCHEDULE_LIMIT_REACHED") {
-    return t(locale, "reschedule.limitReached", { limit: limit ?? 0 });
+    return t(locale, "reschedule.limitReached", {
+      limit: limit ?? 0,
+      times: pluralRu(limit ?? 0, { one: "раз", few: "раза", many: "раз" }),
+    });
   }
   if (code === "RESCHEDULE_WINDOW_CLOSED") {
     return t(locale, "reschedule.windowClosed", { hours: limit ?? 0 });

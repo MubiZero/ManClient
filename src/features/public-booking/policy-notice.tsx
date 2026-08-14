@@ -1,4 +1,5 @@
 import { formatSomoni } from "@/core/formatting/money";
+import { pluralRu } from "@/core/formatting/plural";
 import { moneyLocale, t, type SupportedLocale } from "@/i18n/translate";
 
 /**
@@ -26,7 +27,14 @@ export function PolicyNotice({
     policy.minLeadTimeMinutes > 0 ? t(locale, "booking.policy.leadTime", { value: formatLeadTime(locale, policy.minLeadTimeMinutes) }) : null,
     policy.maxAdvanceDays !== null ? t(locale, "booking.policy.horizon", { days: policy.maxAdvanceDays }) : null,
     policy.freeCancellationHours > 0 ? t(locale, "booking.policy.cancellation", { hours: policy.freeCancellationHours }) : null,
-    policy.maxCustomerReschedules !== null ? t(locale, "booking.policy.rescheduleLimit", { count: policy.maxCustomerReschedules }) : null,
+    // Tajik counts with an invariant «бор», so only the Russian template carries a {times} slot and the
+    // extra parameter simply finds nothing to replace in the other dictionary.
+    policy.maxCustomerReschedules !== null
+      ? t(locale, "booking.policy.rescheduleLimit", {
+          count: policy.maxCustomerReschedules,
+          times: pluralRu(policy.maxCustomerReschedules, { one: "раза", few: "раз", many: "раз" }),
+        })
+      : null,
     // Full prepayment is stated by the payment page the customer is taken to next, and it is what every
     // business did before the setting existed. Only the two surprising answers are worth a line here.
     prepaymentRule(locale, policy),

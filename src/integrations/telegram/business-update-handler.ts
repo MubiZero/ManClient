@@ -26,6 +26,7 @@ import { verifyBookingActionToken } from "@/core/bookings/booking-action-token";
 import { listCustomerBookings, getCustomerBooking } from "@/core/bookings/customer-booking-query-service";
 import { cancelBooking } from "@/core/bookings/cancel-booking";
 import { rescheduleBooking } from "@/core/bookings/reschedule-booking";
+import { pluralRu } from "@/core/formatting/plural";
 
 export type BusinessTelegramHandlerDependencies = {
   now: () => Date;
@@ -661,7 +662,7 @@ function reschedulePolicyText(error: BookingPolicyError, locale: ConversationLoc
   if (error.code === "RESCHEDULE_LIMIT_REACHED") {
     return locale === "tg"
       ? `Ин сабт аллакай ${error.limit ?? 0} бор иваз шудааст. Лутфан бо мо тамос гиред.`
-      : `Эту запись уже переносили ${error.limit ?? 0} раз(а). Свяжитесь с бизнесом, если время не подходит.`;
+      : `Эту запись уже переносили ${error.limit ?? 0} ${pluralRu(error.limit ?? 0, { one: "раз", few: "раза", many: "раз" })}. Свяжитесь с бизнесом, если время не подходит.`;
   }
   return locale === "tg"
     ? `Сабтро камтар аз ${error.limit ?? 0} соат пеш аз ташриф иваз кардан мумкин нест. Лутфан бо мо тамос гиред.`

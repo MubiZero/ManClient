@@ -8,11 +8,13 @@ import { listBusinessBookings } from "@/core/booking-operations/booking-query-se
 import { getDaySchedule, getWeekSchedule } from "@/core/booking-operations/day-schedule-service";
 import { prisma } from "@/core/database/prisma";
 import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
+import { pluralRu } from "@/core/formatting/plural";
 import { BookingFilters } from "@/features/dashboard/bookings/booking-filters";
 import { BookingList } from "@/features/dashboard/bookings/booking-list";
 import { DayGrid } from "@/features/dashboard/bookings/day-grid";
 import { WeekGrid } from "@/features/dashboard/bookings/week-grid";
 import { ButtonLink } from "@/features/ui-kit/button";
+import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { PageHeader } from "@/features/ui-kit/page-header";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -22,9 +24,9 @@ export default async function BookingsPage({ searchParams }: PageProps) {
   const query = await searchParams;
   const branches = await prisma.branch.findMany({ where: { businessId: membership.businessId, archivedAt: null }, select: { id: true, name: true, timeZone: true }, orderBy: { name: "asc" } });
   const baseTimeZone = branches.find((item) => item.id === query.branchId)?.timeZone ?? branches[0]?.timeZone ?? "Asia/Dushanbe";
-  const listQuery = compactQuery(query);
+  const listQuery = filterQuery(query);
   const trail = readPageTrail(query.trail);
-  const filters = parseBookingFilters({ ...listQuery, ...(trail.length ? { cursor: trail[trail.length - 1] } : {}) }, baseTimeZone);
+  const filters = parseBookingFilters({ ...listQuery, ...(currentCursor(trail) ? { cursor: currentCursor(trail) } : {}) }, baseTimeZone);
   const calendarInput = { businessId: membership.businessId, actorUserId: membership.userId, branchId: filters.branchId, staffId: filters.staffId, date: filters.date };
   const [day, week] = await Promise.all([
     filters.view === "day" ? getDaySchedule(calendarInput) : null,
@@ -73,7 +75,7 @@ export default async function BookingsPage({ searchParams }: PageProps) {
       <PageHeader
         eyebrow="Рабочий календарь"
         title="Записи"
-        description={result.items.length ? `${result.items.length} записей в выборке` : "Управляйте визитами клиентов и загрузкой команды."}
+        description={result.items.length ? `${result.items.length} ${pluralRu(result.items.length, { one: "запись", few: "записи", many: "записей" })} в выборке` : "Управляйте визитами клиентов и загрузкой команды."}
         action={
           <div className="flex gap-2">
             <ButtonLink href="/api/dashboard/export/bookings" variant="secondary">
@@ -125,46 +127,16 @@ export default async function BookingsPage({ searchParams }: PageProps) {
       ) : null}
       {calendar ? <h2 className="text-sm font-semibold text-foreground">{day ? "Записи за день" : "Записи за неделю"}</h2> : null}
       <BookingList items={result.items} filtered={filtered} />
-      {trail.length || result.nextCursor ? (
-        <nav aria-label="Страницы записей" className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-          <span>Страница {trail.length + 1}</span>
-          <div className="flex gap-2">
-            {trail.length ? (
-              <ButtonLink href={pageHref(listQuery, trail.slice(0, -1))} variant="secondary" size="sm">
-                Назад
-              </ButtonLink>
-            ) : null}
-            {result.nextCursor ? (
-              <ButtonLink href={pageHref(listQuery, [...trail, result.nextCursor])} variant="secondary" size="sm">
-                Далее
-              </ButtonLink>
-            ) : null}
-          </div>
-        </nav>
-      ) : null}
+      <CursorPager
+        basePath="/dashboard/bookings"
+        query={listQuery}
+        trail={trail}
+        nextCursor={result.nextCursor}
+        label="Страницы записей"
+      />
     </>
   );
 }
 
-/** Paging keys are how the list walks, not what it selects, so the filter schema never sees them. */
-const PAGING_KEYS = new Set(["cursor", "trail"]);
 
-function compactQuery(query: Record<string, string | string[] | undefined>) {
-  return Object.fromEntries(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== "" && !PAGING_KEYS.has(entry[0])));
-}
 
-/**
- * The cursor query can only walk forward, which is why the button used to replace the list while calling
- * itself "Показать ещё". Keeping the cursors already used turns that one-way walk into pages: the last one
- * is the page on screen, dropping it goes back. Bounded so a hand-written URL cannot grow without end.
- */
-function readPageTrail(value: string | string[] | undefined) {
-  if (typeof value !== "string") return [];
-  return value.split(",").filter((cursor) => cursor.length > 0 && cursor.length <= 128).slice(-50);
-}
-
-function pageHref(listQuery: Record<string, string>, trail: string[]) {
-  const params = new URLSearchParams(listQuery);
-  if (trail.length) params.set("trail", trail.join(","));
-  return `/dashboard/bookings?${params.toString()}`;
-}

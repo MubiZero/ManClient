@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { businessHasFeature, PLAN_LABELS } from "@/core/platform/subscription-plans";
 import { getAverageRating, listReviews, setReviewHidden } from "@/core/reviews/review-service";
+import { pluralRu } from "@/core/formatting/plural";
 import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
@@ -56,7 +57,7 @@ export default async function ReviewsPage({ searchParams }: PageProps) {
           label="Средняя оценка"
           value={rating.average !== null ? rating.average.toFixed(1) : "—"}
           icon={Star}
-          trend={rating.count > 0 ? { direction: "flat", label: `${rating.count} отзывов` } : undefined}
+          trend={rating.count > 0 ? { direction: "flat", label: `${rating.count} ${pluralRu(rating.count, { one: "отзыв", few: "отзыва", many: "отзывов" })}` } : undefined}
         />
       </div>
 
