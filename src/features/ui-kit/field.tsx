@@ -42,15 +42,31 @@ export function Field({
 }) {
   const generatedId = useId();
   const id = htmlFor ?? generatedId;
+  const messageId = `${id}-message`;
+  /**
+   * The message under a field has to be attached to it, not merely near it. `aria-invalid` is what makes
+   * the control read as rejected and what the `aria-[invalid=true]` styling above hangs on; the describedby
+   * link is how the reason is read out at all, since a screen reader announces the label and then stops.
+   * `role="alert"` speaks it the moment it appears, for the person who has already moved on.
+   */
+  const described = error || hint ? messageId : undefined;
   const control =
-    !htmlFor && isValidElement(children)
-      ? cloneElement(children as ReactElement<{ id?: string }>, { id: (children as ReactElement<{ id?: string }>).props.id ?? id })
+    isValidElement(children)
+      ? cloneElement(children as ReactElement<{ id?: string; "aria-invalid"?: boolean; "aria-describedby"?: string }>, {
+          ...(htmlFor ? {} : { id: (children as ReactElement<{ id?: string }>).props.id ?? id }),
+          ...(error ? { "aria-invalid": true } : {}),
+          ...(described ? { "aria-describedby": described } : {}),
+        })
       : children;
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{label}</Label>
       {control}
-      {error ? <p className="text-[13px] text-destructive">{error}</p> : hint ? <p className="text-[13px] text-muted-foreground">{hint}</p> : null}
+      {error ? (
+        <p id={messageId} role="alert" className="text-[13px] text-destructive">{error}</p>
+      ) : hint ? (
+        <p id={messageId} className="text-[13px] text-muted-foreground">{hint}</p>
+      ) : null}
     </div>
   );
 }
