@@ -114,16 +114,27 @@ export function findPhoneVerificationTemplateId(): string | null {
 export const PLATFORM_SMS_LABEL = "ManClient";
 
 /**
- * Cyrillic SMS fits 70 characters per segment. " - код подтверждения: " plus six digits spends 28 of them,
- * so a name longer than this turns every code into two segments at twice the price. A truncated salon
- * name still tells the customer who is asking; a doubled bill on every code tells them nothing.
+ * A Cyrillic SMS is sent as UCS-2, which fits 70 characters in one segment. Payom counts segments and
+ * calls them "сообщений": a delivered text of 43 characters shows as `1 шт.` against −0,045 сомони, so
+ * a message that spills past 70 is billed as two.
+ *
+ * Everything below exists to make sure that never happens. Then the ledger's row count equals the number
+ * of segments by construction, and what a salon costs is a number rather than an estimate.
+ */
+const SMS_SEGMENT_LENGTH = 70;
+
+/**
+ * " - код подтверждения: " plus six digits spends 28 of the 70, leaving 42. Forty keeps a margin for a
+ * template whose approved wording differs slightly from the one in the runbook — the id comes from the
+ * environment, and its exact text is not ours to read.
  */
 const MAX_LABEL_LENGTH = 40;
 
-export function smsLabel(name: string | null | undefined): string {
+export function smsLabel(name: string | null | undefined, budget = MAX_LABEL_LENGTH): string {
   const trimmed = name?.trim();
   if (!trimmed) return PLATFORM_SMS_LABEL;
-  return trimmed.length <= MAX_LABEL_LENGTH ? trimmed : `${trimmed.slice(0, MAX_LABEL_LENGTH - 1).trimEnd()}…`;
+  // A truncated salon name still tells the customer who is writing; a doubled bill tells them nothing.
+  return trimmed.length <= budget ? trimmed : `${trimmed.slice(0, budget - 1).trimEnd()}…`;
 }
 
 export function buildPhoneVerificationSms(code: string, label: string): { templateId: string; variables: Record<string, string> } {
@@ -161,10 +172,15 @@ export function buildPayomVariables(
 ): { templateId: string; variables: Record<string, string> } {
   const template = TEMPLATES[kind][locale === "tg" ? "tg" : "ru"];
   const timeZone = input.timeZone ?? DEFAULT_TIME_ZONE;
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone, dateStyle: "short" }).format(input.startsAt);
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(input.startsAt);
   const values: Record<TemplateVariable, string> = {
-    "text-1": input.businessName,
-    "date-1": new Intl.DateTimeFormat("en-CA", { timeZone, dateStyle: "short" }).format(input.startsAt),
-    "time-1": new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(input.startsAt),
+    // The name is the only variable-length part, so it is the one that has to give. The budget is read
+    // off the approved wording rather than hardcoded: these templates differ by 20 characters between
+    // kinds and languages, and a single constant would either truncate needlessly or not enough.
+    "text-1": smsLabel(input.businessName, nameBudget(template, date, time)),
+    "date-1": date,
+    "time-1": time,
   };
 
   // Sending a placeholder the template does not contain would be silently dropped, and omitting one
@@ -173,4 +189,17 @@ export function buildPayomVariables(
     templateId: template.id,
     variables: Object.fromEntries(template.variables.map((name) => [name, values[name]])),
   };
+}
+
+/**
+ * How much of one segment is left for the salon's name once the approved wording and the visit's date
+ * and time have taken their share. Measured against the text payom will actually deliver, which is why
+ * `approvedText` is kept next to every id.
+ */
+function nameBudget(template: PayomTemplate, date: string, time: string): number {
+  const fixedLength = template.approvedText
+    .replace("{text-1}", "")
+    .replace("{date-1}", date)
+    .replace("{time-1}", time).length;
+  return Math.max(1, SMS_SEGMENT_LENGTH - fixedLength);
 }
