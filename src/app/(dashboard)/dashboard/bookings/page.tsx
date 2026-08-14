@@ -22,7 +22,9 @@ export default async function BookingsPage({ searchParams }: PageProps) {
   const query = await searchParams;
   const branches = await prisma.branch.findMany({ where: { businessId: membership.businessId, archivedAt: null }, select: { id: true, name: true, timeZone: true }, orderBy: { name: "asc" } });
   const baseTimeZone = branches.find((item) => item.id === query.branchId)?.timeZone ?? branches[0]?.timeZone ?? "Asia/Dushanbe";
-  const filters = parseBookingFilters(compactQuery(query), baseTimeZone);
+  const listQuery = compactQuery(query);
+  const trail = readPageTrail(query.trail);
+  const filters = parseBookingFilters({ ...listQuery, ...(trail.length ? { cursor: trail[trail.length - 1] } : {}) }, baseTimeZone);
   const calendarInput = { businessId: membership.businessId, actorUserId: membership.userId, branchId: filters.branchId, staffId: filters.staffId, date: filters.date };
   const [day, week] = await Promise.all([
     filters.view === "day" ? getDaySchedule(calendarInput) : null,
@@ -123,18 +125,46 @@ export default async function BookingsPage({ searchParams }: PageProps) {
       ) : null}
       {calendar ? <h2 className="text-sm font-semibold text-foreground">{day ? "Записи за день" : "Записи за неделю"}</h2> : null}
       <BookingList items={result.items} filtered={filtered} />
-      {result.nextCursor ? (
-        <Link
-          href={`/dashboard/bookings?${new URLSearchParams({ ...Object.fromEntries(Object.entries(compactQuery(query)).map(([key, value]) => [key, String(value)])), cursor: result.nextCursor }).toString()}`}
-          className="w-fit rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
-        >
-          Показать ещё
-        </Link>
+      {trail.length || result.nextCursor ? (
+        <nav aria-label="Страницы записей" className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+          <span>Страница {trail.length + 1}</span>
+          <div className="flex gap-2">
+            {trail.length ? (
+              <ButtonLink href={pageHref(listQuery, trail.slice(0, -1))} variant="secondary" size="sm">
+                Назад
+              </ButtonLink>
+            ) : null}
+            {result.nextCursor ? (
+              <ButtonLink href={pageHref(listQuery, [...trail, result.nextCursor])} variant="secondary" size="sm">
+                Далее
+              </ButtonLink>
+            ) : null}
+          </div>
+        </nav>
       ) : null}
     </>
   );
 }
 
+/** Paging keys are how the list walks, not what it selects, so the filter schema never sees them. */
+const PAGING_KEYS = new Set(["cursor", "trail"]);
+
 function compactQuery(query: Record<string, string | string[] | undefined>) {
-  return Object.fromEntries(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""));
+  return Object.fromEntries(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== "" && !PAGING_KEYS.has(entry[0])));
+}
+
+/**
+ * The cursor query can only walk forward, which is why the button used to replace the list while calling
+ * itself "Показать ещё". Keeping the cursors already used turns that one-way walk into pages: the last one
+ * is the page on screen, dropping it goes back. Bounded so a hand-written URL cannot grow without end.
+ */
+function readPageTrail(value: string | string[] | undefined) {
+  if (typeof value !== "string") return [];
+  return value.split(",").filter((cursor) => cursor.length > 0 && cursor.length <= 128).slice(-50);
+}
+
+function pageHref(listQuery: Record<string, string>, trail: string[]) {
+  const params = new URLSearchParams(listQuery);
+  if (trail.length) params.set("trail", trail.join(","));
+  return `/dashboard/bookings?${params.toString()}`;
 }
