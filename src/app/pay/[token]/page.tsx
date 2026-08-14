@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 import { verifyBookingActionToken } from "@/core/bookings/booking-action-token";
 import { prisma } from "@/core/database/prisma";
 import { getPaymentInstructions } from "@/core/payments/payment-service";
+import { getPublicPaymentView } from "@/core/payments/public-payment-view";
 import { PaymentPage } from "@/features/public-payment/payment-page";
-import { getPublicPaymentView } from "@/features/public-payment/public-payment-view";
 import { resolveLocale } from "@/i18n/translate";
 
 const LOCALE_COOKIE = "nc-locale";

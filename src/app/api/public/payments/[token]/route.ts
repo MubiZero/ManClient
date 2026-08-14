@@ -1,6 +1,6 @@
 import { verifyBookingActionToken } from "@/core/bookings/booking-action-token";
 import { extendPaymentHold } from "@/core/bookings/hold-extension";
-import { getPublicPaymentView } from "@/features/public-payment/public-payment-view";
+import { getPublicPaymentView } from "@/core/payments/public-payment-view";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
