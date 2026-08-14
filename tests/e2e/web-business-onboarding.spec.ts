@@ -24,8 +24,9 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await expect(page).toHaveURL(/\/dashboard\/onboarding$/);
   await expect(page.getByRole("heading", { name: "Подготовьте бизнес к записи" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Добавьте первую услугу" })).toBeVisible();
-  const firstStepMarker = await page.locator(".onboarding-progress li").first().locator("span").boundingBox();
-  const firstStepLabel = await page.locator(".onboarding-progress li").first().locator("strong").boundingBox();
+  const progress = page.getByRole("list", { name: "Этапы настройки бизнеса" });
+  const firstStepMarker = await progress.locator("li").first().locator("span").boundingBox();
+  const firstStepLabel = await progress.locator("li").first().locator("strong").boundingBox();
   expect(firstStepMarker).not.toBeNull();
   expect(firstStepLabel).not.toBeNull();
   expect(firstStepLabel!.y).toBeGreaterThanOrEqual(firstStepMarker!.y + firstStepMarker!.height);
@@ -37,10 +38,14 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await page.reload();
   await expect(page.getByRole("heading", { name: "Как принимаете оплату" })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator(".onboarding-progress").getByText("Услуга")).toBeVisible();
-  await expect(page.locator(".onboarding-progress").getByText("Оплата")).toBeVisible();
-  await expect(page.locator(".onboarding-progress").getByText("Запуск")).toBeVisible();
+  await expect(progress.getByText("Услуга")).toBeVisible();
+  await expect(progress.getByText("Оплата")).toBeVisible();
+  await expect(progress.getByText("Запуск")).toBeVisible();
+  // A step already behind the owner stays reachable: the wizard is the only place the first service
+  // can be corrected before the booking link goes out.
+  await expect(progress.getByRole("link", { name: "Услуга" })).toHaveAttribute("href", "/dashboard/onboarding?step=service");
   await page.getByRole("link", { name: "Назад к услуге" }).click();
+  await expect(page).toHaveURL(/step=service/);
   await expect(page.getByRole("heading", { name: "Проверьте первую услугу" })).toBeVisible();
   await expect(page.getByLabel("Название услуги")).toHaveValue("Мужская стрижка");
   await page.getByRole("button", { name: "Сохранить и перейти к оплате" }).click();
@@ -48,7 +53,7 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await page.getByLabel("Карта DushanbeCity").fill("9762000000000000");
   await page.getByRole("button", { name: "Сохранить карту" }).click();
   await expect(page.getByRole("heading", { name: "Страница записи работает" })).toBeVisible();
-  await expect(page.locator(".onboarding-progress").getByText("Запуск")).toBeVisible();
+  await expect(progress.getByText("Запуск")).toBeVisible();
   await expect(page.getByText("Ссылка для клиентов")).toBeVisible();
   await expect(page.getByText("Отправьте её клиентам или разместите в Instagram, Telegram и на сайте.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Создать клиентского бота" })).toHaveAttribute("href", "/dashboard/settings/integrations");
@@ -59,10 +64,13 @@ test("new owner stays on the website and reaches authenticated onboarding", asyn
   await expect(page.getByText("Ссылка скопирована")).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const actionBox = await page.locator(".onboarding-launch-actions").boundingBox();
-  expect(actionBox).not.toBeNull();
-  expect(actionBox!.x).toBeGreaterThanOrEqual(0);
-  expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(390);
+  const openBox = await page.getByRole("link", { name: "Открыть страницу" }).boundingBox();
+  const copyBox = await page.getByRole("button", { name: "Скопировать ссылку" }).boundingBox();
+  expect(openBox).not.toBeNull();
+  expect(copyBox).not.toBeNull();
+  expect(openBox!.x).toBeGreaterThanOrEqual(0);
+  expect(openBox!.x + openBox!.width).toBeLessThanOrEqual(390);
+  expect(copyBox!.x + copyBox!.width).toBeLessThanOrEqual(390);
   await expect(page.getByRole("link", { name: "Открыть страницу" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Скопировать ссылку" })).toBeVisible();
 
@@ -104,8 +112,7 @@ test("registration form fits a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/register");
   await expect(page.getByRole("heading", { name: "Создайте кабинет бизнеса" })).toBeVisible();
-  const panel = page.locator(".registration-panel");
-  const box = await panel.boundingBox();
+  const box = await page.locator("form").boundingBox();
   expect(box).not.toBeNull();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);

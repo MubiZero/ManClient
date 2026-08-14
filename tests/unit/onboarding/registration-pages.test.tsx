@@ -25,7 +25,9 @@ describe("web business onboarding", () => {
   });
 
   it("offers real next steps inside the dashboard", () => {
-    const html = renderToStaticMarkup(<OnboardingChecklist businessSlug="salon-sino" />);
+    const html = renderToStaticMarkup(<OnboardingChecklist businessSlug="salon-sino" readiness={{
+      service: true, staff: true, schedule: true, payment: true, telegram: false,
+    }} />);
 
     expect(html).toContain("Страница записи работает");
     expect(html).toContain("Ссылка для клиентов");
@@ -50,6 +52,18 @@ describe("web business onboarding", () => {
     expect(html).toContain("Telegram подключён");
     expect(html).toContain("Открыть интеграции");
     expect(html).not.toContain("Создать клиентского бота");
+  });
+
+  it("names what is still blocking the booking page instead of the link", () => {
+    const html = renderToStaticMarkup(<OnboardingChecklist businessSlug="salon-sino" readiness={{
+      service: false, staff: true, schedule: false, payment: true, telegram: false,
+    }} />);
+
+    expect(html).toContain("Завершите запуск страницы");
+    expect(html).toContain("Опубликовать услугу");
+    expect(html).toContain("Настроить расписание");
+    expect(html).not.toContain("Добавить специалиста");
+    expect(html).not.toContain("Ссылка для клиентов");
   });
 
   it("shows one onboarding question at a time", () => {

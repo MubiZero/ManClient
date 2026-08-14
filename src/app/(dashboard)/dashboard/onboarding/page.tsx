@@ -7,6 +7,7 @@ import { OnboardingChecklist } from "@/features/onboarding/onboarding-checklist"
 import { OnboardingProgress } from "@/features/onboarding/onboarding-progress";
 import { PaymentSetupForm } from "@/features/onboarding/payment-setup-form";
 import { ServiceSetupForm } from "@/features/onboarding/service-setup-form";
+import { PageHeader } from "@/features/ui-kit/page-header";
 import { redirect } from "next/navigation";
 
 type OnboardingPageProps = { searchParams: Promise<{ error?: string; step?: string }> };
@@ -25,8 +26,17 @@ export default async function DashboardOnboardingPage({ searchParams }: Onboardi
   ]);
   // The step is behind the owner once they have either entered a card or said they take payment on the
   // premises. Without the second half a salon on the default NONE would sit on this step forever.
-  const paymentDecided = Boolean(branch?.recipientCardEncrypted) || Boolean(business.paymentSetupSkippedAt);
-  const currentStep: 1 | 2 | 3 = paymentDecided ? 3 : service && requestedStep !== "service" ? 2 : 1;
+  const cardSaved = Boolean(branch?.recipientCardEncrypted);
+  const paymentDecided = cardSaved || Boolean(business.paymentSetupSkippedAt);
+  // Where the data says the owner has got to, and which of the earlier steps are still worth opening.
+  // The service can be corrected for as long as the wizard is on screen; the card can be entered only
+  // once, so a salon that already gave one is sent to branch settings instead of a form that no-ops.
+  const furthestStep: 1 | 2 | 3 = paymentDecided ? 3 : service ? 2 : 1;
+  const openSteps: (1 | 2 | 3)[] = [1];
+  if (service && !cardSaved) openSteps.push(2);
+  if (paymentDecided) openSteps.push(3);
+  const requested = requestedStep === "service" ? 1 : requestedStep === "payment" ? 2 : requestedStep === "launch" ? 3 : null;
+  const currentStep: 1 | 2 | 3 = requested && openSteps.includes(requested) ? requested : furthestStep;
   // A card is only missing if something would actually ask for money — the business rule, or one service
   // overriding it. Otherwise there is nothing to fix and nothing to nag about.
   const prepaymentExpected = business.prepaymentMode !== "NONE" || paidServiceCount > 0;
@@ -82,17 +92,21 @@ export default async function DashboardOnboardingPage({ searchParams }: Onboardi
   }
 
   return (
-    <section className="dashboard-content onboarding-page">
-      <div className="page-heading"><div><p className="context-label">Первые шаги</p><h1>Подготовьте бизнес к записи</h1><p>Осталось настроить услугу и получение оплаты. Каждый шаг сохраняется отдельно.</p></div></div>
-      <div className="onboarding-wizard">
-        <OnboardingProgress currentStep={currentStep} />
+    <section className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Первые шаги"
+        title="Подготовьте бизнес к записи"
+        description="Осталось настроить услугу и получение оплаты. Каждый шаг сохраняется отдельно."
+      />
+      <div className="flex w-full max-w-2xl flex-col gap-4">
+        <OnboardingProgress currentStep={currentStep} openSteps={openSteps} />
         {currentStep === 1 ? <ServiceSetupForm action={saveService} service={service ?? undefined} error={error === "service" ? "Проверьте название, длительность и стоимость услуги." : undefined} /> : null}
         {currentStep === 2 ? <PaymentSetupForm action={saveCard} skipAction={skipCard} error={error === "card" ? "Введите 16 цифр карты DushanbeCity и попробуйте ещё раз." : undefined} /> : null}
         {currentStep === 3 ? <OnboardingChecklist businessSlug={business.slug} readiness={{
           service: Boolean(service?.isPublished),
           staff: staffCount > 0,
           schedule: scheduleCount > 0,
-          payment: !prepaymentExpected || Boolean(branch?.recipientCardEncrypted),
+          payment: !prepaymentExpected || cardSaved,
           telegram: telegramCount > 0,
         }} /> : null}
       </div>
