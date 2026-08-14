@@ -11,7 +11,11 @@ import { Sheet, SheetContent } from "@/features/ui-kit/sheet";
 import { ThemeToggle } from "@/features/ui-kit/theme-toggle";
 
 type DashboardRole = "OWNER" | "ADMIN" | "STAFF";
-type NavigationItem = { href: string; label: string; group: "work" | "settings"; icon: typeof LayoutDashboard; mobile: "primary" | "more"; adminOnly?: boolean };
+/**
+ * `staffLabel` does double duty: it lets a settings page through the staff filter and names it the way
+ * staff meet it. A master has nothing to integrate — they have a Telegram to connect.
+ */
+type NavigationItem = { href: string; label: string; group: "work" | "settings"; icon: typeof LayoutDashboard; mobile: "primary" | "more"; adminOnly?: boolean; staffLabel?: string };
 
 const allItems: NavigationItem[] = [
   { href: "/dashboard", label: "Обзор", group: "work", icon: LayoutDashboard, mobile: "more" },
@@ -29,7 +33,7 @@ const allItems: NavigationItem[] = [
   { href: "/dashboard/settings/schedule", label: "Расписание", group: "settings", icon: Calendar, mobile: "more" },
   { href: "/dashboard/settings/policies", label: "Правила записи", group: "settings", icon: Timer, mobile: "more", adminOnly: true },
   { href: "/dashboard/settings/materials", label: "Материалы", group: "settings", icon: QrCode, mobile: "more" },
-  { href: "/dashboard/settings/integrations", label: "Интеграции", group: "settings", icon: Plug, mobile: "more" },
+  { href: "/dashboard/settings/integrations", label: "Интеграции", group: "settings", icon: Plug, mobile: "more", staffLabel: "Telegram" },
   { href: "/dashboard/settings/whatsapp", label: "WhatsApp", group: "settings", icon: MessageCircle, mobile: "more" },
   { href: "/dashboard/settings/notifications", label: "Уведомления", group: "settings", icon: Bell, mobile: "more" },
   { href: "/dashboard/settings/branding", label: "Брендинг", group: "settings", icon: Palette, mobile: "more" },
@@ -38,7 +42,10 @@ const allItems: NavigationItem[] = [
 ];
 
 export function dashboardNavigationForRole(role: DashboardRole): NavigationItem[] {
-  return role === "STAFF" ? allItems.filter((item) => item.group === "work" && !item.adminOnly) : allItems;
+  if (role !== "STAFF") return allItems;
+  return allItems
+    .filter((item) => (item.group === "work" && !item.adminOnly) || item.staffLabel)
+    .map((item) => (item.staffLabel ? { ...item, label: item.staffLabel } : item));
 }
 
 export function isDashboardRouteActive(href: string, pathname: string): boolean {

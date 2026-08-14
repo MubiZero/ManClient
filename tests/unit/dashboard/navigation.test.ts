@@ -12,7 +12,9 @@ describe("dashboard navigation", () => {
   });
 
   it("does not expose administrative routes to staff", () => {
-    expect(dashboardNavigationForRole("STAFF").map(item => item.label)).toEqual(["Обзор", "Записи"]);
+    // Telegram is the exception: the staff bot is where a master reads their day, and linking a chat
+    // only ever links their own membership.
+    expect(dashboardNavigationForRole("STAFF").map(item => item.label)).toEqual(["Обзор", "Записи", "Telegram"]);
   });
 
   it("keeps the receipt queue off the bar for staff, who cannot review one", () => {

@@ -6,12 +6,17 @@ import type { TelegramDashboardStatus } from "@/core/integrations/telegram-dashb
 
 type RequestState = "idle" | "checking";
 
+type ChatLink = { url: string; qrDataUrl?: string };
+
 export function TelegramIntegrationForm({
   initialStatus,
   managedBotsAvailable = true,
+  canManageCustomerBot = true,
 }: {
   initialStatus: TelegramDashboardStatus;
   managedBotsAvailable?: boolean;
+  /** Staff link their own chat but never own the customer bot, so that half of the page is theirs alone. */
+  canManageCustomerBot?: boolean;
 }) {
   const [integration, setIntegration] = useState(initialStatus);
   const [requestState, setRequestState] = useState<RequestState>("idle");
@@ -19,6 +24,9 @@ export function TelegramIntegrationForm({
   const [error, setError] = useState<string | null>(initialStatus.lastWebhookError);
   const [rotating, setRotating] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [linkState, setLinkState] = useState<"idle" | "requesting">("idle");
+  const [chatLink, setChatLink] = useState<ChatLink | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [assistantState, setAssistantState] = useState<"idle" | "opening">("idle");
   const [assistantError, setAssistantError] = useState<string | null>(null);
   const [showExistingBot, setShowExistingBot] = useState(false);
@@ -65,6 +73,27 @@ export function TelegramIntegrationForm({
     }
   }
 
+  /**
+   * The link is single-use and lives fifteen minutes, so it is shown rather than followed: the dashboard
+   * is usually open on a desktop while Telegram is on the phone, and a second attempt should not mean
+   * hunting for the button again.
+   */
+  async function requestChatLink() {
+    setLinkState("requesting");
+    setLinkError(null);
+    try {
+      const response = await fetch("/api/integrations/telegram/platform-link", { method: "POST" });
+      const payload = await response.json() as { url?: string; qrDataUrl?: string; error?: string };
+      if (!response.ok || !payload.url) throw new Error(payload.error ?? "TELEGRAM_UNAVAILABLE");
+      setChatLink({ url: payload.url, qrDataUrl: payload.qrDataUrl });
+    } catch (caught) {
+      setLinkError(errorMessage(caught));
+      setChatLink(null);
+    } finally {
+      setLinkState("idle");
+    }
+  }
+
   async function openBusinessAssistant() {
     setAssistantState("opening");
     setAssistantError(null);
@@ -81,23 +110,63 @@ export function TelegramIntegrationForm({
 
   return (
     <div className="telegram-settings-grid">
+      <section className="integration-status-panel" aria-labelledby="personal-link-title">
+        <div>
+          <p className="context-label">Ваш личный доступ</p>
+          <h2 id="personal-link-title">Привяжите свой Telegram к бизнесу</h2>
+          <p className="integration-help">Записи, чеки и расписание вы ведёте в готовом <strong>@manclient_bot</strong> — создавать для этого ничего не нужно. Привязка нужна каждому сотруднику отдельно: бот должен знать, кто ему пишет.</p>
+        </div>
+        <div className="integration-actions">
+          <button className="primary-button" type="button" disabled={linkState === "requesting"} onClick={requestChatLink}>
+            {linkState === "requesting" ? "Готовим ссылку..." : chatLink ? "Получить новую ссылку" : "Привязать мой Telegram"}
+          </button>
+        </div>
+        {linkError ? <p className="integration-error" role="alert">{linkError}</p> : null}
+        {chatLink ? (
+          <div className="mt-5 flex flex-wrap items-start gap-5" aria-live="polite">
+            {chatLink.qrDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- a data: URI has nothing for the image optimiser to fetch
+              <img
+                src={chatLink.qrDataUrl}
+                alt="QR-код со ссылкой на @manclient_bot"
+                className="size-40 rounded-md border border-border bg-white p-2"
+              />
+            ) : null}
+            <div className="flex min-w-60 flex-1 flex-col gap-2">
+              <a className="primary-link self-start" href={chatLink.url} target="_blank" rel="noreferrer">Открыть Telegram</a>
+              <p className="text-sm text-muted-foreground">С телефона — наведите камеру на код. С компьютера — нажмите кнопку или скопируйте ссылку.</p>
+              <code className="block overflow-x-auto rounded-md border border-border bg-secondary/40 p-2 text-xs">{chatLink.url}</code>
+              <p className="text-sm text-muted-foreground">Ссылка одноразовая и действует 15 минут. Если не успели — нажмите «Получить новую ссылку».</p>
+            </div>
+          </div>
+        ) : null}
+        <small>Привязка подтверждается в Telegram. ManClient не получает пароль, код входа или Telegram-сессию.</small>
+      </section>
+
+      {canManageCustomerBot ? (
       <section className="integration-status-panel" aria-labelledby="business-assistant-title">
         <div>
           <p className="context-label">Один бот от вашего бизнеса</p>
           <h2 id="business-assistant-title">Создайте только одного бота — для клиентов</h2>
-          <p className="integration-help">Владельцы и команда уже работают в готовом <strong>@manclient_bot</strong>. Telegram привяжет ваш аккаунт к бизнесу, а клиентский бот сразу будет принадлежать вам.</p>
+          <p className="integration-help">Отдельный бот нужен только вашим клиентам: через него они записываются и присылают чеки. Он сразу будет принадлежать вам, а ManClient подключит его автоматически.</p>
         </div>
-        <div className="integration-actions">
-          <button className="primary-button" type="button" disabled={assistantState === "opening" || (!configured && !managedBotsAvailable)} onClick={openBusinessAssistant}>
-            {assistantState === "opening" ? "Открываем Telegram..." : configured ? "Открыть @manclient_bot" : "Создать клиентского бота"}
-          </button>
-          {!configured ? <button className="secondary-action" type="button" onClick={() => setShowExistingBot(true)}>Подключить существующего бота</button> : null}
-        </div>
+        {/* Creation happens inside Telegram, so this button only carries the owner there; opening the
+            assistant for everyday work is the panel above, and one button now does one job. */}
+        {!configured ? (
+          <div className="integration-actions">
+            <button className="primary-button" type="button" disabled={assistantState === "opening" || !managedBotsAvailable} onClick={openBusinessAssistant}>
+              {assistantState === "opening" ? "Открываем Telegram..." : "Создать клиентского бота"}
+            </button>
+            <button className="secondary-action" type="button" onClick={() => setShowExistingBot(true)}>Подключить существующего бота</button>
+          </div>
+        ) : null}
         {assistantError ? <p className="integration-error" role="alert">{assistantError}</p> : null}
         {!configured && !managedBotsAvailable ? <p className="integration-error" role="alert">Автоматическое создание временно недоступно: режим управления ботами не включён у @manclient_bot. Можно подключить уже созданного бота.</p> : null}
         <small>Создание подтверждается в Telegram. ManClient не получает пароль, код входа или Telegram-сессию владельца.</small>
       </section>
+      ) : null}
 
+      {canManageCustomerBot ? (
       <section className="integration-status-panel" aria-live="polite">
         <div className="integration-status-heading">
           <div>
@@ -123,8 +192,9 @@ export function TelegramIntegrationForm({
           <p className="integration-help">Клиентский бот пока не создан. Нажмите «Создать клиентского бота»: Telegram оформит ownership сразу на ваш аккаунт, а ManClient подключит интеграцию автоматически.</p>
         )}
       </section>
+      ) : null}
 
-      {(showExistingBot || rotating) ? (
+      {canManageCustomerBot && (showExistingBot || rotating) ? (
         <form className="integration-token-form" onSubmit={submit} noValidate>
           <div>
             <h2>{rotating ? "Подключить другого существующего бота" : "Подключить существующего бота"}</h2>
