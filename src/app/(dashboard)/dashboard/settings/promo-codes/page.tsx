@@ -7,7 +7,7 @@ import { formatSomoni } from "@/core/formatting/money";
 import { businessHasFeature, PLAN_LABELS } from "@/core/platform/subscription-plans";
 import { createPromoCode, deactivatePromoCode, listPromoCodes } from "@/core/promotions/promo-code-service";
 import { Badge } from "@/features/ui-kit/badge";
-import { Button } from "@/features/ui-kit/button";
+import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui-kit/card";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { Field, Input, Select } from "@/features/ui-kit/field";
@@ -28,6 +28,9 @@ export default async function PromoCodesPage({ searchParams }: PageProps) {
           icon={Ticket}
           title="Промокоды доступны на тарифе Стандарт"
           description={`Сейчас у вас тариф «${PLAN_LABELS[membership.business.subscriptionPlan]}». Перейдите на «${PLAN_LABELS.STANDARD}» или выше, чтобы выдавать клиентам скидки.`}
+          // Naming the plan is only half the offer: without a way there the owner has to guess that the
+          // switch lives in the last item of the settings list.
+          action={<ButtonLink href="/dashboard/settings/plan">Подключить «{PLAN_LABELS.STANDARD}»</ButtonLink>}
         />
       </>
     );
@@ -102,7 +105,14 @@ export default async function PromoCodesPage({ searchParams }: PageProps) {
       </Card>
 
       {promoCodes.length === 0 ? (
-        <EmptyState title="Промокодов пока нет" description="Создайте первый промокод — клиенты смогут ввести его при записи." />
+        // The form is right above, but on a long settings page it can be off screen — the jump lands on the
+        // code field itself, so the first action starts where it ends.
+        <EmptyState
+          icon={Ticket}
+          title="Промокодов пока нет"
+          description="Создайте первый промокод — клиенты смогут ввести его при записи."
+          action={<ButtonLink href="#code" variant="secondary" size="sm">Создать промокод</ButtonLink>}
+        />
       ) : (
         <Table>
           <TableHeader>
