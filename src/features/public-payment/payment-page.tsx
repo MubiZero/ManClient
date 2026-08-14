@@ -1,5 +1,6 @@
 "use client";
 
+import { formatLocaleDayMonthTime } from "@/core/formatting/locale-date";
 import { brandPalette } from "@/core/branding/brand-palette";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -416,7 +417,7 @@ function formatRemainingHold(milliseconds: number) {
 }
 
 function formatVisitDateTime(value: Date | string, timeZone: string, locale: SupportedLocale) {
-  return new Intl.DateTimeFormat(intlLocale(locale), { timeZone, day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return formatLocaleDayMonthTime(new Date(value), timeZone, locale);
 }
 
 /**

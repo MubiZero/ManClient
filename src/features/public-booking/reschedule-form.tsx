@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { formatLocaleTime } from "@/core/formatting/locale-date";
 import { pluralRu } from "@/core/formatting/plural";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Field, Input } from "@/features/ui-kit/field";
@@ -71,7 +72,7 @@ export function RescheduleForm({ token, branchId, serviceId, staffId, timeZone, 
                 onClick={() => void select(value)}
                 className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/50 hover:bg-secondary"
               >
-                {new Intl.DateTimeFormat(intlLocale(locale), { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(value))}
+                {formatLocaleTime(new Date(value), timeZone, locale)}
               </button>
             ))}
           </div>

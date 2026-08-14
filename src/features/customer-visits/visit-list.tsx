@@ -1,5 +1,6 @@
 "use client";
 
+import { formatLocaleDayMonthTime } from "@/core/formatting/locale-date";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -163,11 +164,5 @@ function statusKey(status: VisitView["status"]) {
 }
 
 function formatVisitDate(value: string, timeZone: string, locale: SupportedLocale): string {
-  return new Intl.DateTimeFormat(intlLocale(locale), {
-    timeZone,
-    day: "numeric",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatLocaleDayMonthTime(new Date(value), timeZone, locale);
 }

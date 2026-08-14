@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { formatLocaleDayNumber, formatLocaleWeekdayShort, formatLocaleTime } from "@/core/formatting/locale-date";
 import { localDateTimeToUtc, todayInTimeZone } from "@/core/formatting/dushanbe-date";
 import { formatSomoni } from "@/core/formatting/money";
 import {
@@ -1008,11 +1009,7 @@ export function validateBookingPhone(value: string, locale: SupportedLocale = "r
 }
 
 export function formatBookingTime(value: string, timeZone: string, locale: SupportedLocale = "ru"): string {
-  return new Intl.DateTimeFormat(intlLocale(locale), {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatLocaleTime(new Date(value), timeZone, locale);
 }
 
 /** Adds days to a `yyyy-mm-dd` string, for the default waitlist window. */
@@ -1026,12 +1023,12 @@ function addDays(date: string, days: number): string {
 
 /** «пн», «вт» — the weekday over the number in a day chip. */
 function formatDayWeekday(date: string, locale: SupportedLocale): string {
-  return new Intl.DateTimeFormat(intlLocale(locale), { timeZone: "UTC", weekday: "short" }).format(new Date(`${date}T12:00:00.000Z`));
+  return formatLocaleWeekdayShort(new Date(`${date}T12:00:00.000Z`), "UTC", locale);
 }
 
 /** The day of the month alone: the strip never spans more than a month, so the month is implied. */
 function formatDayNumber(date: string, locale: SupportedLocale): string {
-  return new Intl.DateTimeFormat(intlLocale(locale), { timeZone: "UTC", day: "numeric" }).format(new Date(`${date}T12:00:00.000Z`));
+  return formatLocaleDayNumber(new Date(`${date}T12:00:00.000Z`), "UTC", locale);
 }
 
 type SavedBooking = { branchId: string; serviceId: string; staffId: string; name: string; phone: string };
