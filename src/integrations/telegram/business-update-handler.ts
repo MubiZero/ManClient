@@ -16,6 +16,8 @@ import { DEFAULT_TIME_ZONE, localDateTimeToUtc } from "@/core/formatting/dushanb
 import { formatSomoni } from "@/core/formatting/money";
 import { assertPaymentCardConfigured, getPaymentUrl } from "@/core/payments/payment-service";
 import type { ReceiptRecognizer } from "@/core/payments/receipt-recognizer";
+import { intlLocale, moneyLocale, t } from "@/i18n/translate";
+import { fitButtonText } from "@/integrations/telegram/bot-messages";
 import { contactKeyboard, inlineButtonGrid, inlineButtons } from "@/integrations/telegram/conversation-renderer";
 import { escapeTelegramHtml, type TelegramReplyMarkup } from "@/integrations/telegram/telegram-api";
 import type { BusinessTelegramContext, BusinessTelegramUpdate } from "@/integrations/telegram/business-update-dispatcher";
@@ -274,13 +276,19 @@ async function renderState(
     return;
   }
   if (session.state === "BRANCH") {
-    const branches = await prisma.branch.findMany({ where: { businessId }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+    // The same visibility rules the booking core enforces: offering an archived branch or an unpublished
+    // service only walks the customer into "no free time" three taps later.
+    const branches = await prisma.branch.findMany({ where: { businessId, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } });
     await sendOptions(chatId, locale, "BRANCH", branches.map(branch => ({ text: branch.name, kind: "SELECT_BRANCH", payload: { branchId: branch.id } })), businessId, conversationId, expiresAt, dependencies, page);
     return;
   }
   if (session.state === "SERVICE") {
-    const services = await prisma.service.findMany({ where: { branch: { id: session.data.branchId, businessId } }, orderBy: { name: "asc" }, select: { id: true, name: true } });
-    await sendOptions(chatId, locale, "SERVICE", services.map(service => ({ text: service.name, kind: "SELECT_SERVICE", payload: { serviceId: service.id } })), businessId, conversationId, expiresAt, dependencies, page);
+    const services = await prisma.service.findMany({
+      where: { branch: { id: session.data.branchId, businessId }, archivedAt: null, isPublished: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, durationMinutes: true, amountDiram: true },
+    });
+    await sendOptions(chatId, locale, "SERVICE", services.map(service => ({ text: serviceOptionLabel(service, locale), kind: "SELECT_SERVICE", payload: { serviceId: service.id } })), businessId, conversationId, expiresAt, dependencies, page);
     return;
   }
   if (session.state === "STAFF") {
@@ -291,7 +299,7 @@ async function renderState(
   if (session.state === "DATE") {
     const branch = await prisma.branch.findFirstOrThrow({ where: { id: required(session.data.branchId), businessId }, select: { timeZone: true } });
     const dates = nextDates(dependencies.now(), 14, branch.timeZone);
-    await sendOptions(chatId, locale, "DATE", dates.map(date => ({ text: formatDateLabel(date), kind: "SELECT_DATE", payload: { date } })), businessId, conversationId, expiresAt, dependencies, page, 2);
+    await sendOptions(chatId, locale, "DATE", dates.map(date => ({ text: formatDateLabel(date, locale), kind: "SELECT_DATE", payload: { date } })), businessId, conversationId, expiresAt, dependencies, page, 2);
     return;
   }
   if (session.state === "SLOT") {
@@ -584,7 +592,7 @@ async function handleCustomerAction(
     if (!booking) throw new Error("Booking is unavailable");
     const dates = nextDates(dependencies.now(), 14, booking.branch.timeZone);
     const [dateButtons, bookingButton, homeButton] = await Promise.all([
-      actionButtons(businessId, conversationId, session.expiresAt, dates.map(date => ({ text: formatDateLabel(date), kind: "CLIENT_RESCHEDULE_DATE", payload: { bookingId: booking.id, date } }))),
+      actionButtons(businessId, conversationId, session.expiresAt, dates.map(date => ({ text: formatDateLabel(date, locale), kind: "CLIENT_RESCHEDULE_DATE", payload: { bookingId: booking.id, date } }))),
       actionButtons(businessId, conversationId, session.expiresAt, [{ text: locale === "tg" ? "‹ Ба сабт" : "‹ К записи", kind: "CLIENT_BOOKING_OPEN", payload: { bookingId: booking.id } }]),
       actionButtons(businessId, conversationId, session.expiresAt, [{ text: locale === "tg" ? "Ба меню" : "В меню", kind: "CLIENT_HOME", payload: {} }]),
     ]);
@@ -691,9 +699,25 @@ function nextDates(now: Date, count: number, timeZone: string) {
   });
 }
 
-function formatDateLabel(date: string) {
-  const [year, month, day] = date.split("-");
-  return `${day}.${month}.${year}`;
+/**
+ * Price and duration decide the choice, so they belong on the button rather than on the confirmation
+ * screen three taps later — the same pair the web form shows under every service.
+ */
+function serviceOptionLabel(
+  service: { name: string; durationMinutes: number; amountDiram: number },
+  locale: ConversationLocale,
+) {
+  const details = t(locale, "booking.durationAndPrice", {
+    minutes: service.durationMinutes,
+    price: formatSomoni(service.amountDiram, moneyLocale(locale)),
+  });
+  return fitButtonText(`${service.name} · ${details}`);
+}
+
+/** "пт, 15 авг." — a bare 15.08.2026 makes the customer count out which of the fourteen is Saturday. */
+function formatDateLabel(date: string, locale: ConversationLocale) {
+  return new Intl.DateTimeFormat(intlLocale(locale), { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" })
+    .format(new Date(`${date}T12:00:00.000Z`));
 }
 
 function formatVisitTime(value: Date, timeZone = DEFAULT_TIME_ZONE) {
