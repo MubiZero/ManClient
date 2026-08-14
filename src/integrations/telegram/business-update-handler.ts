@@ -286,15 +286,31 @@ async function renderState(
     return;
   }
   if (session.state === "BRANCH") {
-    // The same visibility rules the booking core enforces: offering an archived branch or an unpublished
-    // service only walks the customer into "no free time" three taps later.
-    const branches = await prisma.branch.findMany({ where: { businessId, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+    // The same visibility rules the booking core enforces, and applied to the branch too: a floor whose
+    // services are all drafts, archived, or left without a specialist has nothing to offer, and putting
+    // it on the keyboard only walks the customer into an empty list they have to back out of.
+    const branches = await prisma.branch.findMany({
+      where: {
+        businessId,
+        archivedAt: null,
+        services: { some: { archivedAt: null, isPublished: true, staffMembers: { some: { archivedAt: null } } } },
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
     await sendOptions(chatId, locale, "BRANCH", branches.map(branch => ({ text: branch.name, kind: "SELECT_BRANCH", payload: { branchId: branch.id } })), businessId, conversationId, expiresAt, dependencies, page);
     return;
   }
   if (session.state === "SERVICE") {
     const services = await prisma.service.findMany({
-      where: { branch: { id: session.data.branchId, businessId }, archivedAt: null, isPublished: true },
+      where: {
+        branch: { id: session.data.branchId, businessId },
+        archivedAt: null,
+        isPublished: true,
+        // Without somebody to work it the next step is an empty specialist list, so the service is not
+        // on offer however published it looks.
+        staffMembers: { some: { archivedAt: null } },
+      },
       orderBy: { name: "asc" },
       select: { id: true, name: true, durationMinutes: true, amountDiram: true },
     });

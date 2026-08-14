@@ -1,7 +1,11 @@
 import { ButtonLink } from "@/features/ui-kit/button";
 
-/** Paging keys are how a list walks, not what it selects, so a filter schema never sees them. */
-const PAGING_KEYS = new Set(["cursor", "trail"]);
+/**
+ * Paging keys are how a list walks, not what it selects, so a filter schema never sees them. The notice
+ * keys are dropped for a different reason: they are the answer to something the operator just did, and
+ * carrying them onto page two re-announced «Подтверждено: 12» to somebody who had only turned a page.
+ */
+const PAGING_KEYS = new Set(["cursor", "trail", "notice", "error", "field", "approved", "skipped"]);
 
 /** A cursor is capped at 128 characters by the query schemas, and no real list runs 50 pages deep. */
 const MAX_CURSOR_LENGTH = 128;

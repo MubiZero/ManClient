@@ -32,6 +32,8 @@ export async function POST(request: Request) {
   } catch (error) {
     if (!(error instanceof SettingsError)) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
     const status = error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : 400;
-    return Response.json({ error: error.code }, { status });
+    // The control the schema named travels with the code. The commonest refusal on this form is a
+    // deposit chosen without a size, and the answer belongs on that box rather than under the whole page.
+    return Response.json({ error: error.code, ...(error.field ? { field: error.field } : {}) }, { status });
   }
 }

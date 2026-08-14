@@ -56,11 +56,15 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
   const [depositSomoni, setDepositSomoni] = useState(initial.depositAmountDiram === null ? "" : (initial.depositAmountDiram / 100).toFixed(2));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // The control the server named, so the answer sits on the box that caused it rather than under the
+  // whole page. Cleared with the error, never left pointing at a field the next attempt did not touch.
+  const [errorField, setErrorField] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
 
   async function save() {
     setSaving(true);
     setError("");
+    setErrorField(null);
     setNotice("");
     try {
       const response = await fetch("/api/dashboard/settings/policies", {
@@ -77,8 +81,11 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
           depositSomoni: depositSomoni.trim() === "" ? null : depositSomoni,
         }),
       });
-      const result = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(result.error);
+      const result = (await response.json()) as { error?: string; field?: string };
+      if (!response.ok) {
+        setErrorField(result.field ?? null);
+        throw new Error(result.error);
+      }
       setNotice("Правила записи сохранены");
     } catch (caught) {
       setError(errorMessage(caught));
@@ -91,14 +98,14 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
     <Card>
       <CardContent className="flex flex-col gap-6 pt-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Принимать записи не позднее чем" hint="Насколько заранее клиент должен записаться. Сотрудники в кабинете не ограничены.">
+          <Field label="Принимать записи не позднее чем" error={errorField === "minLeadTimeMinutes" ? error : undefined} hint="Насколько заранее клиент должен записаться. Сотрудники в кабинете не ограничены.">
             <Select value={String(minLeadTimeMinutes)} onChange={(event) => setMinLeadTimeMinutes(Number(event.target.value))}>
               {LEAD_TIME_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </Select>
           </Field>
-          <Field label="Горизонт записи, дней" hint="На сколько дней вперёд открыт календарь. Пусто — без ограничения.">
+          <Field label="Горизонт записи, дней" error={errorField === "maxAdvanceDays" ? error : undefined} hint="На сколько дней вперёд открыт календарь. Пусто — без ограничения.">
             <Input
               type="number"
               min={1}
@@ -108,14 +115,14 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
               onChange={(event) => setMaxAdvanceDays(event.target.value)}
             />
           </Field>
-          <Field label="Клиент может отменить или перенести" hint="После этого срока отмена и перенос доступны только через бизнес.">
+          <Field label="Клиент может отменить или перенести" error={errorField === "freeCancellationHours" ? error : undefined} hint="После этого срока отмена и перенос доступны только через бизнес.">
             <Select value={String(freeCancellationHours)} onChange={(event) => setFreeCancellationHours(Number(event.target.value))}>
               {CANCELLATION_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </Select>
           </Field>
-          <Field label="Лимит переносов одной записи" hint="Сколько раз клиент может перенести визит сам. Пусто — без лимита.">
+          <Field label="Лимит переносов одной записи" error={errorField === "maxCustomerReschedules" ? error : undefined} hint="Сколько раз клиент может перенести визит сам. Пусто — без лимита.">
             <Input
               type="number"
               min={0}
@@ -129,7 +136,7 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
 
         <fieldset className="flex flex-col gap-4 rounded-md border border-border bg-secondary/40 p-4">
           <legend className="px-1 text-sm font-semibold text-foreground">Предоплата</legend>
-          <Field label="Что клиент оплачивает при записи" hint="«Ничего» подтверждает запись сразу, оплата — на месте.">
+          <Field label="Что клиент оплачивает при записи" error={errorField === "prepaymentMode" ? error : undefined} hint="«Ничего» подтверждает запись сразу, оплата — на месте.">
             <Select value={prepaymentMode} onChange={(event) => setPrepaymentMode(event.target.value as BookingPolicyValue["prepaymentMode"])}>
               <option value="FULL">Полную стоимость услуги</option>
               <option value="DEPOSIT">Депозит, остаток на месте</option>
@@ -138,10 +145,10 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
           </Field>
           {prepaymentMode === "DEPOSIT" ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Депозит, % от стоимости" hint="Округляется вверх до целых сомони.">
+              <Field label="Депозит, % от стоимости" error={errorField === "depositPercent" ? error : undefined} hint="Округляется вверх до целых сомони.">
                 <Input type="number" min={1} max={100} value={depositPercent} placeholder="30" onChange={(event) => setDepositPercent(event.target.value)} />
               </Field>
-              <Field label="Или фиксированный депозит, сомони" hint="Если заполнено, используется вместо процента.">
+              <Field label="Или фиксированный депозит, сомони" error={errorField === "depositSomoni" ? error : undefined} hint="Если заполнено, используется вместо процента.">
                 <Input value={depositSomoni} placeholder="50.00" onChange={(event) => setDepositSomoni(event.target.value)} />
               </Field>
             </div>
@@ -162,7 +169,7 @@ export function BookingPolicyForm({ initial }: { initial: BookingPolicyValue }) 
           />
         </Field>
 
-        {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
+        {error && !errorField ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
         {notice ? <p className="text-sm text-primary" role="status">{notice}</p> : null}
 
         <div className="flex justify-end">

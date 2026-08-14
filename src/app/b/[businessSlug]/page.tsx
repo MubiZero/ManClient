@@ -95,9 +95,14 @@ export default async function PublicBookingPage({ params, searchParams }: PagePr
   const signedInPhone = await readCustomerPhone();
   const signedInCustomer = signedInPhone ? { phone: signedInPhone, name: await findCustomerName(signedInPhone) } : null;
 
-  // A branch with nothing published is not a choice. Offering it puts the customer on a service step
-  // with an empty list and no way to tell whether the floor is closed or the page is broken.
-  const bookableBranches = business.branches.filter(({ services }) => services.length > 0);
+  // Nothing is offered that cannot be carried through to a time. A service whose specialists have all
+  // been archived still reads as bookable and then strands the customer on a specialist step with an
+  // empty grid — the same dead end as a draft service, one screen later. A branch left with no such
+  // service is not a choice either: it puts them on a service step with an empty list and no way to
+  // tell whether the floor is closed or the page is broken.
+  const bookableBranches = business.branches
+    .map((branch) => ({ ...branch, services: branch.services.filter((service) => service.staffMembers.length > 0) }))
+    .filter(({ services }) => services.length > 0);
 
   return (
     <main className="min-h-screen bg-secondary/30" style={brandStyle}>

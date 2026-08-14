@@ -123,8 +123,10 @@ export async function approveSubscriptionReceipt(input: { receiptId: string; act
 
 export async function rejectSubscriptionReceipt(input: { receiptId: string; actorUserId: string; reason: string }) {
   await requirePlatformAdmin(input.actorUserId);
+  // The same 3..300 the dialog promises. Enforcing it only in the browser left the bound to whoever was
+  // using one, while the note it guards is what the business is told when its payment is refused.
   const reason = input.reason.trim();
-  if (!reason) throw new PlatformError("INVALID_INPUT");
+  if (reason.length < 3 || reason.length > 300) throw new PlatformError("INVALID_INPUT");
 
   await prisma.$transaction(async (transaction) => {
     const receipt = await transaction.subscriptionReceipt.findUnique({ where: { id: input.receiptId } });

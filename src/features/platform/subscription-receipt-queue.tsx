@@ -173,12 +173,21 @@ function SubscriptionReceiptCard({
   );
 }
 
+/**
+ * Deliberately not the customer-receipt wording from `receipt-review/attention-reason`: here the payer is
+ * a business and the counterpart is the platform's own invoice, so «Сумма не совпала со счётом» says more
+ * than «Сумма не совпадает». The codes are the same set, so every one it can be handed is spelled out —
+ * three of them used to fall through to «Требует проверки» and told the operator nothing.
+ */
 function reasonLabel(code: string | null) {
   return ({
     AMOUNT_MISMATCH: "Сумма не совпала со счётом",
     RECIPIENT_MISMATCH: "Перевод не на карту платформы",
     OPERATION_TIME_MISMATCH: "Дата перевода вне срока счёта",
     RECEIPT_NOT_SUCCESSFUL: "В чеке не написано «успешно»",
+    RECEIPT_MISMATCH: "Данные чека не сошлись со счётом",
+    BOOKING_NOT_PENDING: "Счёт уже не ждёт оплаты",
+    OCR_FAILED: "Чек не удалось прочитать",
     OCR_UNRELIABLE: "Чек не удалось прочитать",
   } as Record<string, string>)[code ?? ""] ?? "Требует проверки";
 }

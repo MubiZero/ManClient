@@ -35,12 +35,19 @@ const NAMED_IN_BULK = 4;
  */
 export function AttentionPaymentsQueue({
   payments,
+  now,
   approveAction,
   rejectAction,
   bulkApproveAction,
   bulkRejectAction,
 }: {
   payments: AttentionPayment[];
+  /**
+   * The moment the ages are measured from, decided on the server. Reading the clock here instead would
+   * have the server and the browser render different words either side of a minute boundary, and React
+   * throws the whole subtree away to fix it.
+   */
+  now: Date;
   approveAction: ReviewAction;
   rejectAction: ReviewAction;
   bulkApproveAction: ReviewAction;
@@ -120,6 +127,12 @@ export function AttentionPaymentsQueue({
         <TableHeader>
           <TableRow>
             <TableHead className="w-8">
+              {/*
+                The box itself stays 16px so it sits right beside the text, but the label around it is a
+                thumb's worth of target: these choose which receipts a bulk decision acts on, and a miss
+                on "select all" is the most expensive miss on this screen.
+              */}
+              <label className="-m-3 flex cursor-pointer items-center justify-center p-3">
               <Checkbox
                 aria-label="Выбрать все чеки на странице"
                 checked={allSelected}
@@ -129,6 +142,7 @@ export function AttentionPaymentsQueue({
                 }}
                 onChange={(event) => setSelectedIds(event.target.checked ? payments.map((payment) => payment.id) : [])}
               />
+              </label>
             </TableHead>
             <TableHead>Бизнес</TableHead>
             <TableHead>Клиент</TableHead>
@@ -150,11 +164,13 @@ export function AttentionPaymentsQueue({
             return (
               <TableRow key={payment.id}>
                 <TableCell>
-                  <Checkbox
-                    aria-label={`Выбрать чек: ${payment.business.name}, ${payment.booking.customer.name}`}
-                    checked={selectedIds.includes(payment.id)}
-                    onChange={(event) => toggle(payment.id, event.target.checked)}
-                  />
+                  <label className="-m-3 flex cursor-pointer items-center justify-center p-3">
+                    <Checkbox
+                      aria-label={`Выбрать чек: ${payment.business.name}, ${payment.booking.customer.name}`}
+                      checked={selectedIds.includes(payment.id)}
+                      onChange={(event) => toggle(payment.id, event.target.checked)}
+                    />
+                  </label>
                 </TableCell>
                 <TableCell>
                   <Link href={`/platform/businesses/${payment.business.id}`} className="font-medium text-foreground hover:underline">
@@ -172,7 +188,7 @@ export function AttentionPaymentsQueue({
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   <time dateTime={payment.updatedAt.toISOString()} title={formatDateTime(payment.updatedAt)}>
-                    {formatTimeAgo(payment.updatedAt)}
+                    {formatTimeAgo(payment.updatedAt, now)}
                   </time>
                 </TableCell>
                 <TableCell>
@@ -203,7 +219,7 @@ export function AttentionPaymentsQueue({
                       note={{
                         label: "Причина отклонения",
                         placeholder: "Например, сумма в чеке не совпадает",
-                        hint: "От 3 до 300 символов. Причина сохранится в истории записи.",
+                        hint: "От 3 до 300 символов. Клиент увидит эту причину на странице оплаты, поэтому напишите, что именно исправить.",
                         required: true,
                       }}
                       confirmLabel="Да, отклонить"

@@ -211,7 +211,7 @@ function PaymentReviewCard({ payment, approveAction, rejectAction }: { payment: 
             note={{
               label: "Причина отклонения",
               placeholder: "Например, сумма в чеке не совпадает",
-              hint: "От 3 до 300 символов. Причина сохранится в истории записи.",
+              hint: "От 3 до 300 символов. Клиент увидит эту причину на странице оплаты, поэтому напишите, что именно исправить.",
               required: true,
             }}
             confirmLabel="Да, отклонить"

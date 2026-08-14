@@ -75,6 +75,7 @@ export default async function PlatformPaymentsPage({ searchParams }: PageProps) 
         <EmptyState title="Нет проблемных оплат" description="Все чеки по всем бизнесам обработаны." />
       ) : (
         <AttentionPaymentsQueue
+          now={new Date()}
           payments={payments}
           approveAction={approve}
           rejectAction={reject}

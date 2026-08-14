@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 
 import type { TelegramDashboardStatus } from "@/core/integrations/telegram-dashboard-service";
+import { ButtonLink } from "@/features/ui-kit/button";
 
 type RequestState = "idle" | "checking";
 
@@ -133,7 +134,9 @@ export function TelegramIntegrationForm({
               />
             ) : null}
             <div className="flex min-w-60 flex-1 flex-col gap-2">
-              <a className="primary-link self-start" href={chatLink.url} target="_blank" rel="noreferrer">Открыть Telegram</a>
+              <ButtonLink href={chatLink.url} target="_blank" rel="noreferrer" className="self-start">
+                Открыть Telegram
+              </ButtonLink>
               <p className="text-sm text-muted-foreground">С телефона — наведите камеру на код. С компьютера — нажмите кнопку или скопируйте ссылку.</p>
               <code className="block overflow-x-auto rounded-md border border-border bg-secondary/40 p-2 text-xs">{chatLink.url}</code>
               <p className="text-sm text-muted-foreground">Ссылка одноразовая и действует 15 минут. Если не успели — нажмите «Получить новую ссылку».</p>

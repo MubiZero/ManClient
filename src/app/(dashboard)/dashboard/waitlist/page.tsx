@@ -4,13 +4,14 @@ import Link from "next/link";
 import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { cancelWaitlistEntry, listWaitlistEntries } from "@/core/bookings/waitlist-service";
 import { businessHasFeature, PLAN_LABELS } from "@/core/platform/subscription-plans";
+import { CursorPager, currentCursor, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { Badge } from "@/features/ui-kit/badge";
 import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 
-type PageProps = { searchParams: Promise<{ cursor?: string }> };
+type PageProps = { searchParams: Promise<{ trail?: string }> };
 
 const STATUS_LABELS = {
   WAITING: "Ожидает",
@@ -50,8 +51,8 @@ export default async function WaitlistPage({ searchParams }: PageProps) {
     );
   }
 
-  const { cursor } = await searchParams;
-  const { items, nextCursor } = await listWaitlistEntries(membership.businessId, cursor);
+  const trail = readPageTrail((await searchParams).trail);
+  const { items, nextCursor } = await listWaitlistEntries(membership.businessId, currentCursor(trail));
 
   async function cancelEntry(formData: FormData) {
     "use server";
@@ -108,11 +109,7 @@ export default async function WaitlistPage({ searchParams }: PageProps) {
         </Table>
       )}
 
-      {nextCursor ? (
-        <Link href={`/dashboard/waitlist?cursor=${nextCursor}`} className="text-sm font-medium text-foreground hover:underline">
-          Следующая страница →
-        </Link>
-      ) : null}
+      <CursorPager basePath="/dashboard/waitlist" query={{}} trail={trail} nextCursor={nextCursor} label="Страницы листа ожидания" />
     </>
   );
 }
