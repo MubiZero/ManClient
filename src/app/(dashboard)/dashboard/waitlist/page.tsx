@@ -5,7 +5,7 @@ import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { cancelWaitlistEntry, listWaitlistEntries } from "@/core/bookings/waitlist-service";
 import { businessHasFeature, PLAN_LABELS } from "@/core/platform/subscription-plans";
 import { Badge } from "@/features/ui-kit/badge";
-import { Button } from "@/features/ui-kit/button";
+import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
@@ -42,6 +42,9 @@ export default async function WaitlistPage({ searchParams }: PageProps) {
           icon={Hourglass}
           title="Лист ожидания доступен на тарифе Стандарт"
           description={`Сейчас у вас тариф «${PLAN_LABELS[membership.business.subscriptionPlan]}». Перейдите на «${PLAN_LABELS.STANDARD}» или выше, чтобы собирать заявки на освободившиеся слоты.`}
+          // Naming the plan is only half the offer: without a way there the owner has to guess that the
+          // switch lives in the last item of the settings list.
+          action={<ButtonLink href="/dashboard/settings/plan">Подключить «{PLAN_LABELS.STANDARD}»</ButtonLink>}
         />
       </>
     );

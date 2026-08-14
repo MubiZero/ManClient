@@ -27,6 +27,9 @@ export default async function CommissionsPage({ searchParams }: PageProps) {
           icon={Wallet}
           title="Учёт комиссий доступен на тарифе Премиум"
           description={`Сейчас у вас тариф «${PLAN_LABELS[membership.business.subscriptionPlan]}». Перейдите на «${PLAN_LABELS.PREMIUM}», чтобы начислять и отслеживать комиссии специалистов за принятые оплаты.`}
+          // Naming the plan is only half the offer: without a way there the owner has to guess that the
+          // switch lives in the last item of the settings list.
+          action={<ButtonLink href="/dashboard/settings/plan">Подключить «{PLAN_LABELS.PREMIUM}»</ButtonLink>}
         />
       </>
     );
@@ -45,6 +48,7 @@ export default async function CommissionsPage({ searchParams }: PageProps) {
   ]);
 
   const exportQuery = new URLSearchParams(query as Record<string, string>).toString();
+  const filtered = Boolean(query.staffId || query.from || query.to);
 
   return (
     <>
@@ -66,7 +70,15 @@ export default async function CommissionsPage({ searchParams }: PageProps) {
       <CommissionFilters staffId={query.staffId} from={query.from} to={query.to} staff={staff} />
 
       {result.items.length === 0 ? (
-        <EmptyState title="Нет начислений" description="За выбранный период комиссии не начислялись." />
+        // An empty report reads very differently depending on why it is empty: a narrow filter is the
+        // reader's own doing and has an undo, an empty ledger is just how a business starts.
+        <EmptyState
+          title={filtered ? "Ничего не найдено" : "Начислений пока нет"}
+          description={filtered
+            ? "За выбранный период и специалиста комиссии не начислялись. Расширьте период или сбросьте фильтры."
+            : "Комиссия начисляется сама, когда оплата за визит принята, а у специалиста задан процент."}
+          action={filtered ? <ButtonLink href="/dashboard/commissions" variant="secondary" size="sm">Сбросить фильтры</ButtonLink> : undefined}
+        />
       ) : (
         <Table>
           <TableHeader>

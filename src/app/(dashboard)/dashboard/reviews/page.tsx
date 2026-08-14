@@ -4,7 +4,7 @@ import Link from "next/link";
 import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { businessHasFeature, PLAN_LABELS } from "@/core/platform/subscription-plans";
 import { getAverageRating, listReviews, setReviewHidden } from "@/core/reviews/review-service";
-import { Button } from "@/features/ui-kit/button";
+import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { StatCard } from "@/features/ui-kit/stat-card";
@@ -23,6 +23,9 @@ export default async function ReviewsPage({ searchParams }: PageProps) {
           icon={Star}
           title="Отзывы доступны на тарифе Премиум"
           description={`Сейчас у вас тариф «${PLAN_LABELS[membership.business.subscriptionPlan]}». Перейдите на «${PLAN_LABELS.PREMIUM}», чтобы собирать отзывы и рейтинг от клиентов после визита.`}
+          // Naming the plan is only half the offer: without a way there the owner has to guess that the
+          // switch lives in the last item of the settings list.
+          action={<ButtonLink href="/dashboard/settings/plan">Подключить «{PLAN_LABELS.PREMIUM}»</ButtonLink>}
         />
       </>
     );
