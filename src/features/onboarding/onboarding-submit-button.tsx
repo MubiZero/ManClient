@@ -2,12 +2,29 @@
 
 import { useFormStatus } from "react-dom";
 
-export function OnboardingSubmitButton({ label, pendingLabel, variant = "primary" }: { label: string; pendingLabel: string; variant?: "primary" | "quiet" }) {
+import { Button } from "@/features/ui-kit/button";
+
+/**
+ * The wizard's own submit: same primitive as everywhere else, but a step's action is the one thing on
+ * the screen the owner is meant to press, so it is full width and a size larger than a form button
+ * buried in settings.
+ */
+export function OnboardingSubmitButton({
+  label,
+  pendingLabel,
+  variant = "primary",
+  className = "w-full",
+}: {
+  label: string;
+  pendingLabel: string;
+  variant?: "primary" | "secondary";
+  className?: string;
+}) {
   const { pending } = useFormStatus();
 
   return (
-    <button className={variant === "quiet" ? "secondary-action" : "primary-button onboarding-primary-action"} type="submit" disabled={pending} aria-live="polite">
+    <Button type="submit" variant={variant} size="lg" className={className} loading={pending} aria-live="polite">
       {pending ? pendingLabel : label}
-    </button>
+    </Button>
   );
 }

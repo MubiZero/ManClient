@@ -14,11 +14,14 @@ const buttonVariants = cva(
         quiet: "text-muted-foreground hover:bg-secondary hover:text-foreground",
         destructive: "bg-destructive text-destructive-foreground hover:bg-danger-700",
       },
+      // Every size clears the 44px touch minimum (iOS 44pt / Android 48dp). An administrator works
+      // this product one-handed on a phone between clients, so even the row-level `sm` action has to
+      // be hittable without aiming — the tight 32px variant it replaces was a desktop assumption.
       size: {
-        sm: "h-8 px-3 text-[13px]",
-        md: "h-10 px-4",
-        lg: "h-11 px-5 text-base",
-        icon: "size-9",
+        sm: "h-11 px-3",
+        md: "h-12 px-4",
+        lg: "h-13 px-5 text-base",
+        icon: "size-11",
       },
     },
     defaultVariants: { variant: "primary", size: "md" },

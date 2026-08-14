@@ -2,8 +2,11 @@ import { cloneElement, isValidElement, type InputHTMLAttributes, type LabelHTMLA
 
 import { cn } from "@/features/ui-kit/cn";
 
+// 48px tall to stay above the touch minimum, and `text-base` because Safari on iOS zooms the whole
+// page in when it focuses a control whose text is under 16px — the owner then has to pinch back out
+// between every field.
 const fieldControlClass =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive";
+  "flex h-12 w-full rounded-md border border-input bg-card px-3 text-base text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
   <input ref={ref} className={cn(fieldControlClass, className)} {...props} />

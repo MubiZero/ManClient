@@ -51,7 +51,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-secondary/30 px-4 py-12">
-      <Card className="registration-panel w-full max-w-lg">
+      <Card className="w-full max-w-lg">
         <CardContent className="flex flex-col gap-6 p-8">
           <div className="flex flex-col items-center gap-3 text-center">
             <span
