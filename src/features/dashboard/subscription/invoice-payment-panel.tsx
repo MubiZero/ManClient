@@ -1,11 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { formatSomoni } from "@/core/formatting/money";
 import { PERIOD_LABELS, PLAN_LABELS } from "@/core/platform/plan-labels";
 import type { BillingPeriod, SubscriptionInvoiceStatus, SubscriptionPlan } from "@/generated/prisma/client";
-import { Button } from "@/features/ui-kit/button";
+import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { Field } from "@/features/ui-kit/field";
 
 export type OpenInvoice = {
@@ -22,6 +23,7 @@ export type OpenInvoice = {
  * receipt is what actually settles the invoice.
  */
 export function InvoicePaymentPanel({ invoice, paymentUrl }: { invoice: OpenInvoice; paymentUrl: string | null }) {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
@@ -36,11 +38,13 @@ export function InvoicePaymentPanel({ invoice, paymentUrl }: { invoice: OpenInvo
       const response = await fetch("/api/dashboard/subscription/receipt", { method: "POST", body });
       const result = await response.json() as { status?: string; error?: string };
       if (!response.ok) throw new Error(result.error);
-      setMessage(
-        result.status === "ACCEPTED"
-          ? "Оплата подтверждена, подписка продлена. Обновите страницу."
-          : "Чек принят и передан оператору — обычно это занимает несколько часов.",
-      );
+      if (result.status === "ACCEPTED") {
+        setMessage("Оплата подтверждена, подписка продлена.");
+        // The receipt settled the invoice, so the page around this panel is already out of date.
+        router.refresh();
+      } else {
+        setMessage("Чек принят и передан оператору — обычно это занимает несколько часов.");
+      }
     } catch (error) {
       setMessage(uploadError(error));
     } finally {
@@ -63,14 +67,9 @@ export function InvoicePaymentPanel({ invoice, paymentUrl }: { invoice: OpenInvo
       ) : null}
 
       {paymentUrl ? (
-        <a
-          href={paymentUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex w-fit items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
+        <ButtonLink href={paymentUrl} target="_blank" rel="noreferrer" className="w-fit">
           Оплатить переводом
-        </a>
+        </ButtonLink>
       ) : (
         <p className="text-sm text-muted-foreground">
           Ссылку на оплату мы сейчас не выдаём — оплату принимает оператор ManClient. Напишите в поддержку, сделайте перевод и пришлите

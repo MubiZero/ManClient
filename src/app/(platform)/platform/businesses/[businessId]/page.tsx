@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requirePlatformAdmin } from "@/core/auth/platform-session";
 import { todayInTimeZone } from "@/core/formatting/dushanbe-date";
 import { formatSomoni } from "@/core/formatting/money";
+import { auditEventLabel } from "@/core/platform/audit-labels";
 import { loadBusinessDetail, setBusinessStatus, setBusinessSubscriptionPlan } from "@/core/platform/business-directory";
 import { PLAN_DESCRIPTIONS, PLAN_LABELS } from "@/core/platform/subscription-plans";
 import { Badge } from "@/features/ui-kit/badge";
@@ -162,7 +163,9 @@ export default async function PlatformBusinessDetailPage({ params }: { params: P
           ) : (
             auditEvents.map((event) => (
               <div key={event.id} className="flex items-center justify-between border-b border-border pb-2 text-sm last:border-0 last:pb-0">
-                <span className="text-foreground">{event.type}</span>
+                <span className="text-foreground" title={event.type}>
+                  {auditEventLabel(event.type)}
+                </span>
                 <span className="text-muted-foreground">{event.createdAt.toLocaleString("ru-RU")}</span>
               </div>
             ))
