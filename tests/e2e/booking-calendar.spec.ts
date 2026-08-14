@@ -19,6 +19,10 @@ const SUNDAY = addDays(DATE, 5);
  * receptionist actually walks — read the day, click the gap, save the client — and then checks the gap is
  * gone from the picture, which is what proves the grid reflects the database rather than a guess.
  */
+/*
+ * The grid block and the list row below it both link to the same visit, so a locator has to say which
+ * one it means: the block's accessible name starts with the time, the row's starts with «Запись».
+ */
 test("owner books a visit from a gap in the day calendar", async ({ page }) => {
   const customerName = `Клиент ${Date.now().toString().slice(-6)}`;
   const customerPhone = `+99290${Date.now().toString().slice(-7)}`;
@@ -41,11 +45,11 @@ test("owner books a visit from a gap in the day calendar", async ({ page }) => {
   await expect(page.getByRole("heading", { name: customerName })).toBeVisible();
 
   await page.goto(`/dashboard/bookings?view=day&date=${DATE}`);
-  await expect(page.getByRole("link", { name: new RegExp(`10:00.*${customerName}`, "s") })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`^10:00.*${customerName}`, "s") })).toBeVisible();
   await expect(page.getByRole("link", { name: "Записать на 10:00, Алишер" })).toHaveCount(0);
 
   // Left as the day was found, so the spec can run twice against the same seeded data.
-  await page.getByRole("link", { name: new RegExp(`10:00.*${customerName}`, "s") }).click();
+  await page.getByRole("link", { name: new RegExp(`^10:00.*${customerName}`, "s") }).click();
   await cancelBooking(page);
 });
 
@@ -62,7 +66,7 @@ test("owner drags a visit to a later time in the day calendar", async ({ page })
   await expect(page.getByRole("heading", { name: customerName })).toBeVisible();
 
   await page.goto(`/dashboard/bookings?view=day&date=${DATE}`);
-  const block = page.getByRole("link", { name: new RegExp(`14:00.*${customerName}`, "s") });
+  const block = page.getByRole("link", { name: new RegExp(`^14:00.*${customerName}`, "s") });
   // The grid is taller than the viewport: mouse coordinates outside it deliver no events at all.
   await block.scrollIntoViewIfNeeded();
   const box = await block.boundingBox();
@@ -76,13 +80,13 @@ test("owner drags a visit to a later time in the day calendar", async ({ page })
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 108, { steps: 5 });
   await page.mouse.up();
 
-  await expect(page.getByRole("link", { name: new RegExp(`15:30.*${customerName}`, "s") })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`^15:30.*${customerName}`, "s") })).toBeVisible();
   // The vacated hour is offered again, which is what proves the server was told and not just the picture.
   await expect(page.getByRole("link", { name: "Записать на 14:00, Алишер" })).toBeVisible();
   // Releasing the mouse must not have opened the card the receptionist just moved.
   await expect(page).toHaveURL(/view=day/);
 
-  await page.getByRole("link", { name: new RegExp(`15:30.*${customerName}`, "s") }).click();
+  await page.getByRole("link", { name: new RegExp(`^15:30.*${customerName}`, "s") }).click();
   await cancelBooking(page);
 });
 
@@ -115,7 +119,7 @@ test("owner drags a visit to another day in the week", async ({ page }) => {
   await expect(page.getByRole("heading", { name: customerName })).toBeVisible();
 
   await page.goto(`/dashboard/bookings?view=week&date=${DATE}`);
-  const block = page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") });
+  const block = page.getByRole("link", { name: new RegExp(`^11:00.*${customerName}`, "s") });
   await block.scrollIntoViewIfNeeded();
   const box = (await block.boundingBox())!;
   const thursday = (await page.getByRole("link", { name: new RegExp(`чт.*${dayLabel(THURSDAY)}`, "is") }).boundingBox())!;
@@ -137,9 +141,9 @@ test("owner drags a visit to another day in the week", async ({ page }) => {
   await expect(page.getByRole("link", { name: new RegExp(`чт.*${dayLabel(THURSDAY)}.*записей: 1`, "is") })).toBeVisible();
 
   await page.goto(`/dashboard/bookings?view=day&date=${THURSDAY}`);
-  await expect(page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(`^11:00.*${customerName}`, "s") })).toBeVisible();
 
-  await page.getByRole("link", { name: new RegExp(`11:00.*${customerName}`, "s") }).click();
+  await page.getByRole("link", { name: new RegExp(`^11:00.*${customerName}`, "s") }).click();
   await cancelBooking(page);
 });
 

@@ -14,7 +14,7 @@ test("owner can choose the secondary existing-bot path without retaining its tok
 
   await signIn(page);
   await page.goto("/dashboard/settings/integrations");
-  await expect(page.getByRole("heading", { name: "Telegram" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Telegram", exact: true })).toBeVisible();
   await expect(page.getByText("Создайте только одного бота")).toBeVisible();
   await page.getByRole("button", { name: "Подключить существующего бота" }).click();
 
@@ -33,7 +33,7 @@ test("settings remain usable on a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
   await page.goto("/dashboard/settings/integrations");
-  await expect(page.getByRole("heading", { name: "Telegram" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Telegram", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
 
