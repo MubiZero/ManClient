@@ -47,7 +47,7 @@ describe("PaymentPage", () => {
 
     expect(html).toContain("Время оплаты закончилось");
     expect(html).not.toContain("Прикрепить чек");
-    expect(html).toContain("/b/demo-barber");
+    expect(html).toContain("Записаться снова");
   });
 
   it("shows why the business turned the receipt down", () => {

@@ -318,6 +318,7 @@ export function PaymentPage({
                   <span className="text-xs text-muted-foreground">{t(locale, "payment.fileHint")}</span>
                   {selectedReceipt ? (
                     <span className="mt-1 flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- a blob URL from the customer's phone is not an optimizable public asset */}
                       <img
                         src={selectedReceipt.url}
                         alt={t(locale, "payment.receiptPreviewAlt")}
