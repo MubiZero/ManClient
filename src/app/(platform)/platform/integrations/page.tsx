@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requirePlatformAdmin } from "@/core/auth/platform-session";
 import { BusinessTelegramIntegrationError, retryBusinessTelegramWebhook } from "@/core/integrations/business-telegram-service";
 import { listIntegrationHealth } from "@/core/platform/integration-health";
+import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { Badge } from "@/features/ui-kit/badge";
 import { Button } from "@/features/ui-kit/button";
 import { EmptyState } from "@/features/ui-kit/empty-state";
@@ -11,11 +12,12 @@ import { PageHeader } from "@/features/ui-kit/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 import { ToastEmitter } from "@/features/ui-kit/toast-emitter";
 
-type PageProps = { searchParams: Promise<{ notice?: string; error?: string; cursor?: string }> };
+type PageProps = { searchParams: Promise<{ notice?: string; error?: string; cursor?: string; trail?: string }> };
 
 export default async function PlatformIntegrationsPage({ searchParams }: PageProps) {
   const query = await searchParams;
-  const { items: integrations, nextCursor } = await listIntegrationHealth({ cursor: query.cursor });
+  const trail = readPageTrail(query.trail);
+  const { items: integrations, nextCursor } = await listIntegrationHealth({ cursor: currentCursor(trail) });
 
   async function retry(formData: FormData) {
     "use server";
@@ -87,11 +89,7 @@ export default async function PlatformIntegrationsPage({ searchParams }: PagePro
         </Table>
       )}
 
-      {nextCursor ? (
-        <Link href={`/platform/integrations?cursor=${nextCursor}`} className="text-sm font-medium text-foreground hover:underline">
-          Следующая страница →
-        </Link>
-      ) : null}
+      <CursorPager basePath="/platform/integrations" query={filterQuery(query)} trail={trail} nextCursor={nextCursor} label="Страницы интеграций" />
     </>
   );
 }

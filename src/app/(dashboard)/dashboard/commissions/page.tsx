@@ -7,6 +7,7 @@ import { prisma } from "@/core/database/prisma";
 import { formatSomoni } from "@/core/formatting/money";
 import { businessHasFeature, PLAN_LABELS } from "@/core/platform/subscription-plans";
 import { CommissionFilters } from "@/features/dashboard/commission-filters";
+import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { ButtonLink } from "@/features/ui-kit/button";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
@@ -17,7 +18,9 @@ type PageProps = { searchParams: Promise<Record<string, string | string[] | unde
 
 export default async function CommissionsPage({ searchParams }: PageProps) {
   const membership = await requireBusinessAdmin();
-  const query = compactQuery(await searchParams);
+  const rawQuery = await searchParams;
+  const trail = readPageTrail(rawQuery.trail);
+  const query = compactQuery(rawQuery);
 
   if (!businessHasFeature(membership.business, "STAFF_COMMISSIONS")) {
     return (
@@ -106,14 +109,7 @@ export default async function CommissionsPage({ searchParams }: PageProps) {
         </Table>
       )}
 
-      {result.nextCursor ? (
-        <Link
-          href={`/dashboard/commissions?${new URLSearchParams({ ...query, cursor: result.nextCursor }).toString()}`}
-          className="w-fit rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
-        >
-          Показать ещё
-        </Link>
-      ) : null}
+      <CursorPager basePath="/dashboard/commissions" query={filterQuery(query)} trail={trail} nextCursor={result.nextCursor} label="Страницы начислений" />
     </>
   );
 }

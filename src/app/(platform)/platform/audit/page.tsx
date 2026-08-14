@@ -4,6 +4,7 @@ import { DEFAULT_TIME_ZONE } from "@/core/formatting/dushanbe-date";
 import { auditActorLabel, auditEventLabel } from "@/core/platform/audit-labels";
 import { PLATFORM_SCOPE, listAuditEventTypes, listAuditEvents } from "@/core/platform/audit-log";
 import { listBusinessOptions } from "@/core/platform/business-directory";
+import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { Button, ButtonLink } from "@/features/ui-kit/button";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { Select } from "@/features/ui-kit/field";
@@ -13,10 +14,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // The journal belongs to the platform, not to a branch, and the operator reading it works in Dushanbe.
 const eventTimeFormatter = new Intl.DateTimeFormat("ru-RU", { timeZone: DEFAULT_TIME_ZONE, dateStyle: "short", timeStyle: "medium" });
 
-export default async function PlatformAuditPage({ searchParams }: { searchParams: Promise<{ businessId?: string; type?: string; cursor?: string }> }) {
-  const { businessId, type, cursor } = await searchParams;
+export default async function PlatformAuditPage({ searchParams }: { searchParams: Promise<{ businessId?: string; type?: string; trail?: string }> }) {
+  const { businessId, type, trail: rawTrail } = await searchParams;
+  const trail = readPageTrail(rawTrail);
   const [{ items: events, nextCursor }, businesses, types] = await Promise.all([
-    listAuditEvents({ businessId, type }, { cursor }),
+    listAuditEvents({ businessId, type }, { cursor: currentCursor(trail) }),
     listBusinessOptions(),
     listAuditEventTypes(),
   ]);
@@ -100,18 +102,7 @@ export default async function PlatformAuditPage({ searchParams }: { searchParams
         </Table>
       )}
 
-      {nextCursor ? (
-        <Link
-          href={`/platform/audit?${new URLSearchParams({
-            ...(businessId ? { businessId } : {}),
-            ...(type ? { type } : {}),
-            cursor: nextCursor,
-          }).toString()}`}
-          className="text-sm font-medium text-foreground hover:underline"
-        >
-          Следующая страница →
-        </Link>
-      ) : null}
+      <CursorPager basePath="/platform/audit" query={filterQuery({ ...(businessId ? { businessId } : {}), ...(type ? { type } : {}) })} trail={trail} nextCursor={nextCursor} label="Страницы журнала" />
     </>
   );
 }

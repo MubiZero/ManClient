@@ -2,6 +2,7 @@ import { Search } from "lucide-react";
 import Link from "next/link";
 
 import { listBusinesses } from "@/core/platform/business-directory";
+import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { Badge } from "@/features/ui-kit/badge";
 import { Button } from "@/features/ui-kit/button";
 import { Input } from "@/features/ui-kit/field";
@@ -9,16 +10,17 @@ import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 
-export default async function PlatformBusinessesPage({ searchParams }: { searchParams: Promise<{ q?: string; cursor?: string }> }) {
-  const { q, cursor } = await searchParams;
-  const { items: businesses, nextCursor } = await listBusinesses(q, { cursor });
+export default async function PlatformBusinessesPage({ searchParams }: { searchParams: Promise<{ q?: string; trail?: string }> }) {
+  const { q, trail: rawTrail } = await searchParams;
+  const trail = readPageTrail(rawTrail);
+  const { items: businesses, nextCursor } = await listBusinesses(q, { cursor: currentCursor(trail) });
 
   return (
     <>
       <PageHeader
         eyebrow="Платформа"
         title="Бизнесы"
-        description={cursor ? "Следующая страница" : `Показаны первые ${businesses.length}`}
+        description={trail.length ? `Страница ${trail.length + 1}` : `Показаны первые ${businesses.length}`}
         action={
           <Link href="/platform/businesses/new">
             <Button type="button">Создать бизнес</Button>
@@ -82,14 +84,7 @@ export default async function PlatformBusinessesPage({ searchParams }: { searchP
         </Table>
       )}
 
-      {nextCursor ? (
-        <Link
-          href={`/platform/businesses?${new URLSearchParams({ ...(q ? { q } : {}), cursor: nextCursor }).toString()}`}
-          className="text-sm font-medium text-foreground hover:underline"
-        >
-          Следующая страница →
-        </Link>
-      ) : null}
+      <CursorPager basePath="/platform/businesses" query={filterQuery({ ...(q ? { q } : {}) })} trail={trail} nextCursor={nextCursor} label="Страницы бизнесов" />
     </>
   );
 }

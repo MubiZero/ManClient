@@ -4,21 +4,23 @@ import Link from "next/link";
 import { requireBusinessAdmin } from "@/core/auth/business-session";
 import { listCustomers } from "@/core/dashboard/customer-directory";
 import { formatSomoni } from "@/core/formatting/money";
+import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { Badge } from "@/features/ui-kit/badge";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { Input } from "@/features/ui-kit/field";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/features/ui-kit/table";
 
-type PageProps = { searchParams: Promise<{ search?: string; cursor?: string }> };
+type PageProps = { searchParams: Promise<{ search?: string; trail?: string }> };
 
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" });
 
 export default async function CustomersPage({ searchParams }: PageProps) {
   const membership = await requireBusinessAdmin();
   const query = await searchParams;
+  const trail = readPageTrail(query.trail);
   const search = query.search?.trim() || undefined;
-  const result = await listCustomers({ businessId: membership.businessId, search, cursor: query.cursor });
+  const result = await listCustomers({ businessId: membership.businessId, search, cursor: currentCursor(trail) });
 
   return (
     <>
@@ -78,14 +80,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
         </Table>
       )}
 
-      {result.nextCursor ? (
-        <Link
-          href={`/dashboard/customers?${new URLSearchParams({ ...(search ? { search } : {}), cursor: result.nextCursor }).toString()}`}
-          className="w-fit rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
-        >
-          Показать ещё
-        </Link>
-      ) : null}
+      <CursorPager basePath="/dashboard/customers" query={filterQuery({ ...(search ? { search } : {}) })} trail={trail} nextCursor={result.nextCursor} label="Страницы клиентов" />
     </>
   );
 }

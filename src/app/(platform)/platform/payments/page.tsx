@@ -11,15 +11,17 @@ import {
   rejectPaymentAsPlatformAdmin,
 } from "@/core/payments/payment-review-service";
 import { AttentionPaymentsQueue } from "@/features/platform/attention-payments-queue";
+import { CursorPager, currentCursor, filterQuery, readPageTrail } from "@/features/ui-kit/cursor-pager";
 import { EmptyState } from "@/features/ui-kit/empty-state";
 import { PageHeader } from "@/features/ui-kit/page-header";
 import { ToastEmitter } from "@/features/ui-kit/toast-emitter";
 
-type PageProps = { searchParams: Promise<{ notice?: string; error?: string; cursor?: string; approved?: string; skipped?: string }> };
+type PageProps = { searchParams: Promise<{ notice?: string; error?: string; cursor?: string; approved?: string; skipped?: string; trail?: string }> };
 
 export default async function PlatformPaymentsPage({ searchParams }: PageProps) {
   const query = await searchParams;
-  const { items: payments, nextCursor } = await listAttentionPaymentsAcrossBusinesses({ cursor: query.cursor });
+  const trail = readPageTrail(query.trail);
+  const { items: payments, nextCursor } = await listAttentionPaymentsAcrossBusinesses({ cursor: currentCursor(trail) });
 
   async function approve(formData: FormData) {
     "use server";
@@ -81,11 +83,7 @@ export default async function PlatformPaymentsPage({ searchParams }: PageProps) 
         />
       )}
 
-      {nextCursor ? (
-        <Link href={`/platform/payments?cursor=${nextCursor}`} className="text-sm font-medium text-foreground hover:underline">
-          Следующая страница →
-        </Link>
-      ) : null}
+      <CursorPager basePath="/platform/payments" query={filterQuery(query)} trail={trail} nextCursor={nextCursor} label="Страницы чеков" />
     </>
   );
 }
