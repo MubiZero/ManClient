@@ -50,8 +50,9 @@ describe("ManClient business assistant", () => {
     expect(messages[0].text).toContain("бизнес");
     expect(messages[0].text).not.toContain("чек");
     expect(messages[0].text).not.toContain("клиент");
-    // Signing in connects nothing; the page that issues the one-time deep link is the actual next step.
-    expect(messages[0].url).toBe("https://manclient.example/dashboard/settings/integrations");
+    // Signing in connects nothing; the page that issues the one-time deep link is the actual next step,
+    // and it is carried through the login screen because nobody reaching this message is signed in yet.
+    expect(messages[0].url).toBe("https://manclient.example/login?callbackUrl=%2Fdashboard%2Fsettings%2Fintegrations");
   });
 
   it("consumes a signed membership link once and rechecks its expiry", async () => {

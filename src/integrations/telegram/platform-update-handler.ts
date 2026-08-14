@@ -124,9 +124,11 @@ export async function handlePlatformTelegramUpdate(
     return;
   }
 
-  // The integrations page, not the login screen: signing in connects nothing, the one-time deep link
-  // issued there does. An unauthenticated visitor is bounced to the login screen by the page itself.
-  const integrationsUrl = `${requiredAppUrl()}/dashboard/settings/integrations`;
+  // The integrations page, because signing in connects nothing — the one-time deep link issued there
+  // does. Routed through the login screen so the destination survives for the person who is not signed
+  // in yet, which is nearly everyone who reaches this message; an already-signed-in visitor is passed
+  // straight through. The path is fixed here, and the login screen refuses anything off-site anyway.
+  const integrationsUrl = `${requiredAppUrl()}/login?${new URLSearchParams({ callbackUrl: "/dashboard/settings/integrations" })}`;
   const platformActor = await getPlatformTelegramActor(actor);
   if (platformActor) {
     const locale = resolveBotLocale(platformActor);

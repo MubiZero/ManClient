@@ -3,15 +3,20 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { auth, signIn } from "@/auth";
+import { safeCallbackPath } from "@/core/auth/callback-path";
 import { Button } from "@/features/ui-kit/button";
 import { Card, CardContent } from "@/features/ui-kit/card";
 import { Field, Input } from "@/features/ui-kit/field";
 
-type LoginPageProps = { searchParams: Promise<{ error?: string; reset?: string }> };
+type LoginPageProps = { searchParams: Promise<{ error?: string; reset?: string; callbackUrl?: string }> };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  if (await auth()) redirect("/dashboard");
-  const { error, reset } = await searchParams;
+  const { error, reset, callbackUrl } = await searchParams;
+  // A link may ask for the screen it was written for — the Telegram bot sends people to the page that
+  // actually links their chat — but only a path inside this app is honoured. Everything else falls back
+  // to the overview rather than becoming an open redirect out of a page that just took a password.
+  const destination = safeCallbackPath(callbackUrl) ?? "/dashboard";
+  if (await auth()) redirect(destination);
 
   async function login(formData: FormData) {
     "use server";
@@ -19,10 +24,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       await signIn("credentials", {
         identifier: formData.get("identifier"),
         password: formData.get("password"),
-        redirectTo: "/dashboard",
+        redirectTo: destination,
       });
     } catch (signInError) {
-      if (signInError instanceof AuthError) redirect("/login?error=credentials");
+      // The destination survives a wrong password: losing it would send someone who mistyped once back
+      // to the overview, with no trace of where they were headed.
+      if (signInError instanceof AuthError) {
+        redirect(`/login?${new URLSearchParams({ error: "credentials", ...(destination === "/dashboard" ? {} : { callbackUrl: destination }) })}`);
+      }
       throw signInError;
     }
   }
