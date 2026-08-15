@@ -29,25 +29,18 @@ env:
 jobs:
   # Gates the deploy. Nothing here reaches outside the package registry.
   #
-  # Runs on the project's own runner on the VPS rather than on GitHub's machines. Every job here shares
-  # one runner, so they execute one at a time — which is what keeps two jobs from binding host port 5432
-  # for their Postgres service and from compiling at once on a box that also serves production. A hosted
-  # runner gave each job its own VM and neither was a concern there.
+  # Runs on the project's own runner rather than on GitHub's machines. Every job here shares one runner,
+  # so they execute one at a time and the pipeline takes about twice as long as it did on three parallel
+  # hosted VMs.
+  #
+  # Postgres is the machine's own service, not a `services:` container: those are Linux containers, and
+  # the runner is a Mac. It must be created with the C.UTF-8 collation that `postgres:16-alpine` used —
+  # anything else changes sort order and case-insensitive Cyrillic search, and the tests would disagree
+  # with production over which name comes first. Unlike a container it is not recreated per run; the
+  # integration tests clean up after themselves and the browser suite reseeds, which is what makes a
+  # long-lived database safe here.
   test:
     runs-on: [self-hosted, manclient]
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: manclient
-          POSTGRES_USER: manclient
-          POSTGRES_PASSWORD: manclient
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U manclient -d manclient"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -65,27 +58,15 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-  # Gates the deploy, but only on its own verdict. Downloading Chromium from
-  # Playwright's CDN has answered 403 "not available in your location" for this
-  # runner, and an outage in somebody else's infrastructure must not hold up a
-  # release — so the browser download is allowed to fail and the suite is then
-  # skipped, while a real test failure fails this job and blocks the deploy.
-  # A skip is announced in the job summary rather than passing silently.
+  # Gates the deploy, and now does so unconditionally. The browser download used to be allowed to fail —
+  # GitHub's runners answered 403 "not available in your location" from Playwright's CDN, and an outage in
+  # somebody else's infrastructure should not hold up a release. On the project's own runner that trade no
+  # longer holds: the first run there failed the download for a different reason and the escape hatch
+  # turned a permanent condition into a green pipeline with the browser gate silently switched off, which
+  # is how a release reached production without a single browser test behind it. A blocked deploy is
+  # visible; a skipped gate is not.
   e2e:
     runs-on: [self-hosted, manclient]
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: manclient
-          POSTGRES_USER: manclient
-          POSTGRES_PASSWORD: manclient
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U manclient -d manclient"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -97,20 +78,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma generate
       - run: pnpm prisma migrate deploy
-      # Keeps the browser off the CDN on most runs: the install step below is a
-      # no-op on a cache hit, so a blocked CDN only bites after a version bump.
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - id: browser
-        continue-on-error: true
-        run: pnpm exec playwright install --with-deps chromium
-      - if: steps.browser.outcome == 'failure'
-        run: |
-          echo "⚠️ Chromium download failed — browser suite skipped, deploy not blocked by it." >> "$GITHUB_STEP_SUMMARY"
-      - if: steps.browser.outcome == 'success'
-        run: pnpm playwright test
+      # No cache action: the runner keeps its own disk between runs, so the browser is already there and
+      # this is a no-op except after a version bump. `--with-deps` is gone with it — it exists to apt-get
+      # system libraries on Linux, and reaching for sudo is exactly what broke this step before.
+      - run: pnpm exec playwright install chromium
+      - run: pnpm playwright test
 
   # Deploys, waits for the build to actually finish, and only then asks the released instance whether it
   # is reachable over a working HTTPS with its secrets in place. Without the wait the job would go green
