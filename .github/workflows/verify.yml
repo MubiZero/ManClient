@@ -28,8 +28,13 @@ env:
 
 jobs:
   # Gates the deploy. Nothing here reaches outside the package registry.
+  #
+  # Runs on the project's own runner on the VPS rather than on GitHub's machines. Every job here shares
+  # one runner, so they execute one at a time — which is what keeps two jobs from binding host port 5432
+  # for their Postgres service and from compiling at once on a box that also serves production. A hosted
+  # runner gave each job its own VM and neither was a concern there.
   test:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, manclient]
     services:
       postgres:
         image: postgres:16-alpine
@@ -67,7 +72,7 @@ jobs:
   # skipped, while a real test failure fails this job and blocks the deploy.
   # A skip is announced in the job summary rather than passing silently.
   e2e:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, manclient]
     services:
       postgres:
         image: postgres:16-alpine
@@ -113,7 +118,7 @@ jobs:
   deploy:
     needs: [test, e2e]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, manclient]
     env:
       PRODUCTION_URL: https://manclient.mubi.dev
     steps:
