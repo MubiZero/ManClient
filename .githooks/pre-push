@@ -34,7 +34,7 @@ printf '\n▶ Проверки перед пушем. Пропустить: git 
 # which reads as "the code is broken" rather than "the database is not running" — so say it once, here.
 if ! pg_isready -q -h 127.0.0.1 -p 5432; then
   printf '✗ Postgres на 127.0.0.1:5432 не отвечает — интеграционные тесты без него не имеют смысла.\n'
-  printf '  Поднять: brew services start postgresql@16\n\n'
+  printf '  Поднять: docker compose up -d postgres   (или brew services start postgresql@16)\n\n'
   exit 1
 fi
 

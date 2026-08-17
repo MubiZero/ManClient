@@ -1,6 +1,6 @@
 /**
- * The post-deploy probe. It answers one question the release gate cannot answer from CI alone: is the
- * thing that is actually running reachable over a working HTTPS, and does it carry the secrets it needs?
+ * The post-deploy probe. It answers the one question no check before the push can answer: is the thing
+ * that is actually running reachable over a working HTTPS, and does it carry the secrets it needs?
  *
  * The unit tests prove the code fails closed when a secret is missing. This proves the deployed
  * environment has those secrets at all — a variable that was never added to Coolify looks exactly like a

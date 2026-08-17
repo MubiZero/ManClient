@@ -10,7 +10,7 @@ import { formatProbeReport, probeDeployment } from "@/core/observability/https-p
  *
  * Caveat worth knowing before trusting the certificate line: inside an environment that terminates TLS
  * for you (a corporate proxy, a sandbox egress gateway) the certificate reported is the proxy's, not the
- * one the outside world sees. Run the probe from CI or from an ordinary network.
+ * one the outside world sees. Run the probe from an ordinary network.
  */
 async function main() {
   const url = argValue("--url") ?? process.env.APP_URL;

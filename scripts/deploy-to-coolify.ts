@@ -54,7 +54,7 @@ async function main() {
   }
 }
 
-/** The token travels in a header and is never echoed: an error here is read from a public CI log. */
+/** The token travels in a header and is never echoed: an error here is read off a screen or out of a log. */
 async function coolify<T>(token: string, path: string, method: "GET" | "POST" = "GET"): Promise<T> {
   const response = await fetch(`${COOLIFY_URL}${path}`, { method, headers: { authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error(`Coolify answered HTTP ${response.status} for ${path}`);
