@@ -1,0 +1,65 @@
+#!/bin/sh
+#
+# The last gate before production.
+#
+# There is no CI any more. A push to `main` is picked up by Coolify's GitHub App and released on its own,
+# so nothing between this hook and the customers looks at the code. What used to be a pipeline that could
+# fail loudly in a browser tab is now this script and the person watching it.
+#
+# Deliberately bypassable: `git push --no-verify`. A gate that cannot be opened gets worked around in ways
+# nobody sees, and pushing a documentation fix should not cost twenty minutes. Bypass when you mean to.
+#
+# Installed via `git config core.hooksPath .githooks`, which is why this file is in the repository rather
+# than in `.git/hooks` where only one machine would ever see it.
+
+set -e
+
+# A push that only deletes a remote branch has nothing to test.
+if [ -t 0 ]; then
+  :
+else
+  deleting_only=yes
+  while read -r _local_ref local_sha _remote_ref _remote_sha; do
+    case "$local_sha" in
+      0000000000000000000000000000000000000000) ;;
+      *) deleting_only=no ;;
+    esac
+  done
+  [ "$deleting_only" = yes ] && exit 0
+fi
+
+printf '\n▶ Проверки перед пушем. Пропустить: git push --no-verify\n\n'
+
+# The integration tests talk to a real Postgres. Without it they fail one by one with connection errors,
+# which reads as "the code is broken" rather than "the database is not running" — so say it once, here.
+if ! pg_isready -q -h 127.0.0.1 -p 5432; then
+  printf '✗ Postgres на 127.0.0.1:5432 не отвечает — интеграционные тесты без него не имеют смысла.\n'
+  printf '  Поднять: brew services start postgresql@16\n\n'
+  exit 1
+fi
+
+run() {
+  printf '  → %s\n' "$1"
+  if ! sh -c "$1" > /tmp/manclient-prepush.log 2>&1; then
+    printf '\n✗ Упало: %s\n\n' "$1"
+    tail -40 /tmp/manclient-prepush.log
+    printf '\nПолный вывод: /tmp/manclient-prepush.log\n\n'
+    exit 1
+  fi
+}
+
+run "pnpm lint"
+run "pnpm typecheck"
+run "pnpm test"
+run "pnpm build"
+
+# `next build` and `next dev` write different paths into this generated file, so building here leaves the
+# tree dirty after every push. It carries its own "should not be edited" notice — put it back.
+git checkout -- next-env.d.ts 2>/dev/null || true
+
+# The browser suite is not here on purpose: it starts a dev server and adds minutes to every push. It is
+# also the only thing that checks the product through a browser, and it has caught regressions the unit
+# tests could not see — so run it by hand before a release that matters:
+#
+#   pnpm test:e2e
+printf '\n✓ Чисто. Пуш в main уедет на прод сам — Coolify собирает по вебхуку.\n\n'
