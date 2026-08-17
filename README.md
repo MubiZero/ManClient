@@ -12,13 +12,12 @@ ManClient — B2B SaaS для онлайн-записи сервисных би�
 cp .env.example .env
 docker compose up -d postgres minio mailpit
 pnpm install
-git config core.hooksPath .githooks
 pnpm prisma migrate deploy
 pnpm db:seed
 pnpm dev
 ```
 
-Строка с `core.hooksPath` — не формальность. У проекта нет CI: пуш в `main` подхватывает Coolify и выкатывает на прод сам, поэтому единственная автоматическая проверка между вашим коммитом и клиентами — хук `.githooks/pre-push`. Git не включает хуки из репозитория по умолчанию, так что на клоне без этой команды пуш уедет без единой проверки. Обойти хук осознанно можно через `git push --no-verify`.
+`pnpm install` заодно включает хуки репозитория (`prepare` в `package.json` ставит `core.hooksPath` на `.githooks`), и это не косметика. У проекта нет CI: пуш в `main` подхватывает Coolify и выкатывает на прод сам, поэтому единственная автоматическая проверка между вашим коммитом и клиентами — хук `.githooks/pre-push`. Git не включает хуки из репозитория сам, а шаг, который надо помнить, рано или поздно забывают — поэтому его делает установка зависимостей. Обойти хук осознанно можно через `git push --no-verify`.
 
 Перед seed задайте `CARD_ENCRYPTION_KEY` и demo-пароли из `.env.example`. Значения карт, паролей и токенов в git не добавляются.
 

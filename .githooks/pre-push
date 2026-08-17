@@ -9,8 +9,10 @@
 # Deliberately bypassable: `git push --no-verify`. A gate that cannot be opened gets worked around in ways
 # nobody sees, and pushing a documentation fix should not cost twenty minutes. Bypass when you mean to.
 #
-# Installed via `git config core.hooksPath .githooks`, which is why this file is in the repository rather
-# than in `.git/hooks` where only one machine would ever see it.
+# Installed by `pnpm install` — the `prepare` script points `core.hooksPath` here. That is why this file
+# lives in the repository rather than in `.git/hooks`, where only one machine would ever see it, and why
+# installing it is not a step anybody has to remember: a clone that skips it pushes straight to production
+# with nothing looking at the code.
 
 set -e
 
@@ -48,6 +50,7 @@ run() {
   fi
 }
 
+run "pnpm prisma validate"
 run "pnpm lint"
 run "pnpm typecheck"
 run "pnpm test"
