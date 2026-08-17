@@ -10,6 +10,9 @@ export default defineConfig({
   },
   test: {
     include: ["tests/**/*.test.{ts,tsx}"],
+    // Vitest loads no env file of its own, and the Prisma client reads DATABASE_URL straight from the
+    // environment — see the file for what that looked like when it was missing.
+    setupFiles: ["./tests/setup-env.ts"],
     // Every test shares one database, so files must not run at the same time. `pnpm test` passes
     // --no-file-parallelism, but this key used to sit at the config root where Vitest never reads
     // it, so invoking `vitest run` directly silently went parallel and produced failures in
