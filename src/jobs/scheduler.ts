@@ -1,3 +1,5 @@
+import "@/core/config/load-env-file";
+
 import { createAdvisoryLockSession } from "@/core/database/advisory-lock";
 import { prisma } from "@/core/database/prisma";
 import { logger } from "@/core/observability/logger";

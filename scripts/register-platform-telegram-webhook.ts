@@ -1,3 +1,5 @@
+import "@/core/config/load-env-file";
+
 const platformCommandsRu = [
   { command: "start", description: "Подключить бизнес или открыть меню" },
   { command: "menu", description: "Главное меню" },

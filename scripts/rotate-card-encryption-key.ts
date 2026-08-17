@@ -1,3 +1,5 @@
+import "@/core/config/load-env-file";
+
 import { prisma } from "@/core/database/prisma";
 import { decryptCardNumber, encryptCardNumber } from "@/core/payments/card-encryption";
 

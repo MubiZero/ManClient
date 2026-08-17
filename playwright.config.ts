@@ -1,3 +1,9 @@
+// Playwright reads no `.env` of its own, and the specs need the demo passwords and `INTERNAL_API_SECRET`
+// that live there — without them the suite dies at import time, before a browser ever opens. Loading it
+// here covers the whole run: workers and the `webServer` process are started from this one and inherit its
+// environment. Already-set variables still win, so `DEMO_OWNER_PASSWORD=… pnpm test:e2e` keeps working.
+import "dotenv/config";
+
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({

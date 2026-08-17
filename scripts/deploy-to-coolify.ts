@@ -6,6 +6,7 @@
  * still running — and stays green if the build fails. The probe that runs after this step would then be
  * probing the previous version and passing for the wrong reason.
  */
+import "@/core/config/load-env-file";
 
 const COOLIFY_URL = "https://cool.mubi.dev";
 const APPLICATION_UUID = "u1j3srpnv5rjvsaxnabu1liu";

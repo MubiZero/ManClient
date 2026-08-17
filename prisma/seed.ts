@@ -1,3 +1,5 @@
+import "@/core/config/load-env-file";
+
 import { prisma } from "@/core/database/prisma";
 import { encryptCardNumber } from "@/core/payments/card-encryption";
 import { hashPassword } from "@/core/auth/password";

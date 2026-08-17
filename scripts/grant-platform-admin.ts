@@ -1,3 +1,5 @@
+import "@/core/config/load-env-file";
+
 import { prisma } from "@/core/database/prisma";
 
 async function main() {

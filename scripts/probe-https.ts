@@ -1,3 +1,5 @@
+import "@/core/config/load-env-file";
+
 import { connect } from "node:tls";
 
 import { formatProbeReport, probeDeployment } from "@/core/observability/https-probe";
