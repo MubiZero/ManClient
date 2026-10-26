@@ -15,6 +15,8 @@ import {
 
 const PLATFORM_CARD = "1234567812345678";
 const NOW = new Date("2026-09-10T09:00:00.000Z");
+// The invoice is cut before the transfer it is paid by, which the receipt says happened a minute before NOW.
+const INVOICED_AT = new Date(NOW.getTime() - 3_600_000);
 
 describe("subscription receipts", () => {
   const businessIds: string[] = [];
@@ -57,7 +59,7 @@ describe("subscription receipts", () => {
   });
 
   it("pays the invoice and extends the period when the receipt matches on all five counts", async () => {
-    const invoice = await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" });
+    const invoice = await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" }, INVOICED_AT);
     const receipt = await submit({ amountDiram: 30_000 });
 
     expect(receipt.status).toBe("ACCEPTED");
@@ -70,7 +72,7 @@ describe("subscription receipts", () => {
   });
 
   it("sends a receipt for the wrong amount to the platform queue instead of paying", async () => {
-    const invoice = await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" });
+    const invoice = await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" }, INVOICED_AT);
     const receipt = await submit({ amountDiram: 12_000 });
 
     expect(receipt).toMatchObject({ status: "NEEDS_REVIEW", attentionReason: "AMOUNT_MISMATCH" });
@@ -82,13 +84,13 @@ describe("subscription receipts", () => {
   });
 
   it("refuses an operation number that has already paid for something", async () => {
-    await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" });
+    await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" }, INVOICED_AT);
     await submit({ amountDiram: 30_000, operationNumber: "555000111" });
 
     const suffix = randomUUID();
     const other = await prisma.business.create({ data: { name: `Второй салон ${suffix}`, slug: `receipt-two-${suffix}` } });
     businessIds.push(other.id);
-    await createSubscriptionInvoice({ businessId: other.id, plan: "PREMIUM", period: "MONTHLY" });
+    await createSubscriptionInvoice({ businessId: other.id, plan: "PREMIUM", period: "MONTHLY" }, INVOICED_AT);
 
     await expect(submit({ amountDiram: 30_000, operationNumber: "555000111", businessId: other.id }))
       .rejects.toMatchObject({ code: "DUPLICATE_OPERATION" } satisfies Partial<PlatformError>);
@@ -100,7 +102,7 @@ describe("subscription receipts", () => {
   });
 
   it("keeps the queue and an operator's decision to platform admins", async () => {
-    await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" });
+    await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" }, INVOICED_AT);
     const receipt = await submit({ amountDiram: 12_000 });
 
     await expect(listSubscriptionReceiptsForReview({ actorUserId: ownerId })).rejects.toMatchObject({ code: "FORBIDDEN" } satisfies Partial<PlatformError>);
@@ -109,7 +111,7 @@ describe("subscription receipts", () => {
   });
 
   it("lets the operator settle a disputed receipt by hand", async () => {
-    const invoice = await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" });
+    const invoice = await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" }, INVOICED_AT);
     const receipt = await submit({ amountDiram: 12_000 });
 
     await approveSubscriptionReceipt({ receiptId: receipt.id, actorUserId: adminId, now: NOW });
@@ -120,7 +122,7 @@ describe("subscription receipts", () => {
   });
 
   it("leaves the invoice open when the operator rejects the receipt", async () => {
-    const invoice = await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" });
+    const invoice = await createSubscriptionInvoice({ businessId, plan: "PREMIUM", period: "MONTHLY" }, INVOICED_AT);
     const receipt = await submit({ amountDiram: 12_000 });
 
     await rejectSubscriptionReceipt({ receiptId: receipt.id, actorUserId: adminId, reason: "перевод на другую карту" });

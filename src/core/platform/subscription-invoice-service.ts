@@ -31,11 +31,14 @@ export function listInvoices(businessId: string) {
  * invoices would be two transfers to match against one subscription, so the second request is
  * answered with the first invoice rather than with a new one.
  */
-export async function createSubscriptionInvoice(input: {
-  businessId: string;
-  plan: SubscriptionPlan;
-  period: BillingPeriod;
-}): Promise<SubscriptionInvoice> {
+export async function createSubscriptionInvoice(
+  input: {
+    businessId: string;
+    plan: SubscriptionPlan;
+    period: BillingPeriod;
+  },
+  now = new Date(),
+): Promise<SubscriptionInvoice> {
   if (!SELLABLE_PLANS.includes(input.plan as (typeof SELLABLE_PLANS)[number])) {
     throw new PlatformError("INVALID_INPUT", { plan: input.plan });
   }
@@ -54,6 +57,7 @@ export async function createSubscriptionInvoice(input: {
       // Snapshot, not a lookup: re-pricing the plan tomorrow must not change what was billed today.
       amountDiram,
       reference: invoiceReference(),
+      createdAt: now,
     },
   });
 }
